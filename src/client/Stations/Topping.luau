@@ -119,7 +119,7 @@ function Topping.new(ctx: any, container: Frame)
 			ctx.send("sendToOven", { pizzaId = id }, function(ok)
 				ctx.pending[id] = nil
 				if ok then
-					ctx.switchTo("Bake")
+					ctx.nudge("Bake")
 				end
 				ctx.refresh()
 			end)

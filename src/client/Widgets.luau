@@ -554,4 +554,10 @@ function Widgets.tweenIn(frame: GuiObject, offsetX: number)
 	TweenService:Create(frame, TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = target }):Play()
 end
 
+function Widgets.flash(frame: GuiObject, from: number)
+	-- Fades a highlight from `from` transparency back to invisible; used to point at a tab.
+	frame.BackgroundTransparency = from
+	TweenService:Create(frame, TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+end
+
 return Widgets

@@ -107,16 +107,17 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end)
 
-	-- Drag to cut, with a live preview chord.
+	-- Drag to cut, with a live preview chord. Drags may start anywhere on the board, so a
+	-- stroke that begins just off the crust still counts.
 	local dragStart: Vector2? = nil
 	local dragInput: InputObject? = nil
-	view.frame.InputBegan:Connect(function(input: InputObject)
+	board.InputBegan:Connect(function(input: InputObject)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
 		if current and not ctx.pending[current.id] then
 			local x, y = ctx.toLocal(view.frame, input.Position)
-			dragStart = Vector2.new(x, y)
+			dragStart = Vector2.new(math.clamp(x, -1.6, 1.6), math.clamp(y, -1.6, 1.6))
 			dragInput = input
 		end
 	end)

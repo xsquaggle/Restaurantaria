@@ -34,6 +34,7 @@ Theme.Motion = {
 	release = 0.11,
 	station = 0.14,
 	status = 0.16,
+	nudge = 0.45,
 }
 
 return Theme

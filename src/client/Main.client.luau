@@ -333,12 +333,21 @@ local function buildLayout()
 			Visible = false,
 			Parent = hit,
 		}, { Ui.round() })
+		local glow = Ui.new("Frame", {
+			BackgroundColor3 = C.action,
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.86, 0.78),
+			ZIndex = 2,
+			Parent = hit,
+		}, { Ui.corner(12) })
 		local b = badge(hit, math.max(18, barH * 0.34))
 		b.Position = UDim2.fromScale(0.88, 0.28)
 		hit.Activated:Connect(function()
 			ctx.switchTo(name)
 		end)
-		tabs[name] = { label = label, indicator = indicator, badge = b }
+		tabs[name] = { label = label, indicator = indicator, badge = b, glow = glow }
 	end
 
 	-- Status banner for save problems, and the result toast area.
@@ -414,6 +423,14 @@ function ctx.switchTo(name: string, instant: boolean?)
 		Widgets.tweenIn(ui.stations[name].holder, 24)
 	end
 	ctx.refresh()
+end
+
+-- Results of an action never move the player: the destination tab flashes instead, so a
+-- second tap can't land on whatever control sits in the same spot on the next station.
+function ctx.nudge(name: string)
+	if ui and ctx.station ~= name then
+		Widgets.flash(ui.tabs[name].glow, 0.55)
+	end
 end
 
 function ctx.selectTicket(id: number?)

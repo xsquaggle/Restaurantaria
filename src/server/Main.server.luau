@@ -96,6 +96,25 @@ if RunService:IsStudio() then
 			-- Shift the clock so the next customer arrives now.
 			session.shift.startedAt -= (value or 10)
 			return "ok"
+		elseif command == "resetPatience" then
+			-- Tool-driven playtests are slow; refill every unserved customer's patience.
+			for _, c in session.shift.customers do
+				if c.status ~= "served" then
+					c.arrivedAt = workspace:GetServerTimeNow()
+				end
+			end
+			push(player)
+			return "ok"
+		elseif command == "setBake" then
+			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
+			local id = session.shift.ovens[value[1]]
+			local pizza = id and session.shift.pizzas[id]
+			if not pizza then
+				return "empty slot"
+			end
+			pizza.bakeStart = workspace:GetServerTimeNow() - value[2]
+			push(player)
+			return "ok"
 		end
 		return "unknown command"
 	end

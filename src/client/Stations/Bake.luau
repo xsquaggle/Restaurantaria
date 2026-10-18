@@ -83,7 +83,7 @@ function Bake.new(ctx: any, container: Frame)
 					ctx.pending[pizza.id] = nil
 					if ok then
 						ctx.selectTicket(pizza.ticketId)
-						ctx.switchTo("Cut")
+						ctx.nudge("Cut")
 					end
 					ctx.refresh()
 				end)
