@@ -331,7 +331,7 @@ local function buildLayout()
 		Text = "",
 		Visible = false,
 		FontFace = Theme.Font.bodySemi,
-		TextSize = if compact then 12 else 14,
+		TextSize = 14,
 		TextColor3 = C.mutedInk,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,

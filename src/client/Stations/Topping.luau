@@ -158,7 +158,7 @@ function Topping.new(ctx: any, container: Frame)
 		-- The spare cell of the tray grid.
 		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
 		undo.frame.Position = homes[count + 1]
-		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.min(trayH * 0.56, 44))
+		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.max(48, math.min(trayH * 0.6, 56))) -- 48 px touch floor
 	else
 		undo.frame.AnchorPoint = Vector2.new(1, 0)
 		undo.frame.Position = UDim2.fromOffset(W - margin, margin)
