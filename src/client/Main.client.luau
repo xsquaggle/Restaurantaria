@@ -299,7 +299,7 @@ local function buildLayout()
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, if compact then 10 else 18),
+		Padding = UDim.new(0, if compact then 16 else 28),
 		Parent = left,
 	})
 	local day = Ui.text({
