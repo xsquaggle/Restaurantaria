@@ -103,6 +103,17 @@ function ctx.focusPizza(snap: any, stage: string): any
 	return fallback
 end
 
+-- The ticket the visible station is working on, so the rail highlights what's on screen.
+local STATION_STAGE = { Topping = "topping", Cut = "cutting" }
+function ctx.activeTicket(snap: any): number?
+	local stage = STATION_STAGE[ctx.station]
+	if stage then
+		local p = ctx.focusPizza(snap, stage)
+		return if p then p.ticketId else ctx.selectedTicket
+	end
+	return ctx.selectedTicket
+end
+
 function ctx.toLocal(frame: GuiObject, position: Vector3): (number, number)
 	local rel = (Vector2.new(position.X, position.Y) - frame.AbsolutePosition) / frame.AbsoluteSize
 	return math.clamp(rel.X * 2 - 1, -1.6, 1.6), math.clamp(rel.Y * 2 - 1, -1.6, 1.6)
@@ -369,11 +380,13 @@ local function buildLayout()
 		Parent = nav,
 	})
 	Ui.corner(8).Parent = banner
+	-- Results appear top-centre over the station and never take input, so they can't cover
+	-- or swallow a tap meant for Serve, Undo or the pizza.
 	local toastHolder = Ui.new("Frame", {
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -8, 1, -(navH + 6)),
-		Size = UDim2.fromOffset(if compact then 300 else 380, if compact then 150 else 190),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, railH + 8),
+		Size = UDim2.fromOffset(math.min(if compact then 360 else 440, size.X - 32), 0),
 		ZIndex = 9,
 		Parent = root,
 	})
@@ -445,6 +458,7 @@ local STAGE_TEXT = { topping = "Topping", oven = "In oven", cutting = "Cutting",
 local function refreshRail(snap: any)
 	local seen = {}
 	local compact = ctx.compact
+	local active = ctx.activeTicket(snap)
 	for _, customer in snap.customers do
 		if customer.status == "ordered" then
 			seen[customer.id] = true
@@ -502,7 +516,7 @@ local function refreshRail(snap: any)
 				end
 			end
 			card.stage.Text = if pizza then (STAGE_TEXT[pizza.stage] .. (if pizza.slot then " " .. pizza.slot else "")) else ""
-			local selected = customer.id == ctx.selectedTicket
+			local selected = customer.id == active
 			card.stroke.Color = if selected then C.action else C.ink
 			card.stroke.Thickness = if selected then 4 else 2
 		end
@@ -604,14 +618,6 @@ function ctx.showResult(ticketId: number)
 	end
 	local r = customer.result
 	Ui.clear(ui.toastHolder)
-	local toast = Ui.new("TextButton", {
-		Text = "",
-		AutoButtonColor = false,
-		BackgroundColor3 = C.paper,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 9,
-		Parent = ui.toastHolder,
-	}, { Ui.corner(16), Ui.stroke(C.ink, 3) })
 	local notes = {}
 	for _, part in { r.topping, r.bake, r.cut, r.wait } do
 		for _, n in part.notes do
@@ -620,6 +626,13 @@ function ctx.showResult(ticketId: number)
 			end
 		end
 	end
+	local compact = ctx.compact
+	local toast = Ui.new("Frame", {
+		BackgroundColor3 = C.paper,
+		Size = UDim2.new(1, 0, 0, (if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20)),
+		ZIndex = 9,
+		Parent = ui.toastHolder,
+	}, { Ui.corner(16), Ui.stroke(C.ink, 3) })
 	Ui.text({
 		Text = string.format("%s · %d%% · +%d tips", Recipes.Cast[customer.cast].name, r.overall, r.tip),
 		FontFace = Theme.Font.display,
@@ -648,10 +661,7 @@ function ctx.showResult(ticketId: number)
 		ZIndex = 10,
 		Parent = toast,
 	})
-	toast.Activated:Connect(function()
-		toast:Destroy()
-	end)
-	task.delay(8, function()
+	task.delay(Theme.Motion.toastSeconds, function()
 		if toast.Parent then
 			toast:Destroy()
 		end

@@ -36,6 +36,7 @@ Theme.Motion = {
 	status = 0.16,
 	nudge = 0.45,
 	repeatGuard = 0.35,
+	toastSeconds = 4.5,
 }
 
 return Theme
