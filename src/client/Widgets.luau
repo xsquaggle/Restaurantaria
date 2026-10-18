@@ -118,9 +118,12 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 	end
 	hit.MouseButton1Up:Connect(release)
 	hit.MouseLeave:Connect(release)
+	-- A second activation inside the repeat window is a double tap, not a new intent.
+	local lastFired = -math.huge
 	hit.Activated:Connect(function()
 		release()
-		if self.enabled then
+		if self.enabled and os.clock() - lastFired >= Theme.Motion.repeatGuard then
+			lastFired = os.clock()
 			onActivated()
 		end
 	end)

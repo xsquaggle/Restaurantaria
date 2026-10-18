@@ -35,6 +35,7 @@ Theme.Motion = {
 	station = 0.14,
 	status = 0.16,
 	nudge = 0.45,
+	repeatGuard = 0.35,
 }
 
 return Theme

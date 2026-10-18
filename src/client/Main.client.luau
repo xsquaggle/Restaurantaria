@@ -30,6 +30,8 @@ local player = Players.LocalPlayer
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+	-- Solo prototype: the chat window covered the ticket rail.
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
 end)
 
 local gui = Ui.new("ScreenGui", {
