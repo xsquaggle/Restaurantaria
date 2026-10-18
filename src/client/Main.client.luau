@@ -804,9 +804,7 @@ function ctx.refresh()
 	local profile = snap.profile
 	ui.banner.Visible = profile ~= nil and profile.status ~= "ok"
 	if profile and profile.message then
-		ui.banner.Text = if not ctx.compact then profile.message
-			elseif profile.status == "unavailable" then "Not saving:\nunpublished place"
-			else "Not saving:\nload failed"
+		ui.banner.Text = if profile.status == "unavailable" then "Not saving: unpublished place" else "Not saving: load failed"
 	end
 	refreshSummary(snap)
 end

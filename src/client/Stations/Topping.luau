@@ -117,8 +117,9 @@ function Topping.new(ctx: any, container: Frame)
 		for id, t in trays do
 			local on = id == chosen
 			-- The chosen tray sits a little higher and larger, like it's been pulled forward.
-			TweenService:Create(t.scale, RELEASE, { Scale = if on then 1.06 else 1 }):Play()
-			TweenService:Create(t.button, RELEASE, { Position = t.home + UDim2.fromOffset(0, if on then -trayH * 0.06 else 0) }):Play()
+			TweenService:Create(t.scale, RELEASE, { Scale = if on then 1.1 else 1 }):Play()
+			TweenService:Create(t.button, RELEASE, { Position = t.home + UDim2.fromOffset(0, if on then -trayH * 0.14 else 0) }):Play()
+			t.button.ZIndex = if on then 5 else 4
 		end
 	end
 
