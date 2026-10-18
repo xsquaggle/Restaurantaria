@@ -292,6 +292,16 @@ local function buildLayout()
 		Parent = if hudInTopbar then topGui else root,
 	})
 	local hudText = math.clamp(math.floor(hudH * 0.42), 14, 26)
+	-- Left group: day, coins, then the save warning when there is one, packed in a row so
+	-- nothing overlaps whatever the width.
+	local left = Ui.new("Frame", { Name = "Left", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0), Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = hud })
+	Ui.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, if compact then 10 else 18),
+		Parent = left,
+	})
 	local day = Ui.text({
 		Name = "Day",
 		Text = "Day 1",
@@ -299,9 +309,9 @@ local function buildLayout()
 		TextSize = hudText,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.fromOffset(8, 0),
+		LayoutOrder = 1,
 		Size = UDim2.new(0, 0, 1, 0),
-		Parent = hud,
+		Parent = left,
 	})
 	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = day })
 	local coins = Ui.text({
@@ -311,9 +321,9 @@ local function buildLayout()
 		TextSize = hudText,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.fromOffset(8 + hudText * 4, 0),
+		LayoutOrder = 2,
 		Size = UDim2.new(0, 0, 1, 0),
-		Parent = hud,
+		Parent = left,
 	})
 	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = coins })
 	local banner = Ui.text({
@@ -323,14 +333,14 @@ local function buildLayout()
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if compact then 12 else 14,
 		TextColor3 = C.mutedInk,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.42, 0),
-		Size = UDim2.new(0.3, 0, 1, 0),
-		Parent = hud,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		LayoutOrder = 3,
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = left,
 	})
 	local ringSize = hudH - 6
-	local ovenW = 2 * (ringSize + (if compact then 44 else 64)) + 12
+	local ovenW = 2 * (ringSize + (if compact then 62 else 64)) + 12
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
@@ -804,7 +814,9 @@ function ctx.refresh()
 	local profile = snap.profile
 	ui.banner.Visible = profile ~= nil and profile.status ~= "ok"
 	if profile and profile.message then
-		ui.banner.Text = if profile.status == "unavailable" then "Not saving: unpublished place" else "Not saving: load failed"
+		ui.banner.Text = if ctx.compact then "Not saving"
+			elseif profile.status == "unavailable" then "Not saving: unpublished place"
+			else "Not saving: load failed"
 	end
 	refreshSummary(snap)
 end

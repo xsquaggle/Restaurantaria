@@ -42,25 +42,51 @@ function Topping.new(ctx: any, container: Frame)
 	local W, H = area.X, area.Y
 	local margin = math.clamp(math.round(H * 0.03), 6, 24)
 
-	-- Trays: one row along the bottom, as wide as the counter allows.
+	-- Two ways to fit the counter; the one that gives the bigger pizza wins. Wide screens get
+	-- the reference composition (trays in a row under the pizza); short phone screens stack
+	-- the trays two across beside it, which leaves the pizza much more room.
 	local trayAspect = Art.aspect("tray_pepperoni", Assets.Meta.trayAspect)
 	local gap = math.max(4, math.round(W * 0.01))
 	local count = #Recipes.IngredientOrder
+
 	local trayW = (W - margin * 2 - gap * (count - 1)) / count
 	local trayH = trayW / trayAspect
-	local maxTrayH = H * 0.3
-	if trayH > maxTrayH then
-		trayH = maxTrayH
+	if trayH > H * 0.3 then
+		trayH = H * 0.3
 		trayW = trayH * trayAspect
 	end
-	local rowW = trayW * count + gap * (count - 1)
-
-	-- Board and pizza: as large as fits above the trays, which tuck slightly over its edge.
 	local boardTop = margin * 0.6
+	-- The row tucks slightly over the board's lower edge.
 	local boardD = math.min(H - margin - trayH * 0.84 - boardTop, W * 0.62)
+
+	local cols, rows = 2, math.ceil((count + 1) / 2) -- one spare cell holds Undo
+	local sideTrayH = (H - margin * 2 - gap * (rows - 1)) / rows
+	local sideTrayW = sideTrayH * trayAspect
+	local gridW = sideTrayW * cols + gap * (cols - 1)
+	local sideBoardD = math.min(H - margin * 2, W - gridW - margin * 3)
+	local side = sideBoardD > boardD * 1.08
+
+	local cx: number, cy: number
+	local homes: { UDim2 } = {}
+	if side then
+		trayW, trayH, boardD = sideTrayW, sideTrayH, sideBoardD
+		local left = margin * 2 + gridW
+		cx = left + (W - margin - left) / 2
+		cy = H / 2
+		for i = 1, count + 1 do
+			local col, row = (i - 1) % cols, (i - 1) // cols
+			homes[i] = UDim2.fromOffset(margin + col * (trayW + gap) + trayW / 2, margin + row * (trayH + gap) + trayH / 2)
+		end
+	else
+		cx = math.clamp(W * 0.54, boardD / 2 + margin, W - boardD / 2 - margin)
+		cy = boardTop + boardD / 2
+		local rowW = trayW * count + gap * (count - 1)
+		local rowX = (W - rowW) / 2
+		for i = 1, count do
+			homes[i] = UDim2.fromOffset(rowX + (i - 1) * (trayW + gap) + trayW / 2, H - margin - trayH / 2)
+		end
+	end
 	local pizzaD = boardD / Assets.Meta.boardOverPizza
-	local cx = math.clamp(W * 0.54, boardD / 2 + margin, W - boardD / 2 - margin)
-	local cy = boardTop + boardD / 2
 
 	local board = Ui.new("ImageLabel", {
 		Name = "Board",
@@ -95,10 +121,8 @@ function Topping.new(ctx: any, container: Frame)
 
 	local chosen = Recipes.IngredientOrder[1]
 	local trays: { [string]: { button: ImageButton, scale: UIScale, home: UDim2 } } = {}
-	local rowX = (W - rowW) / 2
-	local rowY = H - margin - trayH
 	for i, id in Recipes.IngredientOrder do
-		local home = UDim2.fromOffset(rowX + (i - 1) * (trayW + gap) + trayW / 2, rowY + trayH / 2)
+		local home = homes[i]
 		local button = Ui.new("ImageButton", {
 			Name = "Tray_" .. id,
 			BackgroundTransparency = 1,
@@ -116,9 +140,10 @@ function Topping.new(ctx: any, container: Frame)
 	local function showChosen()
 		for id, t in trays do
 			local on = id == chosen
-			-- The chosen tray sits a little higher and larger, like it's been pulled forward.
+			-- The chosen tray sits a little larger and pulled toward the pizza.
+			local lift = if side then UDim2.fromOffset(trayW * 0.06, 0) else UDim2.fromOffset(0, -trayH * 0.14)
 			TweenService:Create(t.scale, RELEASE, { Scale = if on then 1.1 else 1 }):Play()
-			TweenService:Create(t.button, RELEASE, { Position = t.home + UDim2.fromOffset(0, if on then -trayH * 0.14 else 0) }):Play()
+			TweenService:Create(t.button, RELEASE, { Position = if on then t.home + lift else t.home }):Play()
 			t.button.ZIndex = if on then 5 else 4
 		end
 	end
@@ -129,9 +154,16 @@ function Topping.new(ctx: any, container: Frame)
 			ctx.send("undoTopping", { pizzaId = current.id })
 		end
 	end)
-	undo.frame.AnchorPoint = Vector2.new(1, 0)
-	undo.frame.Position = UDim2.fromOffset(W - margin, margin)
-	undo.frame.Size = if ctx.compact then UDim2.fromOffset(92, 36) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 44, 64))
+	if side then
+		-- The spare cell of the tray grid.
+		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		undo.frame.Position = homes[count + 1]
+		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.min(trayH * 0.56, 44))
+	else
+		undo.frame.AnchorPoint = Vector2.new(1, 0)
+		undo.frame.Position = UDim2.fromOffset(W - margin, margin)
+		undo.frame.Size = if ctx.compact then UDim2.fromOffset(92, 36) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 44, 64))
+	end
 	undo.frame.ZIndex = 5
 	undo.frame.Parent = frame
 
