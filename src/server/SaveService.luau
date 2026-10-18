@@ -76,10 +76,10 @@ end
 
 function SaveService.load(player: Player): Profile
 	local profile: Profile
-	if not store then
-		profile = { status = "unavailable", data = defaultData(), message = "Saving is unavailable in this session (" .. tostring(storeError) .. ")" }
-	elseif SaveService.simulateLoadFailure then
+	if SaveService.simulateLoadFailure then
 		profile = { status = "failed", data = defaultData(), message = "Couldn't load your progress. Playing without saving so nothing gets overwritten." }
+	elseif not store then
+		profile = { status = "unavailable", data = defaultData(), message = "Saving is unavailable in this session (" .. tostring(storeError) .. ")" }
 	else
 		local ok, result = withRetries(function()
 			return (store :: DataStore):GetAsync(key(player))

@@ -57,6 +57,8 @@ type Session = {
 
 local ShiftService = {}
 ShiftService.sessions = {} :: { [Player]: Session }
+-- Called when state changes outside a client request (a save finishing), so Main can push.
+ShiftService.changed = nil :: ((Player) -> ())?
 
 local function now(): number
 	return workspace:GetServerTimeNow()
@@ -295,9 +297,16 @@ local function finishIfDone(session: Session)
 		end
 	end
 	shift.finished = true
-	local saved, message = SaveService.commitShift(session.player, shift.id, shift.tips, shift.xp)
-	shift.saved = saved
-	shift.saveMessage = message
+	shift.saveMessage = "Saving..."
+	-- The save can retry for several seconds; don't hold the Serve reply for it.
+	task.spawn(function()
+		local saved, message = SaveService.commitShift(session.player, shift.id, shift.tips, shift.xp)
+		shift.saved = saved
+		shift.saveMessage = if saved then nil else message
+		if ShiftService.changed then
+			ShiftService.changed(session.player)
+		end
+	end)
 end
 
 function Actions.serve(shift: Shift, args: any, session: Session): (boolean, string?)
@@ -333,6 +342,12 @@ function Actions.newShift(shift: Shift, _args: any, session: Session): (boolean,
 	end
 	session.shift = newShift()
 	return true, nil
+end
+
+-- Runs one action without the sequence and rate checks. Only for trusted server code
+-- (the Studio test hook); client intents always go through handle().
+function ShiftService.apply(session: Session, action: string, args: any): (boolean, string?)
+	return Actions[action](session.shift, args, session)
 end
 
 ------------------------------------------------------------------------------------------

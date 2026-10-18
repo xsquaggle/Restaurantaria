@@ -555,16 +555,19 @@ end
 local function refreshSummary(snap: any)
 	local summary = ui.summary
 	summary.Visible = snap.finished == true
-	if not snap.finished or ui.summaryShift == snap.shiftId then
+	-- Rebuilt when the save result arrives, which can be after the shift ends.
+	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.saved), tostring(snap.saveMessage)) else nil
+	if not snap.finished or ui.summaryShift == key then
 		return
 	end
-	ui.summaryShift = snap.shiftId
+	ui.summaryShift = key
 	Ui.clear(summary)
+	local area = ui.root.AbsoluteSize
 	local card = Ui.new("Frame", {
 		BackgroundColor3 = C.paper,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(if ctx.compact then 420 else 560, if ctx.compact then 300 else 400),
+		Size = UDim2.fromOffset(math.min(if ctx.compact then 420 else 560, area.X - 24), math.min(if ctx.compact then 300 else 400, area.Y - 24)),
 		ZIndex = 21,
 		Parent = summary,
 	}, { Ui.corner(24), Ui.stroke(C.ink, 3) })
@@ -573,7 +576,9 @@ local function refreshSummary(snap: any)
 		string.format("Tips this shift: %d", snap.tips),
 		string.format("Experience: +%d", snap.xp),
 		string.format("Rank %d · %d shifts completed", profile.rank or 1, profile.shiftsCompleted or 0),
-		if snap.saved then "Progress saved" else ("Not saved: " .. tostring(snap.saveMessage or profile.message or "unknown")),
+		if snap.saved then "Progress saved"
+			elseif snap.saveMessage == "Saving..." then "Saving..."
+			else ("Not saved: " .. tostring(snap.saveMessage or profile.message or "unknown")),
 	}
 	Ui.text({
 		Text = "Shift complete",
