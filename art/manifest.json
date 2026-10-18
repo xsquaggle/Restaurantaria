@@ -1,0 +1,95 @@
+{
+ "about": "Generated art sources and how tools/ArtPipeline.luau turns them into runtime sprites. Owner: Claude via Higgsfield (gameplay and environment art). UI art comes from Astra (ChatGPT) and is listed separately.",
+ "model": "Higgsfield gpt_image_2_5, quality high, 2k, with art/reference/screens-v2/01-topping.png as the style reference",
+ "sources": [
+  {
+   "id": "toppings_raw_v1",
+   "job": "957201b0-1db1-48e9-8246-3abb545f358b",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210516_957201b0-1db1-48e9-8246-3abb545f358b.png",
+   "kind": "sheet",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_1",
+      "topping_pepperoni_2",
+      "topping_pepperoni_3",
+      "topping_mushroom_1",
+      "topping_mushroom_2",
+      "topping_mushroom_3",
+      "topping_basil_1",
+      "topping_basil_2",
+      "topping_basil_3",
+      "topping_olive_1",
+      "topping_olive_2",
+      "topping_olive_3",
+      "topping_pepper_1",
+      "topping_pepper_2",
+      "topping_pepper_3"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "pizza_raw_v1",
+   "job": "349c2fc0-d5dc-4ee6-8061-fc33cf6d876b",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210517_349c2fc0-d5dc-4ee6-8061-fc33cf6d876b.png",
+   "kind": "sprite",
+   "outputs": [
+    {
+     "name": "pizza_raw",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "board_round_v1",
+   "job": "e43fe98e-f83c-4ddf-a5ea-e20a12bb5c9c",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210518_e43fe98e-f83c-4ddf-a5ea-e20a12bb5c9c.png",
+   "kind": "sprite",
+   "outputs": [
+    {
+     "name": "board_round",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "counter_topping_v1",
+   "job": "ea6e3c60-c765-42b4-b53c-01b88897f900",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210517_ea6e3c60-c765-42b4-b53c-01b88897f900.png",
+   "kind": "tiles",
+   "outputs": [
+    {
+     "name": "counter_topping",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "trays_v1",
+   "job": "2661d9c2-8894-4dc2-a1f5-c5548aa734d9",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210516_2661d9c2-8894-4dc2-a1f5-c5548aa734d9.png",
+   "kind": "sheet",
+   "outputs": [
+    {
+     "names": [
+      "tray_pepperoni",
+      "tray_mushroom",
+      "tray_basil",
+      "tray_olive",
+      "tray_pepper"
+     ],
+     "side": 384,
+     "pad": 4
+    }
+   ]
+  }
+ ]
+}
