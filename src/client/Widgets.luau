@@ -323,19 +323,23 @@ export type RailTicket = {
 	setPatience: (RailTicket, number, string) -> (),
 }
 
-local function requirementLines(order: any): { { icon: string?, title: string, sub: string? } }
+-- Compact (phone) tickets put each requirement on one line so the text can stay large.
+local function requirementLines(order: any, compact: boolean): { { icon: string?, title: string, sub: string? } }
 	local recipe = Recipes.ById[order.recipe]
 	local lines = {}
 	if #recipe.toppings == 0 then
-		table.insert(lines, { title = "Cheese only", sub = "No toppings" })
+		table.insert(lines, if compact then { title = "Cheese only" } else { title = "Cheese only", sub = "No toppings" })
 	end
 	for _, req in recipe.toppings do
 		local info = Recipes.Ingredients[req.ingredient]
-		local sub = string.format("%d piece%s", req.count, if req.count == 1 then "" else "s")
-		if req.region ~= "whole" then
-			sub ..= ", " .. REGION_TEXT[req.region]
+		local where = if req.region ~= "whole" then ", " .. REGION_TEXT[req.region] else ""
+		local icon = "topping_" .. info.art .. "_1"
+		if compact then
+			table.insert(lines, { icon = icon, title = string.format("%s x%d%s", info.name, req.count, where) })
+		else
+			local sub = string.format("%d piece%s", req.count, if req.count == 1 then "" else "s") .. where
+			table.insert(lines, { icon = icon, title = info.name, sub = sub })
 		end
-		table.insert(lines, { icon = "topping_" .. info.art .. "_1", title = info.name, sub = sub })
 	end
 	table.insert(lines, { icon = "icon_bake", title = BAKE_TEXT[order.bake] })
 	table.insert(lines, { icon = "icon_cut", title = order.slices .. " wedges" })
@@ -358,7 +362,7 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 	})
 	local name = Ui.text({
 		FontFace = Theme.Font.bodySemi,
-		TextSize = math.max(12, math.floor(headerH * 0.3)),
+		TextSize = math.max(14, math.floor(headerH * 0.3)),
 		TextColor3 = C.mutedInk,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(padX, padTop + headerH * 0.7),
@@ -395,7 +399,7 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 			end
 			number.Text = string.format("#%02d", customer.id)
 			name.Text = Recipes.Cast[customer.cast].name
-			local lines = requirementLines(customer.order)
+			local lines = requirementLines(customer.order, compact)
 			local rowH = math.min(body.Size.Y.Offset / math.max(#lines, 3), if compact then 40 else 76)
 			local icon = math.floor(rowH * 0.78)
 			for i, line in lines do
@@ -416,7 +420,8 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 					Art.apply(img, line.icon)
 				end
 				local textX = icon + math.floor(rowH * 0.2)
-				local titleSize = math.clamp(math.floor(rowH * (if line.sub then 0.4 else 0.44)), 12, 28)
+				-- Style guide floor: 16 px for ordinary text, 14 for secondary.
+				local titleSize = math.clamp(math.floor(rowH * (if line.sub then 0.4 elseif compact then 0.56 else 0.44)), 16, 28)
 				local title = Ui.text({
 					Text = line.title,
 					FontFace = Theme.Font.display,
@@ -428,9 +433,9 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 					Parent = row,
 				})
 				-- Long titles shrink to fit the ticket instead of being cut off.
-				Ui.new("UITextSizeConstraint", { MaxTextSize = titleSize, MinTextSize = 11, Parent = title })
+				Ui.new("UITextSizeConstraint", { MaxTextSize = titleSize, MinTextSize = 12, Parent = title })
 				if line.sub then
-					local subSize = math.clamp(math.floor(rowH * 0.32), 11, 24)
+					local subSize = math.clamp(math.floor(rowH * 0.32), 14, 24)
 					Ui.text({
 						Text = line.sub,
 						FontFace = Theme.Font.bodySemi,
@@ -456,13 +461,14 @@ end
 
 export type RailTab = { button: TextButton, customer: any, setPatience: (RailTab, number, string) -> () }
 
-function Widgets.railTab(customer: any, height: number): RailTab
+-- Compact tabs sit two to a row and show only the face and number.
+function Widgets.railTab(customer: any, height: number, compact: boolean?): RailTab
 	local button = Ui.new("TextButton", {
 		Name = "Tab" .. customer.id,
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, height),
+		Size = if compact then UDim2.new(0.5, -2, 0, height) else UDim2.new(1, 0, 0, height),
 	})
 	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = button }), "ui_ticket_tab")
 	local faceSize = math.floor(height * 0.72)
@@ -475,7 +481,7 @@ function Widgets.railTab(customer: any, height: number): RailTab
 		ImageRectSize = Vector2.new(216, 216),
 		Parent = button,
 	})
-	local textSize = math.clamp(math.floor(height * 0.46), 13, 30)
+	local textSize = math.clamp(math.floor(height * 0.46), 16, 30)
 	Ui.text({
 		Text = string.format("#%02d", customer.id),
 		FontFace = Theme.Font.display,
@@ -489,7 +495,7 @@ function Widgets.railTab(customer: any, height: number): RailTab
 	local x = faceSize + 12 + textSize * 2.4
 	local recipe = Recipes.ById[customer.order.recipe]
 	local icon = math.floor(height * 0.62)
-	for _, req in recipe.toppings do
+	for _, req in if compact then {} else recipe.toppings do
 		local info = Recipes.Ingredients[req.ingredient]
 		local img = Ui.new("ImageLabel", {
 			BackgroundTransparency = 1,
@@ -511,7 +517,7 @@ function Widgets.railTab(customer: any, height: number): RailTab
 		})
 		x += icon + textSize * 1.9
 	end
-	if #recipe.toppings == 0 then
+	if #recipe.toppings == 0 and not compact then
 		Ui.text({
 			Text = "Cheese",
 			FontFace = Theme.Font.display,

@@ -268,7 +268,7 @@ local function buildLayout()
 	local hudInTopbar = inset.Height >= 32 and inset.Width >= 300
 	local hudH = if hudInTopbar then inset.Height else 44
 	local top = if hudInTopbar then 0 else hudH
-	local navH = if compact then 56 else math.clamp(math.round(size.Y * 0.11), 64, 120)
+	local navH = if compact then 64 else math.clamp(math.round(size.Y * 0.11), 64, 120)
 	local railW = if compact then math.max(math.round(size.X * 0.27), 176) else math.clamp(math.round(size.X * 0.23), 280, 460)
 	local railH = size.Y - top - navH
 	ctx.stationSize = Vector2.new(size.X - railW, railH)
@@ -402,10 +402,12 @@ local function buildLayout()
 	Art.apply(panel, "ui_rail_panel")
 	local pad = if compact then 6 else math.round(railW * 0.045)
 	local gap = if compact then 4 else 8
-	local actionH = if compact then 46 else math.clamp(math.round(railH * 0.13), 56, 96)
-	local tabH = if compact then 34 else math.clamp(math.round(railH * 0.085), 44, 72)
+	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
+	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.13), 56, 96)
+	local tabH = if compact then 48 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
-	local ticketH = railH - pad * 2 - actionH - gap - tabsN * (tabH + gap)
+	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
+	local ticketH = railH - pad * 2 - actionH - gap - tabRows * (tabH + gap)
 	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
 	ticket.frame.Position = UDim2.fromOffset(pad, pad)
 	ticket.frame.Parent = rail
@@ -422,9 +424,13 @@ local function buildLayout()
 		Name = "Tabs",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(pad, pad + ticketH + gap),
-		Size = UDim2.fromOffset(railW - pad * 2, tabsN * (tabH + gap)),
+		Size = UDim2.fromOffset(railW - pad * 2, tabRows * (tabH + gap)),
 		Parent = rail,
-	}, { Ui.new("UIListLayout", { Padding = UDim.new(0, gap), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	}, {
+		if compact
+			then Ui.new("UIGridLayout", { CellPadding = UDim2.fromOffset(gap, gap), CellSize = UDim2.new(0.5, -gap / 2, 0, tabH), SortOrder = Enum.SortOrder.LayoutOrder })
+			else Ui.new("UIListLayout", { Padding = UDim.new(0, gap), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 	local actionArea = Ui.new("Frame", {
 		Name = "Action",
 		BackgroundTransparency = 1,
@@ -631,7 +637,7 @@ local function refreshRail(snap: any)
 			seen[customer.id] = true
 			local tab = ui.railTabs[customer.id]
 			if not tab then
-				tab = Widgets.railTab(customer, ui.tabH)
+				tab = Widgets.railTab(customer, ui.tabH, ctx.compact)
 				tab.button.LayoutOrder = customer.id
 				tab.button.Parent = ui.tabList
 				tab.button.Activated:Connect(function()
