@@ -11,7 +11,7 @@ Recipes.Ingredients = {
 	pepperoni = { name = "Pepperoni", plural = "pepperoni", colour = Color3.fromRGB(184, 58, 42), size = 0.13, shape = "disc" },
 	mushroom = { name = "Mushroom", plural = "mushrooms", colour = Color3.fromRGB(222, 205, 176), size = 0.11, shape = "cap" },
 	olive = { name = "Olive", plural = "olives", colour = Color3.fromRGB(52, 44, 48), size = 0.08, shape = "ring" },
-	pepper = { name = "Green pepper", plural = "green peppers", colour = Color3.fromRGB(78, 140, 62), size = 0.10, shape = "ring" },
+	pepper = { name = "Green pepper", short = "Pepper", plural = "green peppers", colour = Color3.fromRGB(78, 140, 62), size = 0.10, shape = "ring" },
 	onion = { name = "Onion", plural = "onions", colour = Color3.fromRGB(205, 170, 205), size = 0.10, shape = "ring" },
 }
 

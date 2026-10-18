@@ -58,11 +58,17 @@ function Topping.new(ctx: any, container: Frame)
 		Size = UDim2.fromOffset(sideW, area.Y - pad * 2),
 		Parent = frame,
 	})
-	local binH = if ctx.compact then 48 else 64
-	local grid = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, binH * 3 + 16), Parent = side }, {
+	-- Phones get three narrow tiles per row (swatch over a small label) so all five bins fit
+	-- above Undo and Bake; wider screens keep two wide tiles with the name beside the swatch.
+	local stacked = ctx.compact
+	local columns = if stacked then 3 else 2
+	local binH = if stacked then 54 else 64
+	local rows = math.ceil(#Recipes.IngredientOrder / columns)
+	local gap = if stacked then 6 else 8
+	local grid = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, binH * rows + gap * (rows - 1)), Parent = side }, {
 		Ui.new("UIGridLayout", {
-			CellSize = UDim2.new(0.5, -4, 0, binH),
-			CellPadding = UDim2.fromOffset(8, 8),
+			CellSize = UDim2.new(1 / columns, -gap * (columns - 1) / columns, 0, binH),
+			CellPadding = UDim2.fromOffset(gap, gap),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -79,17 +85,26 @@ function Topping.new(ctx: any, container: Frame)
 		}, { Ui.corner(12) })
 		binStrokes[id] = Ui.stroke(C.ink, 2)
 		binStrokes[id].Parent = bin
-		local swatch = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(0.42, 0.8), Position = UDim2.fromScale(0.02, 0.1), Parent = bin })
+		local swatch = Ui.new("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = if stacked then Vector2.new(0.5, 0) else Vector2.zero,
+			Size = if stacked then UDim2.fromScale(0.62, 0.62) else UDim2.fromScale(0.42, 0.8),
+			Position = if stacked then UDim2.fromScale(0.5, 0.04) else UDim2.fromScale(0.02, 0.1),
+			Parent = bin,
+		})
 		Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = swatch })
 		Widgets.drawPiece(swatch, { ingredient = id, x = 0, y = 0 }, 0, false)
 		local piece = swatch:FindFirstChildWhichIsA("Frame") :: Frame
 		piece.Size = UDim2.fromScale(0.8, 0.8)
 		Ui.text({
-			Text = info.name,
+			Text = if stacked then (info :: any).short or info.name else info.name,
 			FontFace = Theme.Font.bodySemi,
-			TextSize = if ctx.compact then 14 else 18,
-			Position = UDim2.fromScale(0.42, 0),
-			Size = UDim2.fromScale(0.56, 1),
+			TextSize = if stacked then 11 else 18,
+			TextXAlignment = if stacked then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
+			TextWrapped = false,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = if stacked then UDim2.new(0, 2, 0.66, 0) else UDim2.fromScale(0.42, 0),
+			Size = if stacked then UDim2.new(1, -4, 0.32, 0) else UDim2.fromScale(0.56, 1),
 			Parent = bin,
 		})
 		bin.Activated:Connect(function()
