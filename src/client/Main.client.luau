@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 
 local Shared = ReplicatedStorage.Shared
+local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
@@ -45,16 +46,17 @@ local gui = Ui.new("ScreenGui", {
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	Parent = player:WaitForChild("PlayerGui"),
 })
--- Fills the area under Roblox's top bar so the 3D world never shows behind the game.
-Ui.new("ScreenGui", {
+-- Full-screen layer behind everything: station background art, or a plain fill for stations
+-- whose art doesn't exist yet, so the 3D world never shows behind the game.
+local backdrop = Ui.new("ScreenGui", {
 	Name = "RestaurantariaBackdrop",
 	ResetOnSpawn = false,
 	IgnoreGuiInset = true,
 	DisplayOrder = -1,
 	Parent = player.PlayerGui,
-}, { Ui.new("Frame", { BackgroundColor3 = Color3.fromRGB(140, 98, 66), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }) })
--- On short screens the ticket rail and ovens move into the top bar row beside Roblox's
--- buttons, which would otherwise be dead space, so the stations keep their height.
+}, { Ui.new("Frame", { Name = "Fill", BackgroundColor3 = Color3.fromRGB(140, 98, 66), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }) })
+-- The HUD lives in the top bar row beside Roblox's buttons, which would otherwise be dead
+-- space, so the stations keep their height.
 local topGui = Ui.new("ScreenGui", {
 	Name = "RestaurantariaTop",
 	ResetOnSpawn = false,
@@ -179,8 +181,15 @@ end
 
 ------------------------------------------------------------------------------------------
 -- Layout
+--
+-- Composition follows the approved screen references (art/reference/screens-v2): the HUD
+-- (day, coins, ovens) sits in Roblox's top bar row, the ticket rail is a right-hand column
+-- with the station's main action at its foot, the four tabs run along the bottom, and the
+-- station's work surface fills the rest. A station's background art covers the whole screen
+-- behind all of it.
 
 local ui: any = nil
+local backdropFill = backdrop:FindFirstChild("Fill") :: Frame
 
 local function destroyLayout()
 	for _, conn in ctx.connections do
@@ -189,6 +198,11 @@ local function destroyLayout()
 	ctx.connections = {}
 	Ui.clear(gui)
 	Ui.clear(topGui)
+	for _, child in backdrop:GetChildren() do
+		if child ~= backdropFill then
+			child:Destroy()
+		end
+	end
 	ui = nil
 end
 
@@ -212,106 +226,211 @@ local function badge(parent: GuiObject, size: number): TextLabel
 	return b
 end
 
+-- Full-screen background art cut into tiles (Assets.Meta.backgrounds), scaled to cover the
+-- screen. Wide screens lose a little top and bottom; narrow ones lose the right edge, so
+-- the props on the left stay in view.
+local function background(name: string): Frame
+	local meta = Assets.Meta.backgrounds[name]
+	local screen = backdrop.AbsoluteSize
+	local k = math.max(screen.X / meta.width, screen.Y / meta.height)
+	local holder = Ui.new("Frame", {
+		Name = name,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		Size = UDim2.fromOffset(math.ceil(meta.width * k), math.ceil(meta.height * k)),
+		Visible = false,
+		Parent = backdrop,
+	})
+	for r = 0, meta.rows - 1 do
+		for c = 0, meta.cols - 1 do
+			local tile = Ui.new("ImageLabel", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromScale(c / meta.cols, r / meta.rows),
+				-- One extra pixel hides seams between tiles at fractional scales.
+				Size = UDim2.new(1 / meta.cols, 1, 1 / meta.rows, 1),
+				Parent = holder,
+			})
+			Art.apply(tile, string.format("%s_%d", name, r * meta.cols + c + 1))
+		end
+	end
+	return holder
+end
+
 local function buildLayout()
 	destroyLayout()
 	local size = gui.AbsoluteSize
 	local compact = size.Y < 520
 	ctx.compact = compact
 	local inset = GuiService.TopbarInset
-	local topRow = compact and inset.Height >= 40 and inset.Width >= 320
-	ctx.topRow = topRow
-	local navH = if compact then 60 else 96
-	local railH = if topRow then inset.Height elseif compact then 88 else 140
-	local ovenW = if topRow then 2 * (railH - 8) + 18 elseif compact then 156 else 250
-	-- Where the stations start inside the main gui.
-	local stationsY = if topRow then 0 else railH
-	ctx.stationSize = Vector2.new(size.X, size.Y - stationsY - navH)
+	-- The HUD uses the free part of Roblox's top bar row; without one it takes a strip of
+	-- the main area instead.
+	local hudInTopbar = inset.Height >= 32 and inset.Width >= 300
+	local hudH = if hudInTopbar then inset.Height else 44
+	local top = if hudInTopbar then 0 else hudH
+	local navH = if compact then 56 else math.clamp(math.round(size.Y * 0.11), 64, 120)
+	local railW = if compact then math.max(math.round(size.X * 0.27), 176) else math.clamp(math.round(size.X * 0.23), 280, 460)
+	local railH = size.Y - top - navH
+	ctx.stationSize = Vector2.new(size.X - railW, railH)
 
-	local root = Ui.new("Frame", { Name = "Root", BackgroundColor3 = C.wall, Size = UDim2.fromScale(1, 1), Parent = gui })
-	local railHost: GuiObject = root
-	if topRow then
-		railHost = Ui.new("Frame", {
-			Name = "TopRow",
-			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(inset.Min.X, inset.Min.Y),
-			Size = UDim2.fromOffset(inset.Width, inset.Height),
-			Parent = topGui,
-		})
+	local root = Ui.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = gui })
+
+	local backgrounds = {}
+	for _, name in STATION_ORDER do
+		local art = Stations[name].background
+		if art then
+			backgrounds[name] = background(art)
+		end
 	end
 
-	-- Ticket rail (top-left): compact summaries of open tickets.
-	local rail = Ui.new("ScrollingFrame", {
-		Name = "Rail",
-		BackgroundColor3 = Color3.fromRGB(140, 98, 66),
-		BackgroundTransparency = if topRow then 1 else 0,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, -ovenW, 0, railH),
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		ScrollBarThickness = 0,
-		Parent = railHost,
-	}, {
-		Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
-		Ui.new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
+	-- HUD: day and coins on the left, the two ovens on the right. Tapping an oven opens Bake.
+	local hud = Ui.new("Frame", {
+		Name = "Hud",
+		BackgroundTransparency = 1,
+		Position = if hudInTopbar then UDim2.fromOffset(inset.Min.X, inset.Min.Y) else UDim2.fromOffset(0, 0),
+		Size = if hudInTopbar then UDim2.fromOffset(inset.Width, inset.Height) else UDim2.new(1, 0, 0, hudH),
+		Parent = if hudInTopbar then topGui else root,
 	})
-	local railEmpty = Ui.text({
-		Text = "No open tickets",
-		TextColor3 = C.paper,
+	local hudText = math.clamp(math.floor(hudH * 0.42), 14, 26)
+	local day = Ui.text({
+		Name = "Day",
+		Text = "Day 1",
+		FontFace = Theme.Font.display,
+		TextSize = hudText,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.fromOffset(8, 0),
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = hud,
+	})
+	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = day })
+	local coins = Ui.text({
+		Name = "Coins",
+		Text = "0 coins",
+		FontFace = Theme.Font.display,
+		TextSize = hudText,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.fromOffset(8 + hudText * 4, 0),
+		Size = UDim2.new(0, 0, 1, 0),
+		Parent = hud,
+	})
+	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = coins })
+	local banner = Ui.text({
+		Name = "SaveBanner",
+		Text = "",
+		Visible = false,
 		FontFace = Theme.Font.bodySemi,
-		TextSize = if compact then 16 else 20,
-		Size = UDim2.new(0, if topRow then 140 else 220, 1, 0),
-		Parent = rail,
+		TextSize = if compact then 12 else 14,
+		TextColor3 = C.mutedInk,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.42, 0),
+		Size = UDim2.new(0.3, 0, 1, 0),
+		Parent = hud,
 	})
-
-	-- Oven status (top-right), visible on every station. Tap to jump to the ovens.
+	local ringSize = hudH - 6
+	local ovenW = 2 * (ringSize + (if compact then 44 else 64)) + 12
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Color3.fromRGB(92, 64, 52),
-		BackgroundTransparency = if topRow then 1 else 0,
-		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromOffset(ovenW, railH),
-		Parent = railHost,
+		Position = UDim2.new(1, -4, 0, 0),
+		Size = UDim2.new(0, ovenW, 1, 0),
+		Parent = hud,
 	})
-	-- In the top row the ring's own slot number stands in for the "Oven N" caption.
-	local ringSize = if topRow then railH - 8 else math.min(railH - (if compact then 26 else 36), ovenW / 2 - 12)
 	local ovenRings = {}
 	for i = 1, Config.Oven.slots do
-		local ring = Widgets.ring(ringSize)
-		ring.frame.AnchorPoint = Vector2.new(0.5, 0)
-		ring.frame.Position = UDim2.new((i - 0.5) / Config.Oven.slots, 0, 0, 4)
-		ring.frame.Parent = ovenPanel
-		local label = Ui.text({
-			Text = "Oven " .. i,
-			FontFace = Theme.Font.bodySemi,
-			TextColor3 = C.paper,
-			TextSize = if compact then 14 else 18,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new((i - 0.5) / Config.Oven.slots, 0, 1, -2),
-			Size = UDim2.new(0.5, 0, 0, if compact then 18 else 24),
-			Visible = not topRow,
+		local cell = Ui.new("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale((i - 1) / Config.Oven.slots, 0),
+			Size = UDim2.fromScale(1 / Config.Oven.slots, 1),
 			Parent = ovenPanel,
 		})
+		local ring = Widgets.ring(ringSize)
+		ring.frame.AnchorPoint = Vector2.new(0, 0.5)
+		ring.frame.Position = UDim2.fromScale(0, 0.5)
+		ring.frame.Parent = cell
+		local label = Ui.text({
+			Text = "Empty",
+			FontFace = Theme.Font.display,
+			TextSize = math.clamp(math.floor(hudH * 0.36), 12, 22),
+			TextWrapped = false,
+			Position = UDim2.fromOffset(ringSize + 4, 0),
+			Size = UDim2.new(1, -(ringSize + 4), 1, 0),
+			Parent = cell,
+		})
+		Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = label })
 		ovenRings[i] = { ring = ring, label = label }
 	end
 	ovenPanel.Activated:Connect(function()
 		ctx.switchTo("Bake")
 	end)
 
-	-- Stations
+	-- Stations: each fills the work surface left of the rail.
 	local stationArea = Ui.new("Frame", {
 		Name = "Stations",
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(0, stationsY),
-		Size = UDim2.new(1, 0, 1, -(stationsY + navH)),
+		Position = UDim2.fromOffset(0, top),
+		Size = UDim2.fromOffset(ctx.stationSize.X, railH),
 		Parent = root,
 	})
+
+	-- Rail: active ticket, the other open tickets as tabs, then the station's main action.
+	local rail = Ui.new("Frame", {
+		Name = "Rail",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, top),
+		Size = UDim2.fromOffset(railW, railH),
+		Parent = root,
+	})
+	local panel = Ui.new("ImageLabel", { Name = "Panel", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = rail })
+	Art.apply(panel, "ui_rail_panel")
+	local pad = if compact then 6 else math.round(railW * 0.045)
+	local gap = if compact then 4 else 8
+	local actionH = if compact then 46 else math.clamp(math.round(railH * 0.13), 56, 96)
+	local tabH = if compact then 34 else math.clamp(math.round(railH * 0.085), 44, 72)
+	local tabsN = Config.Shift.maxActiveTickets - 1
+	local ticketH = railH - pad * 2 - actionH - gap - tabsN * (tabH + gap)
+	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
+	ticket.frame.Position = UDim2.fromOffset(pad, pad)
+	ticket.frame.Parent = rail
+	local railEmpty = Ui.text({
+		Text = "No open tickets",
+		FontFace = Theme.Font.display,
+		TextSize = if compact then 16 else 22,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(pad, pad),
+		Size = UDim2.fromOffset(railW - pad * 2, ticketH),
+		Parent = rail,
+	})
+	local tabList = Ui.new("Frame", {
+		Name = "Tabs",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(pad, pad + ticketH + gap),
+		Size = UDim2.fromOffset(railW - pad * 2, tabsN * (tabH + gap)),
+		Parent = rail,
+	}, { Ui.new("UIListLayout", { Padding = UDim.new(0, gap), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local actionArea = Ui.new("Frame", {
+		Name = "Action",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, pad, 1, -pad),
+		Size = UDim2.new(1, -pad * 2, 0, actionH),
+		Parent = rail,
+	})
+	local actions = {}
+	function ctx.actionHost(name: string): Frame
+		if not actions[name] then
+			actions[name] = Ui.new("Frame", { Name = name, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = actionArea })
+		end
+		return actions[name]
+	end
+
 	local stations = {}
 	for _, name in STATION_ORDER do
 		local holder = Ui.new("Frame", { Name = name, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = stationArea })
@@ -322,8 +441,7 @@ local function buildLayout()
 	-- Navigation: proof backplate with four independent hit regions and live badges.
 	local nav = Ui.new("Frame", {
 		Name = "Nav",
-		BackgroundColor3 = Color3.fromRGB(140, 98, 66),
-		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.new(1, 0, 0, navH),
@@ -339,15 +457,7 @@ local function buildLayout()
 		Size = UDim2.fromOffset(barW, barH),
 		Parent = nav,
 	})
-	local barId = Assets.get("ui_tabBar_idle")
-	if barId then
-		Ui.new("ImageLabel", { BackgroundTransparency = 1, Image = barId, Size = UDim2.fromScale(1, 1), Parent = bar })
-	else
-		Ui.new("Frame", { BackgroundColor3 = C.paper, Size = UDim2.fromScale(1, 1), Parent = bar }, { Ui.corner(14), Ui.stroke(C.ink, 3) })
-		for i = 1, 3 do
-			Ui.new("Frame", { BackgroundColor3 = C.ink, BorderSizePixel = 0, Position = UDim2.new(i / 4, -1, 0.1, 0), Size = UDim2.new(0, 2, 0.8, 0), Parent = bar })
-		end
-	end
+	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = bar }), "ui_tabBar_idle")
 	local tabs = {}
 	local tabNames = { Order = "Order", Topping = "Topping", Bake = "Bake", Cut = "Cut" }
 	for i, name in STATION_ORDER do
@@ -362,8 +472,8 @@ local function buildLayout()
 		})
 		local label = Ui.text({
 			Text = tabNames[name],
-			FontFace = Theme.Font.bodySemi,
-			TextSize = if compact then 18 else 26,
+			FontFace = Theme.Font.display,
+			TextSize = if compact then 18 else math.clamp(math.floor(barH * 0.34), 18, 30),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			Size = UDim2.fromScale(0.8, 0.6),
 			Position = UDim2.fromScale(0.08, 0.16),
@@ -397,30 +507,13 @@ local function buildLayout()
 		tabs[name] = { label = label, indicator = indicator, badge = b, glow = glow }
 	end
 
-	-- Status banner for save problems, and the result toast area.
-	local banner = Ui.text({
-		Name = "SaveBanner",
-		Text = "",
-		Visible = false,
-		BackgroundTransparency = 0.1,
-		BackgroundColor3 = C.paper,
-		FontFace = Theme.Font.bodySemi,
-		TextSize = if compact then 14 else 16,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0),
-		Size = UDim2.new(0, math.max(120, (size.X - barW) / 2 - 16), 1, -12),
-		ZIndex = 8,
-		Parent = nav,
-	})
-	Ui.corner(8).Parent = banner
-	-- Results appear top-centre over the station and never take input, so they can't cover
-	-- or swallow a tap meant for Serve, Undo or the pizza.
+	-- Results appear top-centre over the work surface and never take input, so they can't
+	-- cover or swallow a tap meant for a button or the pizza.
 	local toastHolder = Ui.new("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, stationsY + 8),
-		Size = UDim2.fromOffset(math.min(if compact then 360 else 440, size.X - 32), 0),
+		Position = UDim2.fromOffset(ctx.stationSize.X / 2, top + 8),
+		Size = UDim2.fromOffset(math.min(if compact then 340 else 440, ctx.stationSize.X - 32), 0),
 		ZIndex = 9,
 		Parent = root,
 	})
@@ -436,9 +529,15 @@ local function buildLayout()
 
 	ui = {
 		root = root,
-		rail = rail,
+		day = day,
+		coins = coins,
+		ticket = ticket,
 		railEmpty = railEmpty,
-		railCards = {},
+		tabList = tabList,
+		tabH = tabH,
+		railTabs = {},
+		actions = actions,
+		backgrounds = backgrounds,
 		ovenRings = ovenRings,
 		stations = stations,
 		tabs = tabs,
@@ -461,6 +560,12 @@ function ctx.switchTo(name: string, instant: boolean?)
 	ctx.station = name
 	for n, s in ui.stations do
 		s.holder.Visible = n == name
+	end
+	for n, f in ui.backgrounds do
+		f.Visible = n == name
+	end
+	for n, f in ui.actions do
+		f.Visible = n == name
 	end
 	for n, t in ui.tabs do
 		local on = n == name
@@ -487,85 +592,59 @@ function ctx.selectTicket(id: number?)
 	ctx.refresh()
 end
 
-local STAGE_TEXT = { topping = "Topping", oven = "In oven", cutting = "Cutting", served = "Served" }
-
 local function refreshRail(snap: any)
-	local seen = {}
-	local compact = ctx.compact
+	-- The big ticket is whatever the visible station is working on (or the selected ticket);
+	-- every other open ticket is a tab underneath it.
 	local active = ctx.activeTicket(snap)
+	local open = {}
 	for _, customer in snap.customers do
 		if customer.status == "ordered" then
+			table.insert(open, customer)
+		end
+	end
+	table.sort(open, function(a, b)
+		return a.id < b.id
+	end)
+	local shown = nil
+	for _, c in open do
+		if c.id == active then
+			shown = c
+		end
+	end
+	shown = shown or open[1]
+	ui.ticket:set(shown)
+	ui.ticket.frame.Visible = shown ~= nil
+	ui.railEmpty.Visible = shown == nil
+	local seen = {}
+	for _, customer in open do
+		if customer ~= shown then
 			seen[customer.id] = true
-			local card = ui.railCards[customer.id]
-			if not card then
-				local topRow = ctx.topRow
-				local w = if topRow then 128 elseif compact then 150 else 220
-				local button = Ui.new("TextButton", {
-					Text = "",
-					AutoButtonColor = false,
-					BackgroundColor3 = C.paper,
-					Size = UDim2.new(0, w, 1, if topRow then -8 else -12),
-					LayoutOrder = customer.id,
-					Parent = ui.rail,
-				}, { Ui.corner(8) })
-				local stroke = Ui.stroke(C.ink, 2)
-				stroke.Parent = button
-				local recipe = Recipes.ById[customer.order.recipe]
-				-- Top-row cards are 50px tall: name and stage share one line above the meter;
-				-- the recipe is on the station's full ticket.
-				local title = Ui.text({
-					Text = Recipes.Cast[customer.cast].name .. (if topRow then "" else " · " .. recipe.name),
-					FontFace = Theme.Font.bodyBold,
-					TextSize = if topRow then 14 else 16,
-					TextWrapped = false,
-					TextTruncate = Enum.TextTruncate.AtEnd,
-					Position = UDim2.fromOffset(if topRow then 6 else 8, if topRow then 2 else 4),
-					Size = UDim2.new(1, if topRow then -12 else -16, 0, if topRow then 16 else 18),
-					Parent = button,
-				})
-				local stage = Ui.text({
-					Text = "",
-					FontFace = Theme.Font.body,
-					TextSize = if topRow then 12 elseif compact then 14 else 16,
-					TextColor3 = C.mutedInk,
-					TextXAlignment = if topRow then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
-					Position = UDim2.fromOffset(if topRow then 6 else 8, if topRow then 2 else 22),
-					Size = UDim2.new(1, if topRow then -12 else -16, 0, if topRow then 16 else 18),
-					Parent = button,
-				})
-				local meter = Widgets.patience()
-				local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
-				aspect.DominantAxis = Enum.DominantAxis.Height
-				meter.frame.AnchorPoint = Vector2.new(0.5, 1)
-				meter.frame.Position = UDim2.new(0.5, 0, 1, if topRow then -2 else -4)
-				meter.frame.Size = UDim2.new(1, -8, 1, if topRow then -20 else -46)
-				meter.frame.Parent = button
-				button.Activated:Connect(function()
+			local tab = ui.railTabs[customer.id]
+			if not tab then
+				tab = Widgets.railTab(customer, ui.tabH)
+				tab.button.LayoutOrder = customer.id
+				tab.button.Parent = ui.tabList
+				tab.button.Activated:Connect(function()
 					ctx.selectTicket(customer.id)
 				end)
-				card = { button = button, stroke = stroke, stage = stage, meter = meter, title = title }
-				ui.railCards[customer.id] = card
+				ui.railTabs[customer.id] = tab
 			end
-			card.customer = customer
-			local pizza = nil
-			for _, p in snap.pizzas do
-				if p.id == customer.pizzaId then
-					pizza = p
-				end
-			end
-			card.stage.Text = if pizza then (STAGE_TEXT[pizza.stage] .. (if pizza.slot then " " .. pizza.slot else "")) else ""
-			local selected = customer.id == active
-			card.stroke.Color = if selected then C.action else C.ink
-			card.stroke.Thickness = if selected then 4 else 2
+			tab.customer = customer
 		end
 	end
-	for id, card in ui.railCards do
+	for id, tab in ui.railTabs do
 		if not seen[id] then
-			card.button:Destroy()
-			ui.railCards[id] = nil
+			tab.button:Destroy()
+			ui.railTabs[id] = nil
 		end
 	end
-	ui.railEmpty.Visible = next(ui.railCards) == nil
+end
+
+local function refreshHud(snap: any)
+	local profile = snap.profile or {}
+	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
+	local total = (profile.tips or 0) + (if snap.saved then 0 else snap.tips)
+	ui.coins.Text = string.format("%d coins", total)
 end
 
 local function refreshBadges(snap: any)
@@ -717,6 +796,7 @@ function ctx.refresh()
 		return
 	end
 	refreshRail(snap)
+	refreshHud(snap)
 	refreshBadges(snap)
 	for _, s in ui.stations do
 		s.refresh(snap)
@@ -760,9 +840,14 @@ RunService.RenderStepped:Connect(function()
 		return
 	end
 	local now = workspace:GetServerTimeNow()
-	for _, card in ui.railCards do
-		local f = Scoring.patienceFraction(card.customer.arrivedAt, now)
-		card.meter:set(f, Scoring.patienceBand(f))
+	local shown = ui.ticket.customer
+	if shown then
+		local f = Scoring.patienceFraction(shown.arrivedAt, now)
+		ui.ticket:setPatience(f, Scoring.patienceBand(f))
+	end
+	for _, tab in ui.railTabs do
+		local f = Scoring.patienceFraction(tab.customer.arrivedAt, now)
+		tab:setPatience(f, Scoring.patienceBand(f))
 	end
 	local alert = false
 	for i, slot in ui.ovenRings do
@@ -778,10 +863,12 @@ RunService.RenderStepped:Connect(function()
 		if pizza then
 			local customer = ctx.customer(snap, pizza.ticketId)
 			local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
-			slot.ring:set(status.progress, status.colour, tostring(i), status.text)
+			slot.ring:set(status.progress, status.colour, tostring(i), "")
+			slot.label.Text = status.text
 			alert = alert or status.alert
 		else
-			slot.ring:set(0, C.oven, tostring(i), "Empty")
+			slot.ring:set(0, C.oven, tostring(i), "")
+			slot.label.Text = "Empty"
 		end
 	end
 	ui.tabs.Bake.badge.BackgroundColor3 = if alert then C.tomato else C.mutedInk
@@ -798,7 +885,7 @@ gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 	end
 end)
 GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(function()
-	if ui and ctx.compact then
+	if ui then
 		buildLayout()
 	end
 end)

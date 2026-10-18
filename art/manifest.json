@@ -87,7 +87,128 @@
       "tray_pepper"
      ],
      "side": 384,
-     "pad": 4
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "ui_orderTicket_blank",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_orderTicket_blank.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_orderTicket_blank"
+    }
+   ]
+  },
+  {
+   "id": "ui_ovenRing_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_ovenRing_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ovenRing_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_grumpy",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_grumpy.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_grumpy"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_happy",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_happy.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_happy"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_impatient",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_impatient.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_impatient"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_neutral",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_neutral.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_neutral"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_disabled",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_highlighted",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_highlighted.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_highlighted"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_pressed",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_tabBar_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_tabBar_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tabBar_idle"
     }
    ]
   }

@@ -1,6 +1,8 @@
 --!strict
--- Ingredients, recipes and the starter cast. Placeholder visuals are described here so the
--- client can draw greybox food until illustrated sprites exist.
+-- Ingredients, recipes and the starter cast. `art` names the sprite set (art/manifest.json:
+-- topping_<art>_1..3 on the pizza, tray_<art> in the bin) and `size` is a piece's on-pizza
+-- width as a fraction of the pizza's diameter. colour/shape remain for the bake and cut
+-- stations' greybox pizza until their art exists.
 
 export type Requirement = { ingredient: string, count: number, region: string }
 export type Recipe = { id: string, name: string, toppings: { Requirement } }
@@ -8,14 +10,15 @@ export type Recipe = { id: string, name: string, toppings: { Requirement } }
 local Recipes = {}
 
 Recipes.Ingredients = {
-	pepperoni = { name = "Pepperoni", plural = "pepperoni", colour = Color3.fromRGB(184, 58, 42), size = 0.13, shape = "disc" },
-	mushroom = { name = "Mushroom", plural = "mushrooms", colour = Color3.fromRGB(222, 205, 176), size = 0.11, shape = "cap" },
-	olive = { name = "Olive", plural = "olives", colour = Color3.fromRGB(52, 44, 48), size = 0.08, shape = "ring" },
-	pepper = { name = "Green pepper", short = "Pepper", plural = "green peppers", colour = Color3.fromRGB(78, 140, 62), size = 0.10, shape = "ring" },
-	onion = { name = "Onion", plural = "onions", colour = Color3.fromRGB(205, 170, 205), size = 0.10, shape = "ring" },
+	pepperoni = { name = "Pepperoni", plural = "pepperoni", art = "pepperoni", size = 0.16, colour = Color3.fromRGB(184, 58, 42), shape = "disc" },
+	mushroom = { name = "Mushroom", plural = "mushrooms", art = "mushroom", size = 0.15, colour = Color3.fromRGB(222, 205, 176), shape = "cap" },
+	basil = { name = "Basil", plural = "basil leaves", art = "basil", size = 0.14, colour = Color3.fromRGB(78, 150, 58), shape = "disc" },
+	olive = { name = "Olive", plural = "olives", art = "olive", size = 0.095, colour = Color3.fromRGB(52, 44, 48), shape = "ring" },
+	pepper = { name = "Green pepper", short = "Pepper", plural = "green peppers", art = "pepper", size = 0.14, colour = Color3.fromRGB(78, 140, 62), shape = "ring" },
 }
 
-Recipes.IngredientOrder = { "pepperoni", "mushroom", "olive", "pepper", "onion" }
+-- Tray order on the topping counter, left to right (matches the approved reference).
+Recipes.IngredientOrder = { "pepperoni", "mushroom", "basil", "olive", "pepper" }
 
 -- Regions: "whole", "left", "right". Left/right are halves split by the vertical axis.
 Recipes.List = {
@@ -29,9 +32,9 @@ Recipes.List = {
 		{ ingredient = "olive", count = 6, region = "left" },
 		{ ingredient = "pepperoni", count = 4, region = "right" },
 	} },
-	{ id = "onionpep", name = "Onion Pepperoni", toppings = {
+	{ id = "pepbasil", name = "Pepperoni Basil", toppings = {
 		{ ingredient = "pepperoni", count = 6, region = "whole" },
-		{ ingredient = "onion", count = 6, region = "whole" },
+		{ ingredient = "basil", count = 4, region = "whole" },
 	} },
 } :: { Recipe }
 
@@ -46,7 +49,7 @@ Recipes.ShiftOrders = {
 	{ recipe = "garden", bake = "light", slices = 6 },
 	{ recipe = "halfolive", bake = "well", slices = 4 },
 	{ recipe = "cheese", bake = "regular", slices = 8 },
-	{ recipe = "onionpep", bake = "regular", slices = 6 },
+	{ recipe = "pepbasil", bake = "regular", slices = 6 },
 	{ recipe = "pepperoni", bake = "well", slices = 4 },
 }
 

@@ -1,9 +1,37 @@
 --!strict
--- Uploaded image ids for runtime art. An empty id means "not uploaded yet": the client draws a
--- styled stand-in using the same layout, so art can be dropped in without layout changes.
--- Source files: art/ui/runtime/*.png (exported from art/ui/proof-v1).
+-- Uploaded image ids for runtime art. An empty id means "not uploaded yet"; src/shared/Art.luau
+-- then shows the Studio-only copy if one exists, or nothing. Code never draws a stand-in.
+-- Sources: art/manifest.json (generated art and Astra's UI proofs).
 
 local Assets = {
+	-- Topping station: gameplay and environment art (Claude, Higgsfield).
+	counter_topping_1 = "",
+	counter_topping_2 = "",
+	counter_topping_3 = "",
+	counter_topping_4 = "",
+	board_round = "",
+	pizza_raw = "",
+	tray_pepperoni = "",
+	tray_mushroom = "",
+	tray_basil = "",
+	tray_olive = "",
+	tray_pepper = "",
+	topping_pepperoni_1 = "",
+	topping_pepperoni_2 = "",
+	topping_pepperoni_3 = "",
+	topping_mushroom_1 = "",
+	topping_mushroom_2 = "",
+	topping_mushroom_3 = "",
+	topping_basil_1 = "",
+	topping_basil_2 = "",
+	topping_basil_3 = "",
+	topping_olive_1 = "",
+	topping_olive_2 = "",
+	topping_olive_3 = "",
+	topping_pepper_1 = "",
+	topping_pepper_2 = "",
+	topping_pepper_3 = "",
+	-- Interface proofs (Astra, UI Proof V1).
 	ui_orderTicket_blank = "",
 	ui_tabBar_idle = "",
 	ui_ovenRing_idle = "",
@@ -30,6 +58,14 @@ Assets.Meta = {
 	ringBandWidth = 0.092,
 	ticketAspect = 344 / 512,
 	tabBarAspect = 1024 / 130,
+	-- Full-screen backgrounds: virtual size and how they are tiled (each tile <= 1024 px).
+	backgrounds = {
+		counter_topping = { width = 1920, height = 1080, cols = 2, rows = 2 },
+	},
+	-- Sprite sizes for art whose proportions drive layout.
+	trayAspect = 384 / 313,
+	-- The board is drawn this much wider than the pizza that sits on it.
+	boardOverPizza = 1 / 0.9,
 }
 
 function Assets.get(name: string): string?

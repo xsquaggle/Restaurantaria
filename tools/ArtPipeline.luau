@@ -27,7 +27,13 @@ local Pipeline = {}
 local CHUNK = 199000 -- Script.Source is capped at 200,000 characters
 local cache: { [string]: Image } = {}
 
+-- "repo:<path>" sources resolve against this raw GitHub base (set it to a commit before run).
+Pipeline.repoBase = "https://raw.githubusercontent.com/xsquaggle/Restaurantaria/main/"
+
 function Pipeline.load(url: string): Image
+	if url:sub(1, 5) == "repo:" then
+		url = Pipeline.repoBase .. url:sub(6)
+	end
 	if cache[url] then
 		return cache[url]
 	end
@@ -257,6 +263,12 @@ function Pipeline.fitSquare(src: Image, side: number, pad: number): Image
 	return { width = side, height = side, pixels = out }
 end
 
+-- Scale a trimmed sprite so its longer side is `side`, keeping its own aspect ratio.
+function Pipeline.fitWithin(src: Image, side: number): Image
+	local k = side / math.max(src.width, src.height)
+	return Pipeline.resize(src, math.max(1, math.round(src.width * k)), math.max(1, math.round(src.height * k)))
+end
+
 function Pipeline.store(name: string, image: Image, meta: { [string]: any }?)
 	local root = ReplicatedStorage:FindFirstChild("DevArt")
 	if not root then
@@ -350,7 +362,9 @@ function Pipeline.run(manifest: any, only: { [string]: boolean }?): { string }
 				else
 					for i, box in boxes do
 						local o = source.outputs[1]
-						local img = Pipeline.fitSquare(Pipeline.crop(src, box), o.side, o.pad or 0)
+						local img = if o.square == false
+							then Pipeline.fitWithin(Pipeline.crop(src, box), o.side)
+							else Pipeline.fitSquare(Pipeline.crop(src, box), o.side, o.pad or 0)
 						Pipeline.bleed(img)
 						Pipeline.store(names[i], img)
 						table.insert(log, string.format("%s <- %s box %d,%d %dx%d", names[i], source.id, box.x, box.y, box.w, box.h))
@@ -364,6 +378,11 @@ function Pipeline.run(manifest: any, only: { [string]: boolean }?): { string }
 				Pipeline.bleed(img)
 				Pipeline.store(o.name, img)
 				table.insert(log, string.format("%s <- %s trimmed %dx%d", o.name, source.id, box.w, box.h))
+			elseif source.kind == "copy" then
+				-- Already a finished export (e.g. Astra's UI proofs): store the pixels unchanged.
+				local o = source.outputs[1]
+				Pipeline.store(o.name, src)
+				table.insert(log, string.format("%s <- %s as is %dx%d", o.name, source.id, src.width, src.height))
 			elseif source.kind == "tiles" then
 				-- Crop to the target aspect (centred), then cut a cols x rows grid of tiles.
 				local o = source.outputs[1]

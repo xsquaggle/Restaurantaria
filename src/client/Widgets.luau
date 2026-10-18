@@ -1,11 +1,12 @@
 --!strict
--- Reusable interface pieces. Each uses the uploaded proof art when its asset id exists and a
--- token-styled stand-in otherwise, with identical hitboxes and anchors either way.
+-- Reusable interface pieces drawn with supplied art (src/shared/Art.luau). When a piece's art
+-- is missing it stays empty apart from its live text; hitboxes and anchors never change.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
@@ -39,12 +40,6 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 		SliceCenter = Assets.Meta.primarySlice,
 		Parent = frame,
 	})
-	local fallback = Ui.new("Frame", {
-		Name = "Fallback",
-		BackgroundColor3 = C.action,
-		Size = UDim2.fromScale(1, 1),
-		Parent = frame,
-	}, { Ui.corner(18), Ui.stroke(C.ink, 3) })
 	local label = Ui.text({
 		Name = "Label",
 		Text = text,
@@ -72,15 +67,7 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 	local pressed = false
 	local function render()
 		local state = if not self.enabled then "disabled" elseif pressed then "pressed" elseif self.highlighted then "highlighted" else "idle"
-		local id = Assets.get("ui_primary_" .. state)
-		art.Visible = id ~= nil
-		fallback.Visible = id == nil
-		if id then
-			art.Image = id
-		end
-		fallback.BackgroundColor3 = if state == "disabled" then C.disabled elseif state == "pressed" then C.actionPressed else C.action
-		local stroke = fallback:FindFirstChildOfClass("UIStroke") :: UIStroke
-		stroke.Color = if state == "highlighted" then C.paper else C.ink
+		Art.apply(art, "ui_primary_" .. state)
 		label.TextColor3 = if state == "disabled" then C.ink else C.white
 		-- Pressed label displacement stays within 2 px per the guide.
 		label.Position = UDim2.new(0.5, 0, 0.44, if pressed then 2 else 0)
@@ -148,17 +135,7 @@ local HALF = NumberSequence.new({
 
 function Widgets.ring(size: number): Ring
 	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size) })
-	local shellId = Assets.get("ui_ovenRing_idle")
-	if shellId then
-		Ui.new("ImageLabel", { BackgroundTransparency = 1, Image = shellId, Size = UDim2.fromScale(1, 1), Parent = frame })
-	else
-		Ui.new("Frame", {
-			BackgroundColor3 = C.paper,
-			BackgroundTransparency = 0,
-			Size = UDim2.fromScale(1, 1),
-			Parent = frame,
-		}, { Ui.round(), Ui.stroke(C.ink, 2) })
-	end
+	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame }), "ui_ovenRing_idle")
 
 	-- UIStroke draws outside its frame, so size the clip halves to hold the whole stroke and
 	-- shrink the circle so the stroke's centreline sits on the shell's band.
@@ -248,29 +225,12 @@ end
 export type Patience = { frame: Frame, set: (Patience, number, string) -> () }
 
 local BAND_COLOUR = { happy = C.basil, neutral = C.basil, impatient = C.oven, grumpy = C.tomato }
-local BAND_FACE = { happy = "^ ^", neutral = "- -", impatient = "> <", grumpy = "x x" }
 
 function Widgets.patience(): Patience
 	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(240, 68) })
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = Assets.Meta.patienceAspect, Parent = frame })
 	local art = Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
-	local fb = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
 	local fm = Assets.Meta.patienceFill
-	Ui.new("Frame", {
-		BackgroundColor3 = C.paper,
-		Position = UDim2.fromScale(fm.x - 0.02, fm.y - 0.06),
-		Size = UDim2.fromScale(fm.w + 0.04, fm.h + 0.12),
-		Parent = fb,
-	}, { Ui.round(), Ui.stroke(C.ink, 2) })
-	local face = Ui.new("TextLabel", {
-		BackgroundColor3 = C.paper,
-		Size = UDim2.fromScale(0.26, 0.92),
-		Position = UDim2.fromScale(0.02, 0.04),
-		FontFace = Theme.Font.bodyBold,
-		TextColor3 = C.ink,
-		TextScaled = true,
-		Parent = fb,
-	}, { Ui.round(), Ui.stroke(C.ink, 2) })
 	local fill = Ui.new("Frame", {
 		BackgroundColor3 = C.basil,
 		Position = UDim2.fromScale(fm.x, fm.y),
@@ -279,16 +239,14 @@ function Widgets.patience(): Patience
 		Parent = frame,
 	}, { Ui.round() })
 
+	local shownBand = nil
 	local p: Patience = {
 		frame = frame,
 		set = function(_p: Patience, fraction: number, band: string)
-			local id = Assets.get("ui_patience_" .. band)
-			art.Visible = id ~= nil
-			fb.Visible = id == nil
-			if id then
-				art.Image = id
+			if band ~= shownBand then
+				shownBand = band
+				Art.apply(art, "ui_patience_" .. band)
 			end
-			face.Text = BAND_FACE[band]
 			fill.Size = UDim2.fromScale(fm.w * math.clamp(fraction, 0, 1), fm.h)
 			fill.Visible = fraction > 0.01
 			fill.BackgroundColor3 = BAND_COLOUR[band]
@@ -320,16 +278,7 @@ end
 function Widgets.ticket(customerName: string, order: any, compact: boolean): Frame
 	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(200, 300) })
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = Assets.Meta.ticketAspect, Parent = frame })
-	local id = Assets.get("ui_orderTicket_blank")
-	if id then
-		Ui.new("ImageLabel", { BackgroundTransparency = 1, Image = id, Size = UDim2.fromScale(1, 1), Parent = frame })
-	else
-		Ui.new("Frame", { BackgroundColor3 = C.paper, Size = UDim2.fromScale(1, 1), Parent = frame }, {
-			Ui.corner(6),
-			Ui.stroke(C.ink, 2),
-			Ui.new("Frame", { BackgroundColor3 = C.tomato, Size = UDim2.new(1, 0, 0.035, 0), BorderSizePixel = 0 }),
-		})
-	end
+	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame }), "ui_orderTicket_blank")
 	local body = Ui.new("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromScale(0.1, 0.07),
@@ -361,6 +310,230 @@ function Widgets.ticket(customerName: string, order: any, compact: boolean): Fra
 	line(BAKE_TEXT[order.bake], Theme.Font.bodySemi, 0, nil, 20)
 	line(order.slices .. " slices", Theme.Font.bodySemi, 0, nil, 21)
 	return frame
+end
+
+------------------------------------------------------------------------------------------
+-- Rail ticket: the order being worked on, as in the approved references: ticket number and
+-- patience on top, then one line per requirement with its picture.
+
+export type RailTicket = {
+	frame: Frame,
+	customer: any,
+	set: (RailTicket, any) -> (),
+	setPatience: (RailTicket, number, string) -> (),
+}
+
+local function requirementLines(order: any): { { icon: string?, title: string, sub: string? } }
+	local recipe = Recipes.ById[order.recipe]
+	local lines = {}
+	if #recipe.toppings == 0 then
+		table.insert(lines, { title = "Cheese only", sub = "No toppings" })
+	end
+	for _, req in recipe.toppings do
+		local info = Recipes.Ingredients[req.ingredient]
+		local sub = string.format("%d piece%s", req.count, if req.count == 1 then "" else "s")
+		if req.region ~= "whole" then
+			sub ..= ", " .. REGION_TEXT[req.region]
+		end
+		table.insert(lines, { icon = "topping_" .. info.art .. "_1", title = info.name, sub = sub })
+	end
+	table.insert(lines, { icon = "icon_bake", title = BAKE_TEXT[order.bake] })
+	table.insert(lines, { icon = "icon_cut", title = order.slices .. " wedges" })
+	return lines
+end
+
+function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
+	local frame = Ui.new("Frame", { Name = "Ticket", BackgroundTransparency = 1, Size = UDim2.fromOffset(size.X, size.Y) })
+	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame }), "ui_orderTicket_blank")
+	local padX, padTop, padBottom = math.round(size.X * 0.09), math.round(size.Y * 0.07), math.round(size.Y * 0.08)
+	local inner = Vector2.new(size.X - padX * 2, size.Y - padTop - padBottom)
+	local headerH = math.clamp(math.round(inner.Y * 0.2), 28, 70)
+	local number = Ui.text({
+		FontFace = Theme.Font.display,
+		TextSize = math.floor(headerH * 0.72),
+		TextWrapped = false,
+		Position = UDim2.fromOffset(padX, padTop),
+		Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.72),
+		Parent = frame,
+	})
+	local name = Ui.text({
+		FontFace = Theme.Font.bodySemi,
+		TextSize = math.max(12, math.floor(headerH * 0.3)),
+		TextColor3 = C.mutedInk,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(padX, padTop + headerH * 0.7),
+		Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.3),
+		Parent = frame,
+	})
+	local meter = Widgets.patience()
+	meter.frame.AnchorPoint = Vector2.new(1, 0)
+	meter.frame.Position = UDim2.fromOffset(padX + inner.X, padTop + headerH * 0.1)
+	meter.frame.Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.8)
+	meter.frame.Parent = frame
+	local body = Ui.new("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(padX, padTop + headerH + 4),
+		Size = UDim2.fromOffset(inner.X, inner.Y - headerH - 4),
+		Parent = frame,
+	})
+
+	local key = nil
+	local ticket: RailTicket
+	ticket = {
+		frame = frame,
+		customer = nil,
+		set = function(t: RailTicket, customer: any)
+			t.customer = customer
+			local k = if customer then string.format("%d|%s|%s|%d", customer.id, customer.order.recipe, customer.order.bake, customer.order.slices) else nil
+			if k == key then
+				return
+			end
+			key = k
+			Ui.clear(body)
+			if not customer then
+				return
+			end
+			number.Text = string.format("#%02d", customer.id)
+			name.Text = Recipes.Cast[customer.cast].name
+			local lines = requirementLines(customer.order)
+			local rowH = math.min(body.Size.Y.Offset / math.max(#lines, 3), if compact then 40 else 76)
+			local icon = math.floor(rowH * 0.78)
+			for i, line in lines do
+				local row = Ui.new("Frame", {
+					BackgroundTransparency = 1,
+					Position = UDim2.fromOffset(0, (i - 1) * rowH),
+					Size = UDim2.new(1, 0, 0, rowH),
+					Parent = body,
+				})
+				if line.icon then
+					local img = Ui.new("ImageLabel", {
+						BackgroundTransparency = 1,
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.fromScale(0, 0.5),
+						Size = UDim2.fromOffset(icon, icon),
+						Parent = row,
+					})
+					Art.apply(img, line.icon)
+				end
+				local textX = icon + math.floor(rowH * 0.2)
+				local titleSize = math.clamp(math.floor(rowH * (if line.sub then 0.4 else 0.46)), 12, 30)
+				Ui.text({
+					Text = line.title,
+					FontFace = Theme.Font.display,
+					TextSize = titleSize,
+					TextWrapped = false,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					AnchorPoint = Vector2.new(0, if line.sub then 1 else 0.5),
+					Position = UDim2.new(0, textX, if line.sub then 0.56 else 0.5, 0),
+					Size = UDim2.new(1, -textX, 0, titleSize + 2),
+					Parent = row,
+				})
+				if line.sub then
+					local subSize = math.clamp(math.floor(rowH * 0.32), 11, 24)
+					Ui.text({
+						Text = line.sub,
+						FontFace = Theme.Font.bodySemi,
+						TextSize = subSize,
+						TextColor3 = C.mutedInk,
+						TextWrapped = false,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						Position = UDim2.new(0, textX, 0.56, 0),
+						Size = UDim2.new(1, -textX, 0, subSize + 2),
+						Parent = row,
+					})
+				end
+			end
+		end,
+		setPatience = function(_t: RailTicket, fraction: number, band: string)
+			meter:set(fraction, band)
+		end,
+	}
+	return ticket
+end
+
+-- Rail tab: a waiting ticket in one line (patience face, number, toppings with counts).
+
+export type RailTab = { button: TextButton, customer: any, setPatience: (RailTab, number, string) -> () }
+
+function Widgets.railTab(customer: any, height: number): RailTab
+	local button = Ui.new("TextButton", {
+		Name = "Tab" .. customer.id,
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, height),
+	})
+	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = button }), "ui_ticket_tab")
+	local faceSize = math.floor(height * 0.72)
+	-- The patience proofs carry the face in their left square; show just that part.
+	local face = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 6, 0.5, 0),
+		Size = UDim2.fromOffset(faceSize, faceSize),
+		ImageRectSize = Vector2.new(216, 216),
+		Parent = button,
+	})
+	local textSize = math.clamp(math.floor(height * 0.46), 13, 30)
+	Ui.text({
+		Text = string.format("#%02d", customer.id),
+		FontFace = Theme.Font.display,
+		TextSize = textSize,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, faceSize + 12, 0.5, 0),
+		Size = UDim2.fromOffset(textSize * 2.2, height),
+		Parent = button,
+	})
+	local x = faceSize + 12 + textSize * 2.4
+	local recipe = Recipes.ById[customer.order.recipe]
+	local icon = math.floor(height * 0.62)
+	for _, req in recipe.toppings do
+		local info = Recipes.Ingredients[req.ingredient]
+		local img = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, x, 0.5, 0),
+			Size = UDim2.fromOffset(icon, icon),
+			Parent = button,
+		})
+		Art.apply(img, "topping_" .. info.art .. "_1")
+		Ui.text({
+			Text = "x" .. req.count,
+			FontFace = Theme.Font.display,
+			TextSize = math.floor(textSize * 0.8),
+			TextWrapped = false,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, x + icon + 2, 0.5, 0),
+			Size = UDim2.fromOffset(textSize * 1.6, height),
+			Parent = button,
+		})
+		x += icon + textSize * 1.9
+	end
+	if #recipe.toppings == 0 then
+		Ui.text({
+			Text = "Cheese",
+			FontFace = Theme.Font.display,
+			TextSize = math.floor(textSize * 0.8),
+			TextWrapped = false,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, x, 0.5, 0),
+			Size = UDim2.fromOffset(textSize * 4, height),
+			Parent = button,
+		})
+	end
+	local band = nil
+	local tab: RailTab = {
+		button = button,
+		customer = customer,
+		setPatience = function(_t: RailTab, _fraction: number, b: string)
+			if b ~= band then
+				band = b
+				Art.apply(face, "ui_patience_" .. b)
+			end
+		end,
+	}
+	return tab
 end
 
 ------------------------------------------------------------------------------------------
