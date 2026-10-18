@@ -575,7 +575,7 @@ local function refreshSummary(snap: any)
 	local lines = {
 		string.format("Tips this shift: %d", snap.tips),
 		string.format("Experience: +%d", snap.xp),
-		string.format("Rank %d · %d shifts completed", profile.rank or 1, profile.shiftsCompleted or 0),
+		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
 		if snap.saved then "Progress saved"
 			elseif snap.saveMessage == "Saving..." then "Saving..."
 			else ("Not saved: " .. tostring(snap.saveMessage or profile.message or "unknown")),
