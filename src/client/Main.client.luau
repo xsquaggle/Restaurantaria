@@ -39,6 +39,14 @@ local gui = Ui.new("ScreenGui", {
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	Parent = player:WaitForChild("PlayerGui"),
 })
+-- Fills the area under Roblox's top bar so the 3D world never shows behind the game.
+Ui.new("ScreenGui", {
+	Name = "RestaurantariaBackdrop",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	DisplayOrder = -1,
+	Parent = player.PlayerGui,
+}, { Ui.new("Frame", { BackgroundColor3 = Color3.fromRGB(140, 98, 66), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }) })
 
 ------------------------------------------------------------------------------------------
 -- Shared client state and helpers handed to every station.
@@ -343,11 +351,11 @@ local function buildLayout()
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if compact then 14 else 16,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 8, 1, -(navH + 4)),
-		Size = UDim2.new(0.45, 0, 0, if compact then 34 else 40),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.new(0, math.max(120, (size.X - barW) / 2 - 16), 1, -12),
 		ZIndex = 8,
-		Parent = root,
+		Parent = nav,
 	})
 	Ui.corner(8).Parent = banner
 	local toastHolder = Ui.new("Frame", {

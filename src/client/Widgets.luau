@@ -157,17 +157,22 @@ function Widgets.ring(size: number): Ring
 		}, { Ui.round(), Ui.stroke(C.ink, 2) })
 	end
 
-	local bandRadius = Assets.Meta.ringBandRadius
+	-- UIStroke draws outside its frame, so size the clip halves to hold the whole stroke and
+	-- shrink the circle so the stroke's centreline sits on the shell's band.
+	local thickness = math.max(3, math.floor(size * Assets.Meta.ringBandWidth * 0.75))
+	local radius = Assets.Meta.ringBandRadius * size - thickness / 2
+	local holderSize = math.ceil(2 * (radius + thickness)) + 2
 	local arcHolder = Ui.new("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(bandRadius * 2, bandRadius * 2),
+		Size = UDim2.fromOffset(holderSize, holderSize),
 		ZIndex = 2,
 		Parent = frame,
 	})
 	local gradients: { [string]: UIGradient } = {}
 	local strokes: { UIStroke } = {}
+	local inset = holderSize / 2 - radius
 	for _, side in { "right", "left" } do
 		local clip = Ui.new("Frame", {
 			BackgroundTransparency = 1,
@@ -179,13 +184,13 @@ function Widgets.ring(size: number): Ring
 		})
 		local circle = Ui.new("Frame", {
 			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(2, 1),
-			Position = UDim2.fromScale(if side == "right" then -1 else 0, 0),
+			Size = UDim2.fromOffset(radius * 2, radius * 2),
+			Position = UDim2.fromOffset(if side == "right" then -radius else inset, inset),
 			ZIndex = 2,
 			Parent = clip,
 		}, { Ui.round() })
 		local stroke = Ui.new("UIStroke", {
-			Thickness = math.max(3, size * Assets.Meta.ringBandWidth * 0.75),
+			Thickness = thickness,
 			Color = C.oven,
 			Parent = circle,
 		})
@@ -379,6 +384,10 @@ export type PizzaView = { frame: Frame, toppingLayer: Frame, cutLayer: Frame, se
 
 local BLISTERS = { { -0.3, -0.2 }, { 0.25, -0.35 }, { 0.1, 0.3 }, { -0.35, 0.28 }, { 0.38, 0.1 }, { -0.05, -0.45 }, { -0.1, 0.05 } }
 
+local function toppingDarken(doneness: number, burnt: number): number
+	return math.clamp((doneness - 0.8) * 0.25, 0, 0.35) + burnt * 0.3
+end
+
 function Widgets.pizza(): PizzaView
 	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 300) })
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = frame })
@@ -414,6 +423,12 @@ function Widgets.pizza(): PizzaView
 	local toppingLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = frame })
 	local cutLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
 
+	-- Pieces and cut lines are rebuilt only when their content changes; per-frame bake
+	-- updates just recolour what already exists.
+	local contentKey = ""
+	local pieces: { { frame: Frame, base: Color3 } } = {}
+	local lastDarken = -1
+
 	local view: PizzaView = {
 		frame = frame,
 		toppingLayer = toppingLayer,
@@ -427,21 +442,49 @@ function Widgets.pizza(): PizzaView
 				b.BackgroundTransparency = blisterAlpha
 				b.BackgroundColor3 = GOLD_CRUST:Lerp(BURNT_CRUST, burnt)
 			end
-			Ui.clear(toppingLayer)
-			local darken = math.clamp((doneness - 0.8) * 0.25, 0, 0.35) + burnt * 0.3
+
+			local parts = { tostring(pizza.id) }
 			for _, piece in pizza.toppings do
-				Widgets.drawPiece(toppingLayer, piece, darken, piece.pending == true)
+				table.insert(parts, string.format("%s%.3f%.3f%s", piece.ingredient, piece.x, piece.y, if piece.pending then "p" else ""))
 			end
-			Ui.clear(cutLayer)
+			table.insert(parts, "|")
 			for _, line in pizza.cuts or {} do
-				Widgets.drawCut(cutLayer, line, C.paper)
+				table.insert(parts, string.format("%.3f%.3f%.3f%.3f", line.x1, line.y1, line.x2, line.y2))
+			end
+			local key = table.concat(parts, ",")
+			local darken = toppingDarken(doneness, burnt)
+			if key ~= contentKey then
+				contentKey = key
+				Ui.clear(toppingLayer)
+				pieces = {}
+				for _, piece in pizza.toppings do
+					local f = Widgets.drawPiece(toppingLayer, piece, 0, piece.pending == true)
+					table.insert(pieces, { frame = f, base = Recipes.Ingredients[piece.ingredient].colour })
+				end
+				Ui.clear(cutLayer)
+				for _, line in pizza.cuts or {} do
+					Widgets.drawCut(cutLayer, line, C.paper)
+				end
+				lastDarken = -1
+			end
+			if math.abs(darken - lastDarken) > 0.005 then
+				lastDarken = darken
+				local tint = Color3.new(0.15, 0.08, 0.05)
+				for _, p in pieces do
+					local colour = p.base:Lerp(tint, darken)
+					p.frame.BackgroundColor3 = colour
+					local stroke = p.frame:FindFirstChildOfClass("UIStroke")
+					if stroke and stroke.Color ~= C.ink then
+						stroke.Color = colour
+					end
+				end
 			end
 		end,
 	}
 	return view
 end
 
-function Widgets.drawPiece(layer: Frame, piece: any, darken: number, pending: boolean)
+function Widgets.drawPiece(layer: Frame, piece: any, darken: number, pending: boolean): Frame
 	local info = Recipes.Ingredients[piece.ingredient]
 	local colour = info.colour:Lerp(Color3.new(0.15, 0.08, 0.05), darken)
 	local s = info.size
@@ -474,6 +517,7 @@ function Widgets.drawPiece(layer: Frame, piece: any, darken: number, pending: bo
 			Parent = f,
 		}, { Ui.corner(3) })
 	end
+	return f
 end
 
 function Widgets.drawCut(layer: Frame, line: any, colour: Color3)

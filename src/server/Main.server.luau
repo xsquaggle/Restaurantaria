@@ -3,6 +3,8 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local SaveService = require(script.Parent.SaveService)
@@ -57,3 +59,45 @@ task.spawn(function()
 		end
 	end
 end)
+
+-- Studio-only test hook so automated playtests can inspect authoritative state.
+if RunService:IsStudio() then
+	local debug = Instance.new("BindableFunction")
+	debug.Name = "RestaurantariaDebug"
+	debug.OnInvoke = function(command: string, value: any)
+		local player = Players:GetPlayers()[1]
+		local session = player and ShiftService.sessions[player]
+		if not session then
+			return "no session"
+		end
+		if command == "state" then
+			local lines = { string.format("lastSeq=%d rejected=%d tips=%d finished=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.finished)) }
+			for _, c in session.shift.customers do
+				local r = c.result
+				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
+					if r then string.format(" grade=%d (wait %d top %d bake %d cut %d) tip=%d", r.overall, r.wait.score, r.topping.score, r.bake.score, r.cut.score, r.tip) else ""))
+			end
+			for id, pz in session.shift.pizzas do
+				table.insert(lines, string.format("pizza %d ticket=%d stage=%s toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
+			end
+			local profile = SaveService.profiles[player]
+			if profile then
+				table.insert(lines, string.format("profile %s tips=%d xp=%d shifts=%d", profile.status, profile.data.tips, profile.data.xp, profile.data.shiftsCompleted))
+			end
+			return table.concat(lines, "\n")
+		elseif command == "simulateLoadFailure" then
+			SaveService.simulateLoadFailure = value == true
+			return "ok"
+		elseif command == "reloadProfile" then
+			local profile = SaveService.load(player)
+			push(player)
+			return profile.status
+		elseif command == "skipArrivals" then
+			-- Shift the clock so the next customer arrives now.
+			session.shift.startedAt -= (value or 10)
+			return "ok"
+		end
+		return "unknown command"
+	end
+	debug.Parent = ServerStorage
+end
