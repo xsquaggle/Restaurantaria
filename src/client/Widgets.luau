@@ -221,7 +221,8 @@ function Widgets.ring(size: number): Ring
 		ZIndex = 3,
 		Parent = frame,
 	})
-	Ui.new("UITextSizeConstraint", { MinTextSize = 12, MaxTextSize = 22, Parent = statusLabel })
+	-- Phone top-row rings are ~50px; let the status shrink below the usual 12px floor there.
+	Ui.new("UITextSizeConstraint", { MinTextSize = if size < 70 then 9 else 12, MaxTextSize = 22, Parent = statusLabel })
 
 	local ring: Ring = {
 		frame = frame,

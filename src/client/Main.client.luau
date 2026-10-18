@@ -2,6 +2,7 @@
 -- Client bootstrap: builds the station layout for the current viewport, keeps the newest
 -- server snapshot, and drives the per-frame timers (oven rings, patience) from server time.
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -52,6 +53,16 @@ Ui.new("ScreenGui", {
 	DisplayOrder = -1,
 	Parent = player.PlayerGui,
 }, { Ui.new("Frame", { BackgroundColor3 = Color3.fromRGB(140, 98, 66), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }) })
+-- On short screens the ticket rail and ovens move into the top bar row beside Roblox's
+-- buttons, which would otherwise be dead space, so the stations keep their height.
+local topGui = Ui.new("ScreenGui", {
+	Name = "RestaurantariaTop",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	DisplayOrder = 1,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	Parent = player.PlayerGui,
+})
 
 ------------------------------------------------------------------------------------------
 -- Shared client state and helpers handed to every station.
@@ -177,6 +188,7 @@ local function destroyLayout()
 	end
 	ctx.connections = {}
 	Ui.clear(gui)
+	Ui.clear(topGui)
 	ui = nil
 end
 
@@ -205,24 +217,40 @@ local function buildLayout()
 	local size = gui.AbsoluteSize
 	local compact = size.Y < 520
 	ctx.compact = compact
-	local navH = if compact then 64 else 96
-	local railH = if compact then 88 else 140
-	local ovenW = if compact then 156 else 250
-	ctx.stationSize = Vector2.new(size.X, size.Y - railH - navH)
+	local inset = GuiService.TopbarInset
+	local topRow = compact and inset.Height >= 40 and inset.Width >= 320
+	ctx.topRow = topRow
+	local navH = if compact then 60 else 96
+	local railH = if topRow then inset.Height elseif compact then 88 else 140
+	local ovenW = if topRow then 2 * (railH - 8) + 18 elseif compact then 156 else 250
+	-- Where the stations start inside the main gui.
+	local stationsY = if topRow then 0 else railH
+	ctx.stationSize = Vector2.new(size.X, size.Y - stationsY - navH)
 
 	local root = Ui.new("Frame", { Name = "Root", BackgroundColor3 = C.wall, Size = UDim2.fromScale(1, 1), Parent = gui })
+	local railHost: GuiObject = root
+	if topRow then
+		railHost = Ui.new("Frame", {
+			Name = "TopRow",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(inset.Min.X, inset.Min.Y),
+			Size = UDim2.fromOffset(inset.Width, inset.Height),
+			Parent = topGui,
+		})
+	end
 
 	-- Ticket rail (top-left): compact summaries of open tickets.
 	local rail = Ui.new("ScrollingFrame", {
 		Name = "Rail",
 		BackgroundColor3 = Color3.fromRGB(140, 98, 66),
+		BackgroundTransparency = if topRow then 1 else 0,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, -ovenW, 0, railH),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X,
 		ScrollBarThickness = 0,
-		Parent = root,
+		Parent = railHost,
 	}, {
 		Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
 		Ui.new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
@@ -232,7 +260,7 @@ local function buildLayout()
 		TextColor3 = C.paper,
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if compact then 16 else 20,
-		Size = UDim2.new(0, 220, 1, 0),
+		Size = UDim2.new(0, if topRow then 140 else 220, 1, 0),
 		Parent = rail,
 	})
 
@@ -242,13 +270,15 @@ local function buildLayout()
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Color3.fromRGB(92, 64, 52),
+		BackgroundTransparency = if topRow then 1 else 0,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
 		Size = UDim2.fromOffset(ovenW, railH),
-		Parent = root,
+		Parent = railHost,
 	})
-	local ringSize = math.min(railH - (if compact then 26 else 36), ovenW / 2 - 12)
+	-- In the top row the ring's own slot number stands in for the "Oven N" caption.
+	local ringSize = if topRow then railH - 8 else math.min(railH - (if compact then 26 else 36), ovenW / 2 - 12)
 	local ovenRings = {}
 	for i = 1, Config.Oven.slots do
 		local ring = Widgets.ring(ringSize)
@@ -264,6 +294,7 @@ local function buildLayout()
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new((i - 0.5) / Config.Oven.slots, 0, 1, -2),
 			Size = UDim2.new(0.5, 0, 0, if compact then 18 else 24),
+			Visible = not topRow,
 			Parent = ovenPanel,
 		})
 		ovenRings[i] = { ring = ring, label = label }
@@ -277,8 +308,8 @@ local function buildLayout()
 		Name = "Stations",
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(0, railH),
-		Size = UDim2.new(1, 0, 1, -(railH + navH)),
+		Position = UDim2.fromOffset(0, stationsY),
+		Size = UDim2.new(1, 0, 1, -(stationsY + navH)),
 		Parent = root,
 	})
 	local stations = {}
@@ -388,7 +419,7 @@ local function buildLayout()
 	local toastHolder = Ui.new("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, railH + 8),
+		Position = UDim2.new(0.5, 0, 0, stationsY + 8),
 		Size = UDim2.fromOffset(math.min(if compact then 360 else 440, size.X - 32), 0),
 		ZIndex = 9,
 		Parent = root,
@@ -467,43 +498,47 @@ local function refreshRail(snap: any)
 			seen[customer.id] = true
 			local card = ui.railCards[customer.id]
 			if not card then
-				local w = if compact then 150 else 220
+				local topRow = ctx.topRow
+				local w = if topRow then 128 elseif compact then 150 else 220
 				local button = Ui.new("TextButton", {
 					Text = "",
 					AutoButtonColor = false,
 					BackgroundColor3 = C.paper,
-					Size = UDim2.new(0, w, 1, -12),
+					Size = UDim2.new(0, w, 1, if topRow then -8 else -12),
 					LayoutOrder = customer.id,
 					Parent = ui.rail,
 				}, { Ui.corner(8) })
 				local stroke = Ui.stroke(C.ink, 2)
 				stroke.Parent = button
 				local recipe = Recipes.ById[customer.order.recipe]
+				-- Top-row cards are 50px tall: name and stage share one line above the meter;
+				-- the recipe is on the station's full ticket.
 				local title = Ui.text({
-					Text = Recipes.Cast[customer.cast].name .. " · " .. recipe.name,
+					Text = Recipes.Cast[customer.cast].name .. (if topRow then "" else " · " .. recipe.name),
 					FontFace = Theme.Font.bodyBold,
-					TextSize = 16,
+					TextSize = if topRow then 14 else 16,
 					TextWrapped = false,
 					TextTruncate = Enum.TextTruncate.AtEnd,
-					Position = UDim2.fromOffset(8, 4),
-					Size = UDim2.new(1, -16, 0, 18),
+					Position = UDim2.fromOffset(if topRow then 6 else 8, if topRow then 2 else 4),
+					Size = UDim2.new(1, if topRow then -12 else -16, 0, if topRow then 16 else 18),
 					Parent = button,
 				})
 				local stage = Ui.text({
 					Text = "",
 					FontFace = Theme.Font.body,
-					TextSize = if compact then 14 else 16,
+					TextSize = if topRow then 12 elseif compact then 14 else 16,
 					TextColor3 = C.mutedInk,
-					Position = UDim2.fromOffset(8, 22),
-					Size = UDim2.new(1, -16, 0, 18),
+					TextXAlignment = if topRow then Enum.TextXAlignment.Right else Enum.TextXAlignment.Left,
+					Position = UDim2.fromOffset(if topRow then 6 else 8, if topRow then 2 else 22),
+					Size = UDim2.new(1, if topRow then -12 else -16, 0, if topRow then 16 else 18),
 					Parent = button,
 				})
 				local meter = Widgets.patience()
 				local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
 				aspect.DominantAxis = Enum.DominantAxis.Height
 				meter.frame.AnchorPoint = Vector2.new(0.5, 1)
-				meter.frame.Position = UDim2.new(0.5, 0, 1, -4)
-				meter.frame.Size = UDim2.new(1, -8, 1, -46)
+				meter.frame.Position = UDim2.new(0.5, 0, 1, if topRow then -2 else -4)
+				meter.frame.Size = UDim2.new(1, -8, 1, if topRow then -20 else -46)
 				meter.frame.Parent = button
 				button.Activated:Connect(function()
 					ctx.selectTicket(customer.id)
@@ -689,7 +724,9 @@ function ctx.refresh()
 	local profile = snap.profile
 	ui.banner.Visible = profile ~= nil and profile.status ~= "ok"
 	if profile and profile.message then
-		ui.banner.Text = profile.message
+		ui.banner.Text = if not ctx.compact then profile.message
+			elseif profile.status == "unavailable" then "Not saving:\nunpublished place"
+			else "Not saving:\nload failed"
 	end
 	refreshSummary(snap)
 end
@@ -757,6 +794,11 @@ end)
 
 gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 	if ui then
+		buildLayout()
+	end
+end)
+GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(function()
+	if ui and ctx.compact then
 		buildLayout()
 	end
 end)
