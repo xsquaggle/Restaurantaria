@@ -416,18 +416,19 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 					Art.apply(img, line.icon)
 				end
 				local textX = icon + math.floor(rowH * 0.2)
-				local titleSize = math.clamp(math.floor(rowH * (if line.sub then 0.4 else 0.46)), 12, 30)
-				Ui.text({
+				local titleSize = math.clamp(math.floor(rowH * (if line.sub then 0.4 else 0.44)), 12, 28)
+				local title = Ui.text({
 					Text = line.title,
 					FontFace = Theme.Font.display,
-					TextSize = titleSize,
+					TextScaled = true,
 					TextWrapped = false,
-					TextTruncate = Enum.TextTruncate.AtEnd,
 					AnchorPoint = Vector2.new(0, if line.sub then 1 else 0.5),
 					Position = UDim2.new(0, textX, if line.sub then 0.56 else 0.5, 0),
 					Size = UDim2.new(1, -textX, 0, titleSize + 2),
 					Parent = row,
 				})
+				-- Long titles shrink to fit the ticket instead of being cut off.
+				Ui.new("UITextSizeConstraint", { MaxTextSize = titleSize, MinTextSize = 11, Parent = title })
 				if line.sub then
 					local subSize = math.clamp(math.floor(rowH * 0.32), 11, 24)
 					Ui.text({
