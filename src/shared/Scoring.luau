@@ -58,12 +58,20 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 		end
 
 		local countScore = clamp01(1 - math.abs(inside - req.count) / req.count)
-		local expected = req.count / sectors
-		local spreadError = 0
-		for s = 1, sectors do
-			spreadError += math.abs(perSector[s] - expected)
+		-- Spread judges only the pieces placed: 1 for the most even split those pieces allow,
+		-- 0 for all in one sector. An empty pizza has no spread to credit.
+		local spreadScore = 0
+		if inside > 0 then
+			local expected = inside / sectors
+			local spreadError = 0
+			for s = 1, sectors do
+				spreadError += math.abs(perSector[s] - expected)
+			end
+			local r = inside % sectors
+			local best = 2 * r * (sectors - r) / sectors
+			local worst = 2 * inside * (1 - 1 / sectors)
+			spreadScore = if worst > best then clamp01(1 - (spreadError - best) / (worst - best)) else 1
 		end
-		local spreadScore = clamp01(1 - spreadError / (2 * math.max(req.count, 1)))
 		local outsidePenalty = outside / req.count
 		total += clamp01(countScore * 0.6 + spreadScore * 0.4 - outsidePenalty * 0.5)
 		weight += 1
