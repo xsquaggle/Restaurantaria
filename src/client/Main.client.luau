@@ -34,6 +34,9 @@ pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
 end)
 
+-- The stations are laid out for landscape only.
+player:WaitForChild("PlayerGui").ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+
 local gui = Ui.new("ScreenGui", {
 	Name = "Restaurantaria",
 	ResetOnSpawn = false,
