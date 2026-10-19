@@ -892,6 +892,7 @@ local function refreshSummary(snap: any)
 	Ui.clear(summary)
 	local area = ui.root.AbsoluteSize
 	local scrim = Ui.new("ImageLabel", {
+		Name = "Scrim",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Stretch,
 		ImageTransparency = 1,
@@ -904,6 +905,7 @@ local function refreshSummary(snap: any)
 	local cardW = math.min(if ctx.compact then 420 else 560, area.X - 24)
 	local cardH = math.min(if ctx.compact then 300 else 400, area.Y - 24)
 	local card = Ui.new("ImageLabel", {
+		Name = "Card",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
 		-- Astra's metadata candidate (QA review, diagnostics/summary-slice-override-candidate):
