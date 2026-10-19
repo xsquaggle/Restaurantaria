@@ -220,8 +220,11 @@ Assets.Meta = {
 	cutterHandle = { aspect = 414 / 1061, axle = 0.097 },
 }
 
+-- The pack's two aliases (asset-manifest.json): same art under a second name.
+Assets.Alias = { icon_bake = "icon_bake_regular", icon_cut = "icon_nav_cut_idle" }
+
 function Assets.get(name: string): string?
-	local id = (Assets :: any)[name]
+	local id = (Assets :: any)[Assets.Alias[name] or name]
 	if type(id) == "string" and id ~= "" then
 		return id
 	end

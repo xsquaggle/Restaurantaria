@@ -27,6 +27,7 @@ local reported: { [string]: boolean } = {}
 local shown: { [Instance]: string } = {}
 
 local function devFolder(name: string): Instance?
+	name = Assets.Alias[name] or name
 	if not RunService:IsStudio() then
 		return nil
 	end
