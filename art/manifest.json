@@ -1172,6 +1172,68 @@
      "name": "ui_tutorial_target_halo"
     }
    ]
+  },
+  {
+   "id": "bg_order_v1",
+   "job": "fe473294-69a7-46ca-83c1-28b9fe967457",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045617_fe473294-69a7-46ca-83c1-28b9fe967457.png",
+   "kind": "tiles",
+   "note": "Order station shop interior behind the counter, quiet right quarter and foot.",
+   "outputs": [
+    {
+     "name": "bg_order",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "prop_order_counter_v1",
+   "job": "dbbdce6f-7d66-4c48-8c41-b5314c0ef8e7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045616_dbbdce6f-7d66-4c48-8c41-b5314c0ef8e7.png",
+   "kind": "sprite",
+   "note": "Order counter front; customers stand behind it.",
+   "outputs": [
+    {
+     "name": "prop_order_counter",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "bg_bake_v1",
+   "job": "0e356d64-5592-4365-b592-3110cf3a4583",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045618_0e356d64-5592-4365-b592-3110cf3a4583.png",
+   "kind": "tiles",
+   "note": "Bake station kitchen wall behind the ovens.",
+   "outputs": [
+    {
+     "name": "bg_bake",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "bg_cut_v1",
+   "job": "2fbd401d-8ae9-40e6-a377-de3205c25dc9",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045617_2fbd401d-8ae9-40e6-a377-de3205c25dc9.png",
+   "kind": "tiles",
+   "note": "Cut station prep counter under the board.",
+   "outputs": [
+    {
+     "name": "bg_cut",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
   }
  ]
 }

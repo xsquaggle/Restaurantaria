@@ -23,7 +23,9 @@ Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", takeOut = "Ba
 -- Glove rotation for each side it comes from (the drawing points up).
 local ROTATION = { below = 0, above = 180, left = 90, right = -90 }
 
-export type Hint = { target: GuiObject?, text: string, from: string?, legend: boolean?, anchor: GuiObject? }
+-- On phones the card goes to the top (or, with cardSide "bottom", the foot) of the work
+-- surface, centred over cardOver, so it never lands on a control.
+export type Hint = { target: GuiObject?, text: string, from: string?, legend: boolean?, anchor: GuiObject?, cardSide: string?, cardOver: GuiObject? }
 
 -- `avoid` is a control strip (the tab bar) the glove must not cover.
 function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
@@ -166,8 +168,10 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 		if compact then
 			-- Phones have no spare room beside controls: the card sits at the top of the work
 			-- surface, over the scene rather than any control.
-			local centre = if avoid then avoid.AbsolutePosition.X - origin.X + avoid.AbsoluteSize.X / 2 else area.X / 2
-			at = Vector2.new(centre - cardW / 2, 8)
+			local over = hint.cardOver or avoid
+			local centre = if over then over.AbsolutePosition.X - origin.X + over.AbsoluteSize.X / 2 else area.X / 2
+			local floor = if avoid then avoid.AbsolutePosition.Y - origin.Y else area.Y
+			at = Vector2.new(centre - cardW / 2, if hint.cardSide == "bottom" then floor - cardH - 6 else 8)
 		elseif pointing then
 			at = if from == "left" then Vector2.new(tipAt.X - handSize - 8 - cardW, tipAt.Y - cardH / 2)
 				elseif from == "right" then Vector2.new(tipAt.X + handSize + 8, tipAt.Y - cardH / 2)

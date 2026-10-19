@@ -400,7 +400,7 @@ function Topping.new(ctx: any, container: Frame)
 				end
 			end
 			if have < req.count and trays[req.ingredient] then
-				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below" }
+				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below", cardSide = "bottom", cardOver = view.frame }
 			end
 		end
 		return nil
