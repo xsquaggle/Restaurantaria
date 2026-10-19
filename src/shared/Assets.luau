@@ -31,7 +31,20 @@ local Assets = {
 	topping_pepper_1 = "",
 	topping_pepper_2 = "",
 	topping_pepper_3 = "",
-	-- Interface proofs (Astra, UI Proof V1).
+	topping_pepper_red_1 = "",
+	topping_pepper_red_2 = "",
+	topping_pepper_red_3 = "",
+	tray_pepper_mixed = "",
+	-- Interface (Astra, UI V2 integration proof 01).
+	ui_button_primary_idle = "",
+	ui_button_primary_pressed = "",
+	ui_button_primary_disabled = "",
+	ui_button_primary_highlighted = "",
+	ui_hud_pill = "",
+	ui_ticket_top = "",
+	ui_ticket_mid = "",
+	ui_ticket_bottom = "",
+	-- Interface proofs (Astra, UI Proof V1), still used where V2 art is pending.
 	ui_orderTicket_blank = "",
 	ui_tabBar_idle = "",
 	ui_ovenRing_idle = "",
@@ -47,7 +60,14 @@ local Assets = {
 
 -- Layout metadata measured from the runtime exports (fractions of the exported image).
 Assets.Meta = {
-	-- Primary button: 640x207 export, candidate nine-slice margins scaled from the proof manifest.
+	-- V2 primary button (896x240) and HUD pill (640x152): slice centres from Astra's manifest;
+	-- SliceScale is the rendered height over the source height.
+	buttonPrimary = { slice = Rect.new(128, 112, 768, 128), height = 240 },
+	hudPill = { slice = Rect.new(88, 70, 552, 82), height = 152 },
+	-- V2 ticket: three pieces cut from one 840 px wide master; caps 96 px tall, only the
+	-- middle stretches.
+	ticket = { width = 840, cap = 96 },
+	-- V1 button (secondary actions until V2 secondary art arrives): 640x207 export.
 	primarySlice = Rect.new(73, 61, 566, 149),
 	primaryAspect = 640 / 207,
 	-- Patience: live fill safe region inside the 768x216 export.

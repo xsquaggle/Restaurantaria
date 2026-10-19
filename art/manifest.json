@@ -299,6 +299,40 @@
      "name": "ui_ticket_bottom"
     }
    ]
+  },
+  {
+   "id": "toppings_pepper_red_v1",
+   "job": "4dffa146-37fc-4798-8111-51c564df9fa1",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_003331_4dffa146-37fc-4798-8111-51c564df9fa1.png",
+   "kind": "sheet",
+   "note": "Red bell pepper variants (G2). Alternate set, unused: job 8d67693d-4539-4f3f-b9b9-4aabdce85987.",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepper_red_1",
+      "topping_pepper_red_2",
+      "topping_pepper_red_3"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "tray_pepper_mixed_v1",
+   "job": "88ba038c-0ba5-4ffe-8ae7-768ebf0c1f67",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_003330_88ba038c-0ba5-4ffe-8ae7-768ebf0c1f67.png",
+   "kind": "sheet",
+   "note": "Mixed red and green bell pepper tray (G2).",
+   "outputs": [
+    {
+     "names": [
+      "tray_pepper_mixed"
+     ],
+     "side": 384,
+     "square": false
+    }
+   ]
   }
  ]
 }

@@ -14,7 +14,18 @@ Recipes.Ingredients = {
 	mushroom = { name = "Mushroom", plural = "mushrooms", art = "mushroom", size = 0.15, colour = Color3.fromRGB(222, 205, 176), shape = "cap" },
 	basil = { name = "Basil", plural = "basil leaves", art = "basil", size = 0.14, colour = Color3.fromRGB(78, 150, 58), shape = "disc" },
 	olive = { name = "Olive", plural = "olives", art = "olive", size = 0.095, colour = Color3.fromRGB(52, 44, 48), shape = "ring" },
-	pepper = { name = "Green pepper", short = "Pepper", plural = "green peppers", art = "pepper", size = 0.14, colour = Color3.fromRGB(78, 140, 62), shape = "ring" },
+	-- One ingredient with green and red looks; colour never affects counts or grading.
+	pepper = {
+		name = "Bell pepper",
+		short = "Pepper",
+		plural = "bell peppers",
+		art = "pepper",
+		tray = "tray_pepper_mixed",
+		variants = { "topping_pepper_1", "topping_pepper_2", "topping_pepper_3", "topping_pepper_red_1", "topping_pepper_red_2", "topping_pepper_red_3" },
+		size = 0.14,
+		colour = Color3.fromRGB(78, 140, 62),
+		shape = "ring",
+	},
 }
 
 -- Tray order on the topping counter, left to right (matches the approved reference).
