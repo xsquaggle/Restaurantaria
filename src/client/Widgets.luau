@@ -508,26 +508,33 @@ end
 -- Astra's three-part ticket: the caps keep their drawn proportions for the width (96 px at
 -- the 840 px master: 48 px at 420, 19 px at 168) and only the middle stretches. The parts
 -- abut with no overlap.
-function Widgets.ticketBody(parent: GuiObject, w: number, h: number)
+-- Returns a function that re-fits the three parts to a new height.
+function Widgets.ticketBody(parent: GuiObject, w: number, h: number): (number) -> ()
 	local cap = math.round(w * Assets.Meta.ticket.cap / Assets.Meta.ticket.width)
-	local function part(name: string, y: number, height: number)
-		Art.apply(Ui.new("ImageLabel", {
+	local function part(name: string, y: number, height: number): ImageLabel
+		local label = Ui.new("ImageLabel", {
 			Name = name,
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Stretch,
 			Position = UDim2.fromOffset(0, y),
 			Size = UDim2.fromOffset(w, height),
 			Parent = parent,
-		}), name)
+		})
+		Art.apply(label, name)
+		return label
 	end
 	part("ui_ticket_top", 0, cap)
-	part("ui_ticket_mid", cap, h - cap * 2)
-	part("ui_ticket_bottom", h - cap, cap)
+	local mid = part("ui_ticket_mid", cap, h - cap * 2)
+	local bottom = part("ui_ticket_bottom", h - cap, cap)
+	return function(newH: number)
+		mid.Size = UDim2.fromOffset(w, newH - cap * 2)
+		bottom.Position = UDim2.fromOffset(0, newH - cap)
+	end
 end
 
 function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 	local frame = Ui.new("Frame", { Name = "Ticket", BackgroundTransparency = 1, Size = UDim2.fromOffset(size.X, size.Y) })
-	Widgets.ticketBody(frame, size.X, size.Y)
+	local fitBody = Widgets.ticketBody(frame, size.X, size.Y)
 	-- Astra's content insets: 12/14 px on the 168 px phone ticket, 28/32 px at 420 px.
 	local padX = if compact then 12 else math.round(size.X * 28 / 420)
 	local padTop = if compact then 14 else math.round(size.X * 32 / 420)
@@ -640,6 +647,13 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 						Parent = row,
 					})
 				end
+			end
+			-- Wide screens: the paper ends a row's height below the last requirement instead of
+			-- leaving blank paper (the rail's waiting tabs follow the ticket's bottom edge).
+			if not compact then
+				local h = math.min(size.Y, math.round(padTop + headerH + 4 + y + unit * 0.4 + padBottom))
+				frame.Size = UDim2.fromOffset(size.X, h)
+				fitBody(h)
 			end
 		end,
 		setPatience = function(_t: RailTicket, fraction: number, band: string)

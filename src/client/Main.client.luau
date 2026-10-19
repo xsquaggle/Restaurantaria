@@ -532,6 +532,10 @@ local function buildLayout()
 			then Ui.new("UIGridLayout", { CellPadding = UDim2.fromOffset(gap, gap), CellSize = UDim2.new(0.5, -gap / 2, 0, tabH), SortOrder = Enum.SortOrder.LayoutOrder })
 			else Ui.new("UIListLayout", { Padding = UDim.new(0, gap), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	-- The tabs hang under the active ticket, whose height follows its content on desktop.
+	ticket.frame:GetPropertyChangedSignal("Size"):Connect(function()
+		tabList.Position = UDim2.fromOffset(pad, pad + ticket.frame.Size.Y.Offset + gap)
+	end)
 	local actionArea = Ui.new("Frame", {
 		Name = "Action",
 		BackgroundTransparency = 1,
