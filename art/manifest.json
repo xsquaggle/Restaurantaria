@@ -1,0 +1,338 @@
+{
+ "about": "Generated art sources and how tools/ArtPipeline.luau turns them into runtime sprites. Owner: Claude via Higgsfield (gameplay and environment art). UI art comes from Astra (ChatGPT) and is listed separately.",
+ "model": "Higgsfield gpt_image_2_5, quality high, 2k, with art/reference/screens-v2/01-topping.png as the style reference",
+ "sources": [
+  {
+   "id": "toppings_raw_v1",
+   "job": "957201b0-1db1-48e9-8246-3abb545f358b",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210516_957201b0-1db1-48e9-8246-3abb545f358b.png",
+   "kind": "sheet",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_1",
+      "topping_pepperoni_2",
+      "topping_pepperoni_3",
+      "topping_mushroom_1",
+      "topping_mushroom_2",
+      "topping_mushroom_3",
+      "topping_basil_1",
+      "topping_basil_2",
+      "topping_basil_3",
+      "topping_olive_1",
+      "topping_olive_2",
+      "topping_olive_3",
+      "topping_pepper_1",
+      "topping_pepper_2",
+      "topping_pepper_3"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "pizza_raw_v1",
+   "job": "349c2fc0-d5dc-4ee6-8061-fc33cf6d876b",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210517_349c2fc0-d5dc-4ee6-8061-fc33cf6d876b.png",
+   "kind": "sprite",
+   "outputs": [
+    {
+     "name": "pizza_raw",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "board_round_v1",
+   "job": "e43fe98e-f83c-4ddf-a5ea-e20a12bb5c9c",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210518_e43fe98e-f83c-4ddf-a5ea-e20a12bb5c9c.png",
+   "kind": "sprite",
+   "outputs": [
+    {
+     "name": "board_round",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "counter_topping_v1",
+   "job": "ea6e3c60-c765-42b4-b53c-01b88897f900",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210517_ea6e3c60-c765-42b4-b53c-01b88897f900.png",
+   "kind": "tiles",
+   "outputs": [
+    {
+     "name": "counter_topping",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "trays_v1",
+   "job": "2661d9c2-8894-4dc2-a1f5-c5548aa734d9",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261018_210516_2661d9c2-8894-4dc2-a1f5-c5548aa734d9.png",
+   "kind": "sheet",
+   "outputs": [
+    {
+     "names": [
+      "tray_pepperoni",
+      "tray_mushroom",
+      "tray_basil",
+      "tray_olive",
+      "tray_pepper"
+     ],
+     "side": 384,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "ui_orderTicket_blank",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_orderTicket_blank.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_orderTicket_blank"
+    }
+   ]
+  },
+  {
+   "id": "ui_ovenRing_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_ovenRing_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ovenRing_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_grumpy",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_grumpy.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_grumpy"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_happy",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_happy.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_happy"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_impatient",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_impatient.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_impatient"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_neutral",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_patience_neutral.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_neutral"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_disabled",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_highlighted",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_highlighted.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_highlighted"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_primary_pressed",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_primary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_primary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_tabBar_idle",
+   "owner": "Astra (ChatGPT), UI Proof V1",
+   "url": "repo:art/ui/runtime/ui_tabBar_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tabBar_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_idle",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_pressed",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_disabled",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_highlighted",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_highlighted.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_highlighted"
+    }
+   ]
+  },
+  {
+   "id": "ui_hud_pill",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_hud_pill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_hud_pill"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_top",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_top.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_top"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_mid",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_mid.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_mid"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_bottom",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_bottom.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_bottom"
+    }
+   ]
+  },
+  {
+   "id": "toppings_pepper_red_v1",
+   "job": "4dffa146-37fc-4798-8111-51c564df9fa1",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_003331_4dffa146-37fc-4798-8111-51c564df9fa1.png",
+   "kind": "sheet",
+   "note": "Red bell pepper variants (G2). Alternate set, unused: job 8d67693d-4539-4f3f-b9b9-4aabdce85987.",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepper_red_1",
+      "topping_pepper_red_2",
+      "topping_pepper_red_3"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "tray_pepper_mixed_v1",
+   "job": "88ba038c-0ba5-4ffe-8ae7-768ebf0c1f67",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_003330_88ba038c-0ba5-4ffe-8ae7-768ebf0c1f67.png",
+   "kind": "sheet",
+   "note": "Mixed red and green bell pepper tray (G2).",
+   "outputs": [
+    {
+     "names": [
+      "tray_pepper_mixed"
+     ],
+     "side": 384,
+     "square": false
+    }
+   ]
+  }
+ ]
+}

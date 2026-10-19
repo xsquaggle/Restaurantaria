@@ -1,0 +1,585 @@
+{
+  "version": 1,
+  "date": "2026-10-18",
+  "status": "working art direction; Lawson approval pending",
+  "generation_mode": "built-in image_gen; original PNG bytes copied without image editing",
+  "reference_canvas_px": [
+    1920,
+    1080
+  ],
+  "assets": [
+    {
+      "name": "ui_orderTicket_blank",
+      "file": "assets/ui_orderTicket_blank.png",
+      "size_px": [
+        1122,
+        1402
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        175,
+        139,
+        951,
+        1293
+      ],
+      "transparent_pixels_percent": 44.598,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 781723,
+      "sha256": "3672f1cf4b4252cc2e73224905ffc83aac804a9203c2cd957b2001b46cf9b34b",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        320,
+        476
+      ],
+      "nine_slice": false
+    },
+    {
+      "name": "ui_tabBar_idle",
+      "file": "assets/ui_tabBar_idle.png",
+      "size_px": [
+        1983,
+        793
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        48,
+        275,
+        1935,
+        515
+      ],
+      "transparent_pixels_percent": 71.527,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 519035,
+      "sha256": "576364930588b2c073773a5064fed02222a515818ef7fd55f5e8d0a08ea524a9",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        1120,
+        142
+      ],
+      "nine_slice": false
+    },
+    {
+      "name": "ui_primary_idle",
+      "file": "assets/ui_primary_v2_idle.png",
+      "size_px": [
+        1774,
+        887
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        60,
+        177,
+        1717,
+        693
+      ],
+      "transparent_pixels_percent": 46.842,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 816535,
+      "sha256": "58005bdc8e44b39db4a1e584f753970a7f40f3c4005fcae3807e68d46251ce80",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        432,
+        134
+      ],
+      "shared_source_window_xyxy": [
+        48,
+        160,
+        1728,
+        704
+      ],
+      "nine_slice_candidate_full_source": {
+        "margins_ltrb": [
+          240,
+          320,
+          240,
+          335
+        ],
+        "slice_center_xyxy": [
+          240,
+          320,
+          1534,
+          552
+        ],
+        "verified_in_studio": false
+      }
+    },
+    {
+      "name": "ui_primary_pressed",
+      "file": "assets/ui_primary_pressed.png",
+      "size_px": [
+        1774,
+        887
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        59,
+        177,
+        1715,
+        692
+      ],
+      "transparent_pixels_percent": 46.887,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 957707,
+      "sha256": "dbe8557b03e45e5d82a8f42ae47dbd36e93a6f724c00f6881ec000080aa47203",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        432,
+        134
+      ],
+      "shared_source_window_xyxy": [
+        48,
+        160,
+        1728,
+        704
+      ],
+      "nine_slice_candidate_full_source": {
+        "margins_ltrb": [
+          240,
+          320,
+          240,
+          335
+        ],
+        "slice_center_xyxy": [
+          240,
+          320,
+          1534,
+          552
+        ],
+        "verified_in_studio": false
+      }
+    },
+    {
+      "name": "ui_primary_disabled",
+      "file": "assets/ui_primary_disabled.png",
+      "size_px": [
+        1774,
+        887
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        59,
+        178,
+        1716,
+        692
+      ],
+      "transparent_pixels_percent": 46.991,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 862855,
+      "sha256": "c8c5f905955a1c73578ea1903c9f99a2363bf5ba89f939d22dcb88229d29f250",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        432,
+        134
+      ],
+      "shared_source_window_xyxy": [
+        48,
+        160,
+        1728,
+        704
+      ],
+      "nine_slice_candidate_full_source": {
+        "margins_ltrb": [
+          240,
+          320,
+          240,
+          335
+        ],
+        "slice_center_xyxy": [
+          240,
+          320,
+          1534,
+          552
+        ],
+        "verified_in_studio": false
+      }
+    },
+    {
+      "name": "ui_primary_highlighted",
+      "file": "assets/ui_primary_v2_highlighted.png",
+      "size_px": [
+        1774,
+        887
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        58,
+        178,
+        1717,
+        693
+      ],
+      "transparent_pixels_percent": 46.733,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 829460,
+      "sha256": "79ee72bd39b4032aa7c1b99b97cec61d2147d7960426f80a4b570c06438192e4",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        432,
+        134
+      ],
+      "shared_source_window_xyxy": [
+        48,
+        160,
+        1728,
+        704
+      ],
+      "nine_slice_candidate_full_source": {
+        "margins_ltrb": [
+          240,
+          320,
+          240,
+          335
+        ],
+        "slice_center_xyxy": [
+          240,
+          320,
+          1534,
+          552
+        ],
+        "verified_in_studio": false
+      }
+    },
+    {
+      "name": "ui_ovenRing_idle",
+      "file": "assets/ui_ovenRing_idle.png",
+      "size_px": [
+        1254,
+        1254
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        104,
+        106,
+        1150,
+        1147
+      ],
+      "transparent_pixels_percent": 74.233,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 547388,
+      "sha256": "7dbb121b0ef140fd9449fd495e00a8544cca7c320252709f38ab4d0ac9aa2d04",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "center_alpha": 0,
+      "reference_visible_size_px": [
+        112,
+        112
+      ],
+      "nine_slice": false
+    },
+    {
+      "name": "ui_patience_happy",
+      "file": "assets/ui_patience_happy.png",
+      "size_px": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        236,
+        128,
+        1932,
+        584
+      ],
+      "transparent_pixels_percent": 66.832,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 554924,
+      "sha256": "316660f604318a9efd66b3780d48c6f4dd857dc6d8d1a7c8ec4aa7572b5dc127",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        320,
+        86
+      ],
+      "shared_source_window_xyxy": [
+        216,
+        112,
+        1952,
+        600
+      ],
+      "nine_slice": false,
+      "live_fill_safe_region_full_source_xyxy": [
+        720,
+        300,
+        1810,
+        438
+      ]
+    },
+    {
+      "name": "ui_patience_neutral",
+      "file": "assets/ui_patience_neutral.png",
+      "size_px": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        235,
+        128,
+        1933,
+        585
+      ],
+      "transparent_pixels_percent": 66.579,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 670894,
+      "sha256": "514b6ab443590d9172e861cf8c4aff97dd59dc4f375e3f9590592d65015de3b2",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        320,
+        86
+      ],
+      "shared_source_window_xyxy": [
+        216,
+        112,
+        1952,
+        600
+      ],
+      "nine_slice": false,
+      "live_fill_safe_region_full_source_xyxy": [
+        720,
+        300,
+        1810,
+        438
+      ]
+    },
+    {
+      "name": "ui_patience_impatient",
+      "file": "assets/ui_patience_impatient.png",
+      "size_px": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        236,
+        127,
+        1932,
+        585
+      ],
+      "transparent_pixels_percent": 66.563,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 682945,
+      "sha256": "a13434249651cf9aa367adfbe3e48ffc12247be31a1b24a0c3f160829a31c2d8",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        320,
+        86
+      ],
+      "shared_source_window_xyxy": [
+        216,
+        112,
+        1952,
+        600
+      ],
+      "nine_slice": false,
+      "live_fill_safe_region_full_source_xyxy": [
+        720,
+        300,
+        1810,
+        438
+      ]
+    },
+    {
+      "name": "ui_patience_grumpy",
+      "file": "assets/ui_patience_grumpy.png",
+      "size_px": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "alpha_bounds_gt8_px": [
+        232,
+        125,
+        1922,
+        583
+      ],
+      "transparent_pixels_percent": 65.773,
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "corner_alpha": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "bytes": 692755,
+      "sha256": "5514cf2ff10870887a2e056142e672ec4392fbb96509413940d641435e83c8bb",
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ],
+      "status": "visual proof; not uploaded or Studio-tested",
+      "reference_visible_size_px": [
+        320,
+        86
+      ],
+      "shared_source_window_xyxy": [
+        216,
+        112,
+        1952,
+        600
+      ],
+      "nine_slice": false,
+      "live_fill_safe_region_full_source_xyxy": [
+        720,
+        300,
+        1810,
+        438
+      ]
+    }
+  ],
+  "token_contrast_ratios": {
+    "ink_on_paper": 11.4,
+    "muted_on_paper": 5.05,
+    "white_on_action": 6.2,
+    "white_on_pressed": 7.87,
+    "ink_on_disabled": 6.43
+  },
+  "uncompressed_rgba_master_mib": 66.0,
+  "sampled_button_label_region_contrast": {
+    "ui_primary_idle": {
+      "minimum_white_contrast_sampled": 6.03,
+      "minimum_ink_contrast_sampled": 1.99
+    },
+    "ui_primary_pressed": {
+      "minimum_white_contrast_sampled": 7.28,
+      "minimum_ink_contrast_sampled": 1.62
+    },
+    "ui_primary_disabled": {
+      "minimum_white_contrast_sampled": 2.04,
+      "minimum_ink_contrast_sampled": 5.83
+    },
+    "ui_primary_highlighted": {
+      "minimum_white_contrast_sampled": 5.85,
+      "minimum_ink_contrast_sampled": 2.07
+    }
+  }
+}

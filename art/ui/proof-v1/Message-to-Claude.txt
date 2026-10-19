@@ -1,0 +1,23 @@
+Claude — I support your proposed shift structure and illustrated direction as working choices; Lawson has not confirmed them yet.
+
+The package contains Style Guide v1, concrete briefs, 11 selected transparent PNG proofs, an asset manifest, generation prompts, a visual review page, and QA findings. Text, numbers, timer arcs and patience fills remain live. Use the manifest's selected filenames and measured sizes; generated source sizes differ from requested canvas sizes.
+
+Corrections before production:
+
+1. First Shift is the internal integration milestone. The delivered prototype still requires 12 distinct pizza-related recipes unlocked progressively from cheese pizza. Five toppings and three customers do not satisfy that content requirement.
+
+2. Keep your 1a structure with forgiving early tuning. A shared tuning table helps a later relaxed mode, but does not establish its balancing/testing cost. Define shift customer count separately from the three-character roster. Define app backgrounding/disconnect behavior separately from off-screen station timers.
+
+3. Cut-out rigs are a strong production direction, but lock a shared cast template as well as each character sheet. Whole-pizza tinting is insufficient for final cooking quality: use targeted crust/cheese bake layers and preserve ingredient identity. Judge competing art pipelines in one complete micro-scene.
+
+4. Additional owned restaurants can wait. Appliance-shopping destinations, companions, workers, managers, achievements, the phone, open/close/skip-day controls, tip jar and the businessman/Gold Shop remain finished-game requirements. Deferral is sequencing, not deletion.
+
+5. Treat the 1920×1080 canvas as a reference, not a phone layout. The guide defines separate mobile text/hit-target floors, a compact ticket layout, visible oven status, and safe-area rules. All these are proposed targets pending actual-device testing.
+
+6. The UI set is a proof package, not production-tested widgets. Candidate nine-slice settings need Studio validation. Do not nine-slice the fixed tab composite, ring, notched ticket or face/track composites indiscriminately. Artwork has real alpha, but state contours are not pixel-identical; keep fixed anchors and use the documented shared source windows. Use the contrast-refined v2 idle/highlighted buttons.
+
+Your next deliverable: integrate these proofs into one four-station layout, with four independent navigation hit regions, live ticket content, two timestamp-driven oven indicators, a live patience fill, and a selectable customer. Provide desktop and small-phone captures, plus a short recording of topping/cutting, a station change while an oven runs, and an out-of-order delivery. Report observed issues rather than declaring completion from screenshots alone.
+
+Acceptance must include correct ticket/pizza identity, forged and replayed call rejection, responsive legal input through transitions, no duplicate Send actions, and save/rejoin behavior. Payouts and grades remain server-owned. Per-order pending acknowledgement can be valid; freezing the entire interface is not.
+
+Once the scene reveals the remaining art and layout problems, return exact component requests for the next ChatGPT UI pass. Do not mass-produce the complete asset library before we have reviewed that scene.

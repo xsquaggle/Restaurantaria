@@ -1,0 +1,790 @@
+{
+  "pack": "Pizzeria UI V2 integration proof 01",
+  "status": "Asset-preparation proof; Studio/upload/device acceptance pending",
+  "scope": {
+    "delivered": [
+      "A2 HUD pill",
+      "A6 four primary states",
+      "A7 ticket top/middle/bottom"
+    ],
+    "notDelivered": [
+      "A1",
+      "A3",
+      "A4",
+      "A5",
+      "A6 secondary buttons",
+      "A7 divider and waiting tabs",
+      "A8",
+      "A9",
+      "A10",
+      "A11",
+      "A12",
+      "A13",
+      "A14",
+      "A15",
+      "A16",
+      "A17"
+    ]
+  },
+  "artOrigin": "Native ChatGPT image generation, referenced to approved V2 topping mockup. All code work limited to technical preparation and preview assembly.",
+  "reference": {
+    "file": "reference/01-topping.png",
+    "sizePx": [
+      1672,
+      941
+    ]
+  },
+  "coordinates": "Rectangles are [left, top, right, bottom], right/bottom exclusive. Source pixels always refer to delivered runtime PNG unless explicitly named otherwise.",
+  "runtimeDefaults": {
+    "BackgroundTransparency": 1,
+    "BorderSizePixel": 0,
+    "ImageColor3": "#FFFFFF",
+    "ImageTransparency": 0,
+    "AutoButtonColor": false,
+    "extraUIStrokeOrUICorner": "Do not apply to the backplate. Live text may use its own stroke.",
+    "sliceScaleRule": "Use the explicit scale values at named sizes; otherwise target image height / source PNG height. Ancestor UIScale must be accounted for once, not twice."
+  },
+  "ticketAssembly": {
+    "registeredSizePx": [
+      840,
+      938
+    ],
+    "capSourceHeightPx": 96,
+    "desktopProofsPx": [
+      [
+        420,
+        460
+      ],
+      [
+        420,
+        580
+      ]
+    ],
+    "phoneProofsPx": [
+      [
+        168,
+        174
+      ],
+      [
+        168,
+        220
+      ]
+    ],
+    "pixelSnappedPhoneOption": "Use top/bottom cap height 19 each and middle H-38, all three same width 168, matching X. This is a 0.2px cap-height rounding at phone scale.",
+    "pixelSnappedDesktopOption": "Cap height 48 each; middle H-96.",
+    "joinRule": "Abut segments with zero layout padding. First try exact placement. Verify at native scale in Studio before adding any overlap.",
+    "contentInsetsPx": {
+      "desktop": {
+        "left": 28,
+        "right": 28,
+        "top": 32,
+        "bottom": 32
+      },
+      "phone": {
+        "left": 12,
+        "right": 12,
+        "top": 14,
+        "bottom": 14
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "ui_button_primary_idle",
+      "file": "assets/ui_button_primary_idle.png",
+      "sizePx": [
+        896,
+        240
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        8,
+        7,
+        888,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "transparentPixelCount": 25708,
+      "opaquePixelCount": 884,
+      "sha256": "f3aa1ff52f8559405cff49f034bb5e1891493b2387229f1644761d534f73cb3b",
+      "request": "A6 primary only",
+      "sourceMaster": "masters/primary_idle_generated.png",
+      "preparation": "Alpha <=8 removed; measured outer-body affine registration to shared 880x224 body at (8,8), then premultiplied-alpha resampling. No artwork drawn.",
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "safeContentRectSourcePx": [
+        70,
+        56,
+        826,
+        184
+      ],
+      "contentRectRule": "Use explicit target insets for the live icon+label group, not a proportional shrink of the entire source rectangle. Keep font floors. Verify the actual Roblox font.",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "scaleType": "Slice",
+      "targets": [
+        {
+          "name": "desktop",
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333,
+          "liveContentInsetsPx": {
+            "left": 32,
+            "right": 32,
+            "top": 24,
+            "bottom": 24
+          }
+        },
+        {
+          "name": "phone",
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2,
+          "liveContentInsetsPx": {
+            "left": 14,
+            "right": 14,
+            "top": 10,
+            "bottom": 10
+          },
+          "iconLabelGuide": "140x28 live-content box: icon24, gap6, remaining110 for the16px label. If the final font/localization does not fit, use an appropriate shorter label such as Send; do not reduce text below16px."
+        }
+      ],
+      "hitTargetMinPx": [
+        48,
+        48
+      ],
+      "label": "Separate live ivory text with live dark-brown stroke; disabled label dark brown. See README."
+    },
+    {
+      "name": "ui_hud_pill",
+      "file": "assets/ui_hud_pill.png",
+      "sizePx": [
+        640,
+        152
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        5,
+        5,
+        635,
+        147
+      ],
+      "bodyBoundsGt128": [
+        6,
+        6,
+        634,
+        146
+      ],
+      "transparentPixelCount": 10915,
+      "opaquePixelCount": 1219,
+      "sha256": "5423904e9acdca3c4611f4ced33581cbabaa6a3e3070f975eeaef7d7d16d3bc1",
+      "request": "A2",
+      "sourceMaster": "masters/hud_pill_generated.png",
+      "sourceCropPx": [
+        127,
+        265,
+        1646,
+        622
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "safeContentRectSourcePx": [
+        96,
+        36,
+        544,
+        116
+      ],
+      "sliceMarginsSourcePx": {
+        "left": 88,
+        "top": 70,
+        "right": 88,
+        "bottom": 70
+      },
+      "sliceCenterRectSourcePx": [
+        88,
+        70,
+        552,
+        82
+      ],
+      "scaleType": "Slice",
+      "targets": [
+        {
+          "name": "desktop",
+          "sizePx": [
+            240,
+            44
+          ],
+          "sliceScale": 0.2894736842105263
+        },
+        {
+          "name": "phone",
+          "sizePx": [
+            120,
+            36
+          ],
+          "sliceScale": 0.23684210526315788
+        }
+      ],
+      "label": "Separate live dark-brown text; icons remain separate. Noninteractive."
+    },
+    {
+      "name": "ui_ticket_top",
+      "file": "assets/ui_ticket_top.png",
+      "sizePx": [
+        840,
+        96
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        6,
+        6,
+        834,
+        96
+      ],
+      "bodyBoundsGt128": [
+        7,
+        7,
+        833,
+        96
+      ],
+      "transparentPixelCount": 12954,
+      "opaquePixelCount": 516,
+      "sha256": "55d18c82cbe30788d309d7445c6c47fab7fd41cc80de58c7730081cbc83b307e",
+      "request": "A7 body only",
+      "sourceMaster": "masters/ticket_master_generated.png",
+      "registeredMaster": "masters/ticket_registered_840x938.png",
+      "sourceCropPx": [
+        135,
+        77,
+        1120,
+        1177
+      ],
+      "segmentCropRegisteredPx": [
+        0,
+        0,
+        840,
+        96
+      ],
+      "scaleType": "Stretch",
+      "anchorPoint": [
+        0,
+        0
+      ],
+      "assembly": "All three same width. Scale caps uniformly by targetWidth/840; middle gets remaining height. No 9-slice through paper teeth. Abutting, contiguous pixel crops; no baked text.",
+      "targets": [
+        {
+          "name": "desktop",
+          "ticketWidthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "name": "phone",
+          "ticketWidthPx": 168,
+          "capHeightPx": 19.2
+        }
+      ],
+      "sliceMarginsSourcePx": null,
+      "sliceCenterRectSourcePx": null
+    },
+    {
+      "name": "ui_ticket_mid",
+      "file": "assets/ui_ticket_mid.png",
+      "sizePx": [
+        840,
+        746
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        6,
+        0,
+        834,
+        746
+      ],
+      "bodyBoundsGt128": [
+        7,
+        0,
+        833,
+        746
+      ],
+      "transparentPixelCount": 8245,
+      "opaquePixelCount": 1519,
+      "sha256": "d5e7716e7331cc03c5c25f6dad2d606063f8e65ac5a4c419f40af886b27148a6",
+      "request": "A7 body only",
+      "sourceMaster": "masters/ticket_master_generated.png",
+      "registeredMaster": "masters/ticket_registered_840x938.png",
+      "sourceCropPx": [
+        135,
+        77,
+        1120,
+        1177
+      ],
+      "segmentCropRegisteredPx": [
+        0,
+        96,
+        840,
+        842
+      ],
+      "scaleType": "Stretch",
+      "anchorPoint": [
+        0,
+        0
+      ],
+      "assembly": "All three same width. Scale caps uniformly by targetWidth/840; middle gets remaining height. No 9-slice through paper teeth. Abutting, contiguous pixel crops; no baked text.",
+      "targets": [
+        {
+          "name": "desktop",
+          "ticketWidthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "name": "phone",
+          "ticketWidthPx": 168,
+          "capHeightPx": 19.2
+        }
+      ],
+      "sliceMarginsSourcePx": null,
+      "sliceCenterRectSourcePx": null
+    },
+    {
+      "name": "ui_ticket_bottom",
+      "file": "assets/ui_ticket_bottom.png",
+      "sizePx": [
+        840,
+        96
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        6,
+        0,
+        834,
+        90
+      ],
+      "bodyBoundsGt128": [
+        7,
+        0,
+        833,
+        89
+      ],
+      "transparentPixelCount": 12588,
+      "opaquePixelCount": 585,
+      "sha256": "f7f3882f34e9fcad05471cd32e1d9b21bb491297940550b40fbada42c2340933",
+      "request": "A7 body only",
+      "sourceMaster": "masters/ticket_master_generated.png",
+      "registeredMaster": "masters/ticket_registered_840x938.png",
+      "sourceCropPx": [
+        135,
+        77,
+        1120,
+        1177
+      ],
+      "segmentCropRegisteredPx": [
+        0,
+        842,
+        840,
+        938
+      ],
+      "scaleType": "Stretch",
+      "anchorPoint": [
+        0,
+        0
+      ],
+      "assembly": "All three same width. Scale caps uniformly by targetWidth/840; middle gets remaining height. No 9-slice through paper teeth. Abutting, contiguous pixel crops; no baked text.",
+      "targets": [
+        {
+          "name": "desktop",
+          "ticketWidthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "name": "phone",
+          "ticketWidthPx": 168,
+          "capHeightPx": 19.2
+        }
+      ],
+      "sliceMarginsSourcePx": null,
+      "sliceCenterRectSourcePx": null
+    },
+    {
+      "name": "ui_button_primary_pressed",
+      "file": "assets/ui_button_primary_pressed.png",
+      "sizePx": [
+        896,
+        240
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        8,
+        8,
+        889,
+        233
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "transparentPixelCount": 25892,
+      "opaquePixelCount": 183,
+      "sha256": "f8b17abe087c324a71f959e48566fbf4c993e5939ae7397656a0b20f5588e07a",
+      "request": "A6 primary only",
+      "sourceMaster": "masters/primary_pressed_generated.png",
+      "preparation": "Alpha <=8 removed; measured outer-body affine registration to shared 880x224 body at (8,8), then premultiplied-alpha resampling. No artwork drawn.",
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "safeContentRectSourcePx": [
+        70,
+        56,
+        826,
+        184
+      ],
+      "contentRectRule": "Use explicit target insets for the live icon+label group, not a proportional shrink of the entire source rectangle. Keep font floors. Verify the actual Roblox font.",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "scaleType": "Slice",
+      "targets": [
+        {
+          "name": "desktop",
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333,
+          "liveContentInsetsPx": {
+            "left": 32,
+            "right": 32,
+            "top": 24,
+            "bottom": 24
+          }
+        },
+        {
+          "name": "phone",
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2,
+          "liveContentInsetsPx": {
+            "left": 14,
+            "right": 14,
+            "top": 10,
+            "bottom": 10
+          },
+          "iconLabelGuide": "140x28 live-content box: icon24, gap6, remaining110 for the16px label. If the final font/localization does not fit, use an appropriate shorter label such as Send; do not reduce text below16px."
+        }
+      ],
+      "hitTargetMinPx": [
+        48,
+        48
+      ],
+      "label": "Separate live ivory text with live dark-brown stroke; disabled label dark brown. See README."
+    },
+    {
+      "name": "ui_button_primary_disabled",
+      "file": "assets/ui_button_primary_disabled.png",
+      "sizePx": [
+        896,
+        240
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        7,
+        8,
+        889,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "transparentPixelCount": 26305,
+      "opaquePixelCount": 117,
+      "sha256": "a61546d5c3e02372895ec38d33b3f02e17e0d4a445aeee582fbd243a540925d8",
+      "request": "A6 primary only",
+      "sourceMaster": "masters/primary_disabled_generated.png",
+      "preparation": "Alpha <=8 removed; measured outer-body affine registration to shared 880x224 body at (8,8), then premultiplied-alpha resampling. No artwork drawn.",
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "safeContentRectSourcePx": [
+        70,
+        56,
+        826,
+        184
+      ],
+      "contentRectRule": "Use explicit target insets for the live icon+label group, not a proportional shrink of the entire source rectangle. Keep font floors. Verify the actual Roblox font.",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "scaleType": "Slice",
+      "targets": [
+        {
+          "name": "desktop",
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333,
+          "liveContentInsetsPx": {
+            "left": 32,
+            "right": 32,
+            "top": 24,
+            "bottom": 24
+          }
+        },
+        {
+          "name": "phone",
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2,
+          "liveContentInsetsPx": {
+            "left": 14,
+            "right": 14,
+            "top": 10,
+            "bottom": 10
+          },
+          "iconLabelGuide": "140x28 live-content box: icon24, gap6, remaining110 for the16px label. If the final font/localization does not fit, use an appropriate shorter label such as Send; do not reduce text below16px."
+        }
+      ],
+      "hitTargetMinPx": [
+        48,
+        48
+      ],
+      "label": "Separate live ivory text with live dark-brown stroke; disabled label dark brown. See README."
+    },
+    {
+      "name": "ui_button_primary_highlighted",
+      "file": "assets/ui_button_primary_highlighted.png",
+      "sizePx": [
+        896,
+        240
+      ],
+      "mode": "RGBA",
+      "alphaBoundsGt8": [
+        7,
+        8,
+        889,
+        235
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "transparentPixelCount": 24738,
+      "opaquePixelCount": 187,
+      "sha256": "6234b7b8874a05378dca4e4f7e990fbc36a78f0b7185f64f796ffc48efd94e65",
+      "request": "A6 primary only",
+      "sourceMaster": "masters/primary_highlighted_generated.png",
+      "preparation": "Alpha <=8 removed; measured outer-body affine registration to shared 880x224 body at (8,8), then premultiplied-alpha resampling. No artwork drawn.",
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "safeContentRectSourcePx": [
+        70,
+        56,
+        826,
+        184
+      ],
+      "contentRectRule": "Use explicit target insets for the live icon+label group, not a proportional shrink of the entire source rectangle. Keep font floors. Verify the actual Roblox font.",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "scaleType": "Slice",
+      "targets": [
+        {
+          "name": "desktop",
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333,
+          "liveContentInsetsPx": {
+            "left": 32,
+            "right": 32,
+            "top": 24,
+            "bottom": 24
+          }
+        },
+        {
+          "name": "phone",
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2,
+          "liveContentInsetsPx": {
+            "left": 14,
+            "right": 14,
+            "top": 10,
+            "bottom": 10
+          },
+          "iconLabelGuide": "140x28 live-content box: icon24, gap6, remaining110 for the16px label. If the final font/localization does not fit, use an appropriate shorter label such as Send; do not reduce text below16px."
+        }
+      ],
+      "hitTargetMinPx": [
+        48,
+        48
+      ],
+      "label": "Separate live ivory text with live dark-brown stroke; disabled label dark brown. See README."
+    }
+  ],
+  "sources": [
+    {
+      "key": "primary_idle",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-cc951523-f4ca-4d05-a36f-6da5974eb77f.png",
+      "sourceSizePx": [
+        1774,
+        887
+      ],
+      "sourceSha256": "33aef6a854300cd1da80496cf73e37b21cba7bf71735bec7276d8fb079d4c35d",
+      "sourceBodyBoundsGt128": [
+        96,
+        241,
+        1678,
+        639
+      ],
+      "packagedMaster": "masters/primary_idle_generated.png"
+    },
+    {
+      "key": "hud_pill",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-3bc8e871-5f88-4861-8908-da2363587d69.png",
+      "sourceSizePx": [
+        1774,
+        887
+      ],
+      "sourceSha256": "a5288f6509091907266ff2b8601d5ce91b0d9b781ae013fa8b34258349e66a03",
+      "sourceBodyBoundsGt128": [
+        141,
+        279,
+        1632,
+        608
+      ],
+      "packagedMaster": "masters/hud_pill_generated.png"
+    },
+    {
+      "key": "ticket_master",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-f1d97ce7-b2c0-4206-9f9a-87688085dba8.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "01f746811af173f54595a2c684e3160eba66fdc554a5efda8b75bb4de23d3810",
+      "sourceBodyBoundsGt128": [
+        143,
+        85,
+        1112,
+        1169
+      ],
+      "packagedMaster": "masters/ticket_master_generated.png"
+    },
+    {
+      "key": "primary_pressed",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-764cbe56-63f8-4a28-9d97-4f6474454d64.png",
+      "sourceSizePx": [
+        1774,
+        887
+      ],
+      "sourceSha256": "6e8223da0786b61c4ca8d71f70d074aec73d87f44d99b547dc660bb04f0fc4ca",
+      "sourceBodyBoundsGt128": [
+        95,
+        238,
+        1679,
+        640
+      ],
+      "packagedMaster": "masters/primary_pressed_generated.png"
+    },
+    {
+      "key": "primary_disabled",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-c2bb1f20-94f1-47ed-bfdd-14396c83e181.png",
+      "sourceSizePx": [
+        1774,
+        887
+      ],
+      "sourceSha256": "7ed9108c11f0d9d39b029e8ff483cc719155becd7d52fe5b632070ecd0696a9f",
+      "sourceBodyBoundsGt128": [
+        95,
+        239,
+        1679,
+        640
+      ],
+      "packagedMaster": "masters/primary_disabled_generated.png"
+    },
+    {
+      "key": "primary_highlighted",
+      "path": "C:\\Users\\g8rla\\.codex\\generated_images\\01a14d02-60f2-7e82-aec4-3f2dd0de4a69\\exec-dbecf180-cdfc-442b-a3c3-03b51b1dbab0.png",
+      "sourceSizePx": [
+        1774,
+        887
+      ],
+      "sourceSha256": "10759344c681ad0180b8d893bbcc1182930d0e8971728953c0904200298f9d16",
+      "sourceBodyBoundsGt128": [
+        94,
+        237,
+        1681,
+        642
+      ],
+      "packagedMaster": "masters/primary_highlighted_generated.png"
+    }
+  ]
+}

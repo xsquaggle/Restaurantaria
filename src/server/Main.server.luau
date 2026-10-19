@@ -1,0 +1,232 @@
+--!strict
+-- Server bootstrap: remotes, player lifecycle, the arrival tick and snapshot pushes.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(ReplicatedStorage.Shared.Net)
+local Recipes = require(ReplicatedStorage.Shared.Recipes)
+local SaveService = require(script.Parent.SaveService)
+local ShiftService = require(script.Parent.ShiftService)
+
+-- The game is played entirely in screen-space 2D; no avatar, so no touch thumbstick.
+Players.CharacterAutoLoads = false
+
+local folder = Net.folder()
+local actionRemote = folder:WaitForChild(Net.ACTION) :: RemoteFunction
+local stateRemote = folder:WaitForChild(Net.STATE) :: RemoteEvent
+
+local function push(player: Player)
+	local snap = ShiftService.snapshot(player)
+	if snap then
+		stateRemote:FireClient(player, snap)
+	end
+end
+
+ShiftService.changed = push
+
+actionRemote.OnServerInvoke = function(player: Player, seq: any, action: any, args: any)
+	local ok, reason = ShiftService.handle(player, seq, action, args)
+	return ok, reason, ShiftService.snapshot(player)
+end
+
+local function onPlayerAdded(player: Player)
+	SaveService.load(player)
+	if player.Parent == nil then
+		SaveService.release(player)
+		return
+	end
+	ShiftService.start(player)
+	push(player)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	ShiftService.stop(player)
+	SaveService.release(player)
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		for player, session in ShiftService.sessions do
+			if ShiftService.tick(session) then
+				push(player)
+			end
+		end
+	end
+end)
+
+-- Studio-only test hook so automated playtests can inspect authoritative state.
+if RunService:IsStudio() then
+	local debug = Instance.new("BindableFunction")
+	debug.Name = "RestaurantariaDebug"
+	debug.OnInvoke = function(command: string, value: any)
+		local player = Players:GetPlayers()[1]
+		local session = player and ShiftService.sessions[player]
+		if not session then
+			return "no session"
+		end
+		if command == "state" then
+			local lines = { string.format("lastSeq=%d rejected=%d tips=%d finished=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.finished)) }
+			for _, c in session.shift.customers do
+				local r = c.result
+				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
+					if r then string.format(" grade=%d (wait %d top %d bake %d cut %d) tip=%d", r.overall, r.wait.score, r.topping.score, r.bake.score, r.cut.score, r.tip) else ""))
+			end
+			for id, pz in session.shift.pizzas do
+				table.insert(lines, string.format("pizza %d ticket=%d stage=%s toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
+			end
+			local profile = SaveService.profiles[player]
+			if profile then
+				table.insert(lines, string.format("profile %s tips=%d xp=%d shifts=%d", profile.status, profile.data.tips, profile.data.xp, profile.data.shiftsCompleted))
+			end
+			return table.concat(lines, "\n")
+		elseif command == "simulateLoadFailure" then
+			SaveService.simulateLoadFailure = value == true
+			return "ok"
+		elseif command == "reloadProfile" then
+			local profile = SaveService.load(player)
+			push(player)
+			return profile.status
+		elseif command == "skipArrivals" then
+			-- Shift the clock so the next customer arrives now.
+			session.shift.startedAt -= (value or 10)
+			return "ok"
+		elseif command == "resetPatience" then
+			-- Tool-driven playtests are slow; refill every unserved customer's patience.
+			for _, c in session.shift.customers do
+				if c.status ~= "served" then
+					c.arrivedAt = workspace:GetServerTimeNow()
+				end
+			end
+			push(player)
+			return "ok"
+		elseif command == "playOut" then
+			-- Brings in every remaining customer and makes each one a clean pizza, in order,
+			-- through the real actions, so the end-of-shift summary and save can be tested
+			-- without a long manual playthrough. Bypasses the client seq so the client keeps
+			-- working afterwards.
+			local shift = session.shift
+			local log = {}
+			local function act(action: string, args: any)
+				local ok, reason = ShiftService.apply(session, action, args)
+				if not ok then
+					table.insert(log, action .. ": " .. tostring(reason))
+				end
+			end
+			shift.startedAt -= 1000
+			ShiftService.tick(session)
+			local clock = workspace:GetServerTimeNow()
+			-- Open tickets first so taking new orders never hits the rail limit.
+			for _, pass in { "ordered", "waiting" } do
+				for _, c in shift.customers do
+					if c.status ~= pass then
+						continue
+					end
+					if c.status == "waiting" then
+						c.arrivedAt = clock - 20
+						act("takeOrder", { customerId = c.id })
+					end
+					local pizza = shift.pizzas[c.pizzaId]
+					if not pizza then
+						continue
+					end
+					if pizza.stage == "topping" then
+						for _, req in Recipes.ById[c.order.recipe].toppings do
+							for i = 1, req.count do
+								local t = (i - 0.5) / req.count
+								local a = if req.region == "left" then math.rad(90 + t * 180)
+									elseif req.region == "right" then math.rad(-90 + t * 180)
+									else math.rad(22.5 + (i - 1) * 360 / req.count)
+								act("placeTopping", { pizzaId = pizza.id, ingredient = req.ingredient, x = math.cos(a) * 0.5, y = -math.sin(a) * 0.5 })
+							end
+						end
+						act("sendToOven", { pizzaId = pizza.id })
+					end
+					if pizza.stage == "oven" then
+						pizza.bakeStart = workspace:GetServerTimeNow() - Config.Oven.targets[c.order.bake]
+						act("takeOut", { pizzaId = pizza.id })
+					end
+					if pizza.stage == "cutting" then
+						local n = c.order.slices // 2
+						for k = 0, n - 1 do
+							local a = math.rad(k * 180 / n)
+							act("cut", { pizzaId = pizza.id, x1 = math.cos(a) * 1.05, y1 = math.sin(a) * 1.05, x2 = -math.cos(a) * 1.05, y2 = -math.sin(a) * 1.05 })
+						end
+						act("serve", { pizzaId = pizza.id })
+					end
+				end
+			end
+			push(player)
+			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "stage" then
+			-- A busy moment for captures, through the real actions: every ticket open, the
+			-- first pizza in the oven and the next on the topping station with `value` (0-1) of
+			-- its pieces placed.
+			local shift = session.shift
+			local log = {}
+			local function act(action: string, args: any)
+				local ok, reason = ShiftService.apply(session, action, args)
+				if not ok then
+					table.insert(log, action .. ": " .. tostring(reason))
+				end
+			end
+			local function top(pizza: any, recipeId: string, share: number)
+				for _, req in Recipes.ById[recipeId].toppings do
+					for i = 1, math.round(req.count * share) do
+						local t = (i - 0.5) / req.count
+						local a = if req.region == "left" then math.rad(90 + t * 180)
+							elseif req.region == "right" then math.rad(-90 + t * 180)
+							else math.rad(22.5 + (i - 1) * 360 / req.count + (if req.ingredient == "pepper" then 30 else 0))
+						local r = if req.ingredient == "pepper" then 0.28 else 0.52
+						act("placeTopping", { pizzaId = pizza.id, ingredient = req.ingredient, x = math.cos(a) * r, y = -math.sin(a) * r })
+					end
+				end
+			end
+			shift.startedAt -= 1000
+			ShiftService.tick(session)
+			local clock = workspace:GetServerTimeNow()
+			for _, c in shift.customers do
+				if c.status == "waiting" then
+					c.arrivedAt = clock - 5
+					act("takeOrder", { customerId = c.id })
+				end
+			end
+			local open = {}
+			for _, c in shift.customers do
+				if c.status == "ordered" and c.pizzaId and shift.pizzas[c.pizzaId] then
+					table.insert(open, c)
+				end
+			end
+			if open[1] and shift.pizzas[open[1].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[1].pizzaId], open[1].order.recipe, 1)
+				act("sendToOven", { pizzaId = open[1].pizzaId })
+			end
+			if open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, value or 0.7)
+			end
+			push(player)
+			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "setBake" then
+			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
+			local id = session.shift.ovens[value[1]]
+			local pizza = id and session.shift.pizzas[id]
+			if not pizza then
+				return "empty slot"
+			end
+			pizza.bakeStart = workspace:GetServerTimeNow() - value[2]
+			push(player)
+			return "ok"
+		end
+		return "unknown command"
+	end
+	debug.Parent = ServerStorage
+end
