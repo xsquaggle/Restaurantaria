@@ -164,7 +164,10 @@ function Cut.new(ctx: any, container: Frame)
 		if current then
 			local customer = ctx.customer(snap, current.ticketId)
 			local cuts = #current.cuts
-			guide.Text = string.format("Cut into %d slices\nDrag across the centre: %d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+			-- Phones keep both lines short so they stay clear of the board.
+			guide.Text = if ctx.compact
+				then string.format("Cut into %d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+				else string.format("Cut into %d slices\nDrag across the centre: %d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0))
 			serve:setHighlighted(cuts == customer.order.slices // 2)
 		else
