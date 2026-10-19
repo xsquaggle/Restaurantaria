@@ -148,7 +148,10 @@ function Cut.new(ctx: any, container: Frame)
 	local lastPoint: Vector2? = nil
 
 	local function toStation(position: Vector3): Vector2
-		return Vector2.new(position.X, position.Y) - frame.AbsolutePosition
+		-- Keep the whole wheel inside the station so its edge never clips at the panel.
+		local p = Vector2.new(position.X, position.Y) - frame.AbsolutePosition
+		local inset = wheelD * 0.5
+		return Vector2.new(math.clamp(p.X, inset, area.X - inset), math.clamp(p.Y, inset, area.Y - inset))
 	end
 	local function follow(point: Vector2)
 		local prev = lastPoint

@@ -756,6 +756,8 @@ end
 
 -- A cut: the generated groove (G9) stretched along the chord of the infinite line through
 -- the two points, clipped to the pizza circle. `transparency` fades it (the live preview).
+local CRUST_EDGE = 0.95
+
 function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
 	local len = math.sqrt(dx * dx + dy * dy)
@@ -769,7 +771,8 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	if d2 >= 1 then
 		return
 	end
-	local half = math.sqrt(1 - d2)
+	-- The crust edge sits a little inside the pizza frame; stop the groove there.
+	local half = math.sqrt(1 - d2) * CRUST_EDGE
 	local groove = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ImageTransparency = transparency or 0,

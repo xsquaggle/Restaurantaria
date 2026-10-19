@@ -225,6 +225,20 @@ if RunService:IsStudio() then
 			pizza.bakeStart = workspace:GetServerTimeNow() - value[2]
 			push(player)
 			return "ok"
+		elseif command == "age" then
+			-- value = { customerId, seconds }: that customer arrived `seconds` ago (mood captures).
+			local customer = nil
+			for _, c in session.shift.customers do
+				if c.id == value[1] then
+					customer = c
+				end
+			end
+			if not customer then
+				return "no such customer"
+			end
+			customer.arrivedAt = workspace:GetServerTimeNow() - value[2]
+			push(player)
+			return "ok"
 		end
 		return "unknown command"
 	end

@@ -241,6 +241,8 @@ function PizzaArt.new(): View
 						ZIndex = 2,
 						Parent = layer,
 					})
+					-- Pieces stay round when the pizza is drawn flattened (in the oven).
+					Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height, Parent = root })
 					local scale = Ui.new("UIScale", { Scale = 1, Parent = root })
 					local sprite, shade = build(root, art, rotation, REST)
 					shown[key] = root
