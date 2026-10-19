@@ -17,7 +17,10 @@ local C = Theme.Colour
 local Widgets = {}
 
 ------------------------------------------------------------------------------------------
--- Primary button: one fixed hitbox and label anchor across idle/pressed/disabled/highlighted.
+-- Action button: one fixed hitbox and label anchor across idle/pressed/disabled/highlighted.
+-- Primary actions use Astra's V2 button, whose four states share one body outline, so only
+-- the image changes between states. Secondary actions keep the V1 proof until V2 secondary
+-- art arrives.
 
 export type Button = {
 	frame: Frame,
@@ -30,34 +33,63 @@ export type Button = {
 	highlighted: boolean,
 }
 
-function Widgets.button(text: string, onActivated: () -> ()): Button
+local BUTTON_STATES = { "idle", "pressed", "disabled", "highlighted" }
+local PRESS_IN = TweenInfo.new(Theme.Motion.press, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PRESS_OUT = TweenInfo.new(Theme.Motion.release + 0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local preloaded = false
+
+function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | "secondary")?): Button
+	local primary = kind ~= "secondary"
+	local artPrefix = if primary then "ui_button_primary_" else "ui_primary_"
+	if not preloaded then
+		preloaded = true
+		local names = {}
+		for _, state in BUTTON_STATES do
+			table.insert(names, "ui_button_primary_" .. state)
+			table.insert(names, "ui_primary_" .. state)
+		end
+		Art.preload(names)
+	end
 	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
+	-- Art and label share one body, so the press motion moves them together.
+	local body = Ui.new("Frame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		Parent = frame,
+	})
+	local press = Ui.new("UIScale", { Scale = 1, Parent = body })
 	local art = Ui.new("ImageLabel", {
 		Name = "Art",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Assets.Meta.primarySlice,
-		Parent = frame,
+		SliceCenter = if primary then Assets.Meta.buttonPrimary.slice else Assets.Meta.primarySlice,
+		Parent = body,
 	})
 	local label = Ui.text({
 		Name = "Label",
 		Text = text,
-		FontFace = Theme.Font.bodyBold,
-		TextColor3 = C.white,
+		FontFace = if primary then Theme.Font.display else Theme.Font.bodyBold,
+		TextColor3 = if primary then C.label else C.white,
 		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
 		TextScaled = true,
-		Size = UDim2.new(1, -24, 0.5, 0),
-		Position = UDim2.fromScale(0.5, 0.44),
 		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		ZIndex = 3,
-		Parent = frame,
+		Parent = body,
 	})
-	Ui.new("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30, Parent = label })
+	local sizeLimit = Ui.new("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30, Parent = label })
+	-- Ivory on coral needs its outline to read (Astra's README).
+	local stroke = Ui.new("UIStroke", { Color = C.labelStroke, Thickness = 1, Enabled = primary, Parent = label })
 	local hit = Ui.new("TextButton", {
 		Name = "Hit",
 		BackgroundTransparency = 1,
 		Text = "",
+		AutoButtonColor = false,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 4,
 		Parent = frame,
@@ -67,10 +99,26 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 	local pressed = false
 	local function render()
 		local state = if not self.enabled then "disabled" elseif pressed then "pressed" elseif self.highlighted then "highlighted" else "idle"
-		Art.apply(art, "ui_primary_" .. state)
-		label.TextColor3 = if state == "disabled" then C.ink else C.white
-		-- Pressed label displacement stays within 2 px per the guide.
-		label.Position = UDim2.new(0.5, 0, 0.44, if pressed then 2 else 0)
+		Art.apply(art, artPrefix .. state)
+		if primary then
+			label.TextColor3 = if state == "disabled" then C.labelDisabled else C.label
+			stroke.Enabled = state ~= "disabled"
+		else
+			label.TextColor3 = if state == "disabled" then C.ink else C.white
+		end
+	end
+	local function layout()
+		local w, h = frame.AbsoluteSize.X, frame.AbsoluteSize.Y
+		if h <= 0 then
+			return
+		end
+		-- Astra's live-content insets: 32/24 px at 420x110 and 14/10 px at 168x48, i.e. a
+		-- fixed share of the height. Text keeps the 16 px floor and grows to 32 px.
+		local insetX, insetY = math.round(h * 0.29), math.round(h * 0.215)
+		art.SliceScale = math.max(h / (if primary then Assets.Meta.buttonPrimary.height else 207), 0.05)
+		label.Size = UDim2.fromOffset(math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0))
+		sizeLimit.MaxTextSize = math.clamp(math.round(h * 0.29), 16, 32)
+		stroke.Thickness = if h < 64 then 1 else 2
 	end
 
 	self = {
@@ -95,12 +143,14 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 		if self.enabled then
 			pressed = true
 			render()
+			TweenService:Create(press, PRESS_IN, { Scale = 0.96 }):Play()
 		end
 	end)
 	local function release()
 		if pressed then
 			pressed = false
 			render()
+			TweenService:Create(press, PRESS_OUT, { Scale = 1 }):Play()
 		end
 	end
 	hit.MouseButton1Up:Connect(release)
@@ -114,9 +164,8 @@ function Widgets.button(text: string, onActivated: () -> ()): Button
 			onActivated()
 		end
 	end)
-	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		art.SliceScale = math.max(frame.AbsoluteSize.Y / 207, 0.05)
-	end)
+	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	layout()
 	render()
 	return self
 end
@@ -346,10 +395,33 @@ local function requirementLines(order: any, compact: boolean): { { icon: string?
 	return lines
 end
 
+-- Astra's three-part ticket: the caps keep their drawn proportions for the width (96 px at
+-- the 840 px master: 48 px at 420, 19 px at 168) and only the middle stretches. The parts
+-- abut with no overlap.
+function Widgets.ticketBody(parent: GuiObject, w: number, h: number)
+	local cap = math.round(w * Assets.Meta.ticket.cap / Assets.Meta.ticket.width)
+	local function part(name: string, y: number, height: number)
+		Art.apply(Ui.new("ImageLabel", {
+			Name = name,
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Stretch,
+			Position = UDim2.fromOffset(0, y),
+			Size = UDim2.fromOffset(w, height),
+			Parent = parent,
+		}), name)
+	end
+	part("ui_ticket_top", 0, cap)
+	part("ui_ticket_mid", cap, h - cap * 2)
+	part("ui_ticket_bottom", h - cap, cap)
+end
+
 function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 	local frame = Ui.new("Frame", { Name = "Ticket", BackgroundTransparency = 1, Size = UDim2.fromOffset(size.X, size.Y) })
-	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame }), "ui_orderTicket_blank")
-	local padX, padTop, padBottom = math.round(size.X * 0.09), math.round(size.Y * 0.07), math.round(size.Y * 0.08)
+	Widgets.ticketBody(frame, size.X, size.Y)
+	-- Astra's content insets: 12/14 px on the 168 px phone ticket, 28/32 px at 420 px.
+	local padX = if compact then 12 else math.round(size.X * 28 / 420)
+	local padTop = if compact then 14 else math.round(size.X * 32 / 420)
+	local padBottom = padTop
 	local inner = Vector2.new(size.X - padX * 2, size.Y - padTop - padBottom)
 	local headerH = math.clamp(math.round(inner.Y * 0.2), 28, 70)
 	local number = Ui.text({
@@ -461,8 +533,9 @@ end
 
 export type RailTab = { button: TextButton, customer: any, setPatience: (RailTab, number, string) -> () }
 
--- Compact tabs sit two to a row and show only the face and number.
-function Widgets.railTab(customer: any, height: number, compact: boolean?): RailTab
+-- Compact tabs sit two to a row: the face, then the toppings as a small overlapping row
+-- (the number shows once the tab is opened), so a waiting order still reads at a glance.
+function Widgets.railTab(customer: any, height: number, compact: boolean?, width: number?): RailTab
 	local button = Ui.new("TextButton", {
 		Name = "Tab" .. customer.id,
 		Text = "",
@@ -471,63 +544,85 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?): Rail
 		Size = if compact then UDim2.new(0.5, -2, 0, height) else UDim2.new(1, 0, 0, height),
 	})
 	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = button }), "ui_ticket_tab")
-	local faceSize = math.floor(height * 0.72)
+	local faceSize = math.floor(height * (if compact then 0.6 else 0.72))
+	local faceX = if compact then 4 else 6
 	-- The patience proofs carry the face in their left square; show just that part.
 	local face = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 6, 0.5, 0),
+		Position = UDim2.new(0, faceX, 0.5, 0),
 		Size = UDim2.fromOffset(faceSize, faceSize),
 		ImageRectSize = Vector2.new(216, 216),
 		Parent = button,
 	})
-	local textSize = math.clamp(math.floor(height * 0.46), 16, 30)
-	Ui.text({
-		Text = string.format("#%02d", customer.id),
-		FontFace = Theme.Font.display,
-		TextSize = textSize,
-		TextWrapped = false,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, faceSize + 12, 0.5, 0),
-		Size = UDim2.fromOffset(textSize * 2.2, height),
-		Parent = button,
-	})
-	local x = faceSize + 12 + textSize * 2.4
 	local recipe = Recipes.ById[customer.order.recipe]
-	local icon = math.floor(height * 0.62)
-	for _, req in if compact then {} else recipe.toppings do
-		local info = Recipes.Ingredients[req.ingredient]
-		local img = Ui.new("ImageLabel", {
-			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, x, 0.5, 0),
-			Size = UDim2.fromOffset(icon, icon),
-			Parent = button,
-		})
-		Art.apply(img, "topping_" .. info.art .. "_1")
+	local textSize = math.clamp(math.floor(height * 0.46), 16, 30)
+	if compact then
+		local x0 = faceX + faceSize + 4
+		local icon = math.floor(height * 0.46)
+		local list = if #recipe.toppings > 0 then recipe.toppings else { { ingredient = "" } }
+		-- Icons overlap as much as the room right of the face needs.
+		local room = (width or height * 1.7) - x0 - 4
+		local stepX = if #list > 1 then math.min(icon * 0.8, (room - icon) / (#list - 1)) else 0
+		for i, req in list do
+			local img = Ui.new("ImageLabel", {
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, x0 + (i - 1) * stepX, 0.5, 0),
+				Size = UDim2.fromOffset(icon, icon),
+				ZIndex = 2 + #list - i,
+				Parent = button,
+			})
+			-- Cheese only: the plain pizza is the picture.
+			Art.apply(img, if req.ingredient ~= "" then "topping_" .. Recipes.Ingredients[req.ingredient].art .. "_1" else "pizza_raw")
+		end
+	else
 		Ui.text({
-			Text = "x" .. req.count,
+			Text = string.format("#%02d", customer.id),
 			FontFace = Theme.Font.display,
-			TextSize = math.floor(textSize * 0.8),
+			TextSize = textSize,
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, x + icon + 2, 0.5, 0),
-			Size = UDim2.fromOffset(textSize * 1.6, height),
+			Position = UDim2.new(0, faceSize + 12, 0.5, 0),
+			Size = UDim2.fromOffset(textSize * 2.2, height),
 			Parent = button,
 		})
-		x += icon + textSize * 1.9
-	end
-	if #recipe.toppings == 0 and not compact then
-		Ui.text({
-			Text = "Cheese",
-			FontFace = Theme.Font.display,
-			TextSize = math.floor(textSize * 0.8),
-			TextWrapped = false,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, x, 0.5, 0),
-			Size = UDim2.fromOffset(textSize * 4, height),
-			Parent = button,
-		})
+		local x = faceSize + 12 + textSize * 2.4
+		local icon = math.floor(height * 0.62)
+		for _, req in recipe.toppings do
+			local info = Recipes.Ingredients[req.ingredient]
+			local img = Ui.new("ImageLabel", {
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, x, 0.5, 0),
+				Size = UDim2.fromOffset(icon, icon),
+				Parent = button,
+			})
+			Art.apply(img, "topping_" .. info.art .. "_1")
+			Ui.text({
+				Text = "x" .. req.count,
+				FontFace = Theme.Font.display,
+				TextSize = math.floor(textSize * 0.8),
+				TextWrapped = false,
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, x + icon + 2, 0.5, 0),
+				Size = UDim2.fromOffset(textSize * 1.6, height),
+				Parent = button,
+			})
+			x += icon + textSize * 1.9
+		end
+		if #recipe.toppings == 0 then
+			Ui.text({
+				Text = "Cheese",
+				FontFace = Theme.Font.display,
+				TextSize = math.floor(textSize * 0.8),
+				TextWrapped = false,
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, x, 0.5, 0),
+				Size = UDim2.fromOffset(textSize * 4, height),
+				Parent = button,
+			})
+		end
 	end
 	local band = nil
 	local tab: RailTab = {

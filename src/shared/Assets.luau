@@ -63,7 +63,7 @@ Assets.Meta = {
 	-- V2 primary button (896x240) and HUD pill (640x152): slice centres from Astra's manifest;
 	-- SliceScale is the rendered height over the source height.
 	buttonPrimary = { slice = Rect.new(128, 112, 768, 128), height = 240 },
-	hudPill = { slice = Rect.new(88, 70, 552, 82), height = 152 },
+	hudPill = { slice = Rect.new(88, 70, 552, 82), height = 152, inset = 96 },
 	-- V2 ticket: three pieces cut from one 840 px wide master; caps 96 px tall, only the
 	-- middle stretches.
 	ticket = { width = 840, cap = 96 },

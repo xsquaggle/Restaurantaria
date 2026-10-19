@@ -16,6 +16,10 @@ Theme.Colour = {
 	actionEdge = Color3.fromHex("#69B6B3"),
 	disabled = Color3.fromHex("#C7B79C"),
 	white = Color3.new(1, 1, 1),
+	-- Live labels on Astra's V2 art (UI V2 integration proof 01 README).
+	label = Color3.fromHex("#FFF8E8"),
+	labelStroke = Color3.fromHex("#643027"),
+	labelDisabled = Color3.fromHex("#40241F"),
 	-- Scene stand-ins until station art exists.
 	wall = Color3.fromHex("#F3E2C4"),
 	counter = Color3.fromHex("#B98A5E"),

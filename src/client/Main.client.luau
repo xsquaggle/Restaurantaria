@@ -269,7 +269,8 @@ local function buildLayout()
 	local hudH = if hudInTopbar then inset.Height else 44
 	local top = if hudInTopbar then 0 else hudH
 	local navH = if compact then 64 else math.clamp(math.round(size.Y * 0.11), 64, 120)
-	local railW = if compact then math.max(math.round(size.X * 0.27), 176) else math.clamp(math.round(size.X * 0.23), 280, 460)
+	-- Rail widths land on Astra's ticket proofs: 168 px tickets on a phone, 420 px at 1920.
+	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
 	local railH = size.Y - top - navH
 	ctx.stationSize = Vector2.new(size.X - railW, railH)
 
@@ -291,41 +292,54 @@ local function buildLayout()
 		Size = if hudInTopbar then UDim2.fromOffset(inset.Width, inset.Height) else UDim2.new(1, 0, 0, hudH),
 		Parent = if hudInTopbar then topGui else root,
 	})
-	local hudText = math.clamp(math.floor(hudH * 0.42), 14, 26)
-	-- Left group: day, coins, then the save warning when there is one, packed in a row so
-	-- nothing overlaps whatever the width.
+	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
+	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
+	local pillH = math.min(if compact then 36 else 44, hudH - 4)
+	local pillMinW = pillH * (if compact then 120 / 36 else 240 / 44)
+	local pillScale = pillH / Assets.Meta.hudPill.height
+	-- Live content stays inside the pill's drawn safe area (96 px of 640 at each end).
+	local pillInset = math.round(Assets.Meta.hudPill.inset * pillScale)
+	local pillText = if compact then 16 else 22
 	local left = Ui.new("Frame", { Name = "Left", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0), Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = hud })
 	Ui.new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, if compact then 16 else 28),
+		Padding = UDim.new(0, if compact then 8 else 12),
 		Parent = left,
 	})
-	local day = Ui.text({
-		Name = "Day",
-		Text = "Day 1",
-		FontFace = Theme.Font.display,
-		TextSize = hudText,
-		TextWrapped = false,
-		AutomaticSize = Enum.AutomaticSize.X,
-		LayoutOrder = 1,
-		Size = UDim2.new(0, 0, 1, 0),
-		Parent = left,
-	})
-	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = day })
-	local coins = Ui.text({
-		Name = "Coins",
-		Text = "0 coins",
-		FontFace = Theme.Font.display,
-		TextSize = hudText,
-		TextWrapped = false,
-		AutomaticSize = Enum.AutomaticSize.X,
-		LayoutOrder = 2,
-		Size = UDim2.new(0, 0, 1, 0),
-		Parent = left,
-	})
-	Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = coins })
+	local function pill(name: string, order: number): TextLabel
+		local holder = Ui.new("ImageLabel", {
+			Name = name,
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Slice,
+			SliceCenter = Assets.Meta.hudPill.slice,
+			SliceScale = pillScale,
+			Size = UDim2.fromOffset(pillMinW, pillH),
+			LayoutOrder = order,
+			Parent = left,
+		})
+		Art.apply(holder, "ui_hud_pill")
+		local text = Ui.text({
+			Name = "Text",
+			FontFace = Theme.Font.display,
+			TextSize = pillText,
+			TextColor3 = C.labelStroke,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextWrapped = false,
+			Size = UDim2.fromScale(1, 1),
+			Parent = holder,
+		})
+		-- The pill grows (its middle stretches) when the text needs more room.
+		text:GetPropertyChangedSignal("TextBounds"):Connect(function()
+			holder.Size = UDim2.fromOffset(math.max(pillMinW, text.TextBounds.X + pillInset * 2), pillH)
+		end)
+		return text
+	end
+	local day = pill("Day", 1)
+	day.Text = "Day 1"
+	local coins = pill("Coins", 2)
+	coins.Text = "0 coins"
 	local banner = Ui.text({
 		Name = "SaveBanner",
 		Text = "",
@@ -400,10 +414,10 @@ local function buildLayout()
 	})
 	local panel = Ui.new("ImageLabel", { Name = "Panel", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = rail })
 	Art.apply(panel, "ui_rail_panel")
-	local pad = if compact then 6 else math.round(railW * 0.045)
+	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
-	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.13), 56, 96)
+	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.115), 56, 110)
 	local tabH = if compact then 48 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
 	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
@@ -551,6 +565,7 @@ local function buildLayout()
 		railEmpty = railEmpty,
 		tabList = tabList,
 		tabH = tabH,
+		tabW = if compact then (railW - pad * 2 - gap) / 2 else railW - pad * 2,
 		railTabs = {},
 		actions = actions,
 		backgrounds = backgrounds,
@@ -637,7 +652,7 @@ local function refreshRail(snap: any)
 			seen[customer.id] = true
 			local tab = ui.railTabs[customer.id]
 			if not tab then
-				tab = Widgets.railTab(customer, ui.tabH, ctx.compact)
+				tab = Widgets.railTab(customer, ui.tabH, ctx.compact, ui.tabW)
 				tab.button.LayoutOrder = customer.id
 				tab.button.Parent = ui.tabList
 				tab.button.Activated:Connect(function()

@@ -133,27 +133,58 @@ function Topping.new(ctx: any, container: Frame)
 			ZIndex = 4,
 			Parent = frame,
 		})
-		Art.apply(button, "tray_" .. Recipes.Ingredients[id].art)
+		local info = Recipes.Ingredients[id]
+		Art.apply(button, info.tray or "tray_" .. info.art)
 		trays[id] = { button = button, scale = Ui.new("UIScale", { Scale = 1, Parent = button }), home = home }
+	end
+
+	local current: any = nil
+
+	-- The look the next piece of an ingredient will land with on the current pizza.
+	local function nextLook(ingredient: string): (string, number)
+		return PizzaArt.nextLook(if current then ctx.withOptimistic(current) else nil, ingredient)
+	end
+
+	-- The chosen ingredient: its next piece floats above the tray with a lifted shadow and a
+	-- slow bob, so the choice reads at a glance. Purely visual; it never takes input.
+	local lift = if side then UDim2.fromOffset(trayW * 0.06, 0) else UDim2.fromOffset(0, -trayH * 0.14)
+	local pickRaise = UDim2.fromOffset(0, -trayH * 0.16)
+	local pick = PizzaArt.loosePiece(nextLook(chosen), 0, pizzaD * Recipes.Ingredients[chosen].size * 1.15, true)
+	pick.Name = "Pick"
+	pick.ZIndex = 6
+	pick.Position = trays[chosen].home + lift + pickRaise
+	pick.Parent = frame
+	local float = Ui.new("UIScale", { Scale = 1, Parent = pick })
+	TweenService:Create(float, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.06 }):Play()
+	local pickArt = ""
+	local function updatePick()
+		local art, rotation = nextLook(chosen)
+		if art ~= pickArt then
+			pickArt = art
+			PizzaArt.setLook(pick, art, rotation)
+			local size = pizzaD * Recipes.Ingredients[chosen].size * 1.15
+			pick.Size = UDim2.fromOffset(size, size)
+		end
 	end
 
 	local function showChosen()
 		for id, t in trays do
 			local on = id == chosen
 			-- The chosen tray sits a little larger and pulled toward the pizza.
-			local lift = if side then UDim2.fromOffset(trayW * 0.06, 0) else UDim2.fromOffset(0, -trayH * 0.14)
 			TweenService:Create(t.scale, RELEASE, { Scale = if on then 1.1 else 1 }):Play()
 			TweenService:Create(t.button, RELEASE, { Position = if on then t.home + lift else t.home }):Play()
 			t.button.ZIndex = if on then 5 else 4
 		end
+		updatePick()
+		TweenService:Create(pick, RELEASE, { Position = trays[chosen].home + lift + pickRaise }):Play()
 	end
 
 	local undo = Widgets.button("Undo", function()
-		local current = ctx.focusPizza(ctx.snapshot, "topping")
-		if current and not ctx.pending[current.id] then
-			ctx.send("undoTopping", { pizzaId = current.id })
+		local focus = ctx.focusPizza(ctx.snapshot, "topping")
+		if focus and not ctx.pending[focus.id] then
+			ctx.send("undoTopping", { pizzaId = focus.id })
 		end
-	end)
+	end, "secondary")
 	if side then
 		-- The spare cell of the tray grid.
 		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -167,7 +198,6 @@ function Topping.new(ctx: any, container: Frame)
 	undo.frame.ZIndex = 5
 	undo.frame.Parent = frame
 
-	local current: any = nil
 	local sending: number? = nil
 
 	-- Send to oven: the rail's action for this station.
@@ -240,7 +270,7 @@ function Topping.new(ctx: any, container: Frame)
 		end)
 	end
 
-	local hover: ImageLabel? = nil
+	local hover: Frame? = nil
 	local function clearHover()
 		if hover then
 			hover:Destroy()
@@ -254,7 +284,8 @@ function Topping.new(ctx: any, container: Frame)
 			local travel = (Vector2.new(input.Position.X, input.Position.Y) - Vector2.new(dragging.start.X, dragging.start.Y)).Magnitude
 			if not dragging.held and travel >= DRAG_START then
 				clearHover()
-				local held = PizzaArt.loosePiece(dragging.ingredient, math.random(1, 3), math.random(0, 359), pieceSize(dragging.ingredient))
+				local art, rotation = nextLook(dragging.ingredient)
+				local held = PizzaArt.loosePiece(art, rotation, pieceSize(dragging.ingredient), true)
 				-- Picked up: a touch bigger than it will sit, so it reads as lifted.
 				Ui.new("UIScale", { Scale = 1.2, Parent = held })
 				held.Parent = overlay
@@ -267,15 +298,16 @@ function Topping.new(ctx: any, container: Frame)
 			-- Mouse only: a faint preview of the next piece under the pointer.
 			local x, y = ctx.toLocal(view.frame, input.Position)
 			if x * x + y * y <= Config.Topping.placeRadius ^ 2 then
-				if not hover or hover:GetAttribute("Ingredient") ~= chosen then
+				local art, rotation = nextLook(chosen)
+				if not hover or hover:GetAttribute("Art") ~= art then
 					clearHover()
-					hover = PizzaArt.loosePiece(chosen, 1, 0, pieceSize(chosen))
-					local h = hover :: ImageLabel
-					h:SetAttribute("Ingredient", chosen)
-					h.ImageTransparency = 0.55
+					hover = PizzaArt.loosePiece(art, rotation, pieceSize(chosen), false)
+					local h = hover :: Frame
+					h:SetAttribute("Art", art)
+					PizzaArt.fade(h, nil, 0.55)
 					h.Parent = overlay
 				end
-				(hover :: ImageLabel).Position = overlayPoint(input.Position)
+				(hover :: Frame).Position = overlayPoint(input.Position)
 			else
 				clearHover()
 			end
@@ -291,7 +323,7 @@ function Topping.new(ctx: any, container: Frame)
 		end
 		local d = dragging
 		dragging = nil
-		local held: ImageLabel? = d.held
+		local held: Frame? = d.held
 		if not held then
 			return
 		end
@@ -304,7 +336,8 @@ function Topping.new(ctx: any, container: Frame)
 			-- Dropped off the pizza: the piece goes back to its tray.
 			local tray = trays[d.ingredient].button
 			local home = tray.AbsolutePosition + tray.AbsoluteSize / 2 - frame.AbsolutePosition
-			local back = TweenService:Create(held, RETURN, { Position = UDim2.fromOffset(home.X, home.Y), ImageTransparency = 1 })
+			local back = TweenService:Create(held, RETURN, { Position = UDim2.fromOffset(home.X, home.Y) })
+			PizzaArt.fade(held, RETURN, 1)
 			back.Completed:Connect(function()
 				held:Destroy()
 			end)
@@ -340,6 +373,7 @@ function Topping.new(ctx: any, container: Frame)
 		send:setLabel(if busy then "Sending..." elseif current and not ctx.freeOvenSlot(snap) then "Ovens full" else "Send to oven")
 		undo:setEnabled(current ~= nil and not busy and #current.toppings > 0)
 		view:set(if current then ctx.withOptimistic(current) else nil, true)
+		updatePick()
 		if not sending and current and view.frame.Rotation ~= 0 then
 			-- The send was refused: bring the pizza back.
 			TweenService:Create(view.frame, ARRIVE, { Position = UDim2.fromOffset(cx, cy), Rotation = 0 }):Play()

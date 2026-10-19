@@ -9,6 +9,7 @@
 --    stand-in.
 
 local AssetService = game:GetService("AssetService")
+local ContentProvider = game:GetService("ContentProvider")
 local EncodingService = game:GetService("EncodingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -97,6 +98,25 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 		warn("[Art] missing art: " .. name)
 	end
 	return false
+end
+
+-- Load art ahead of first use (e.g. every state of a button) so a state change never shows
+-- an empty frame while the image arrives. Never yields.
+function Art.preload(names: { string })
+	local ids = {}
+	for _, name in names do
+		local id = Assets.get(name)
+		if id then
+			table.insert(ids, id)
+		else
+			devImage(name)
+		end
+	end
+	if #ids > 0 then
+		task.spawn(function()
+			ContentProvider:PreloadAsync(ids)
+		end)
+	end
 end
 
 -- Names that were asked for but do not exist yet; the art request list should cover these.
