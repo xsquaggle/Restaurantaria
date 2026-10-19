@@ -16,8 +16,11 @@ local Widgets = require(Parent.Widgets)
 
 local Cut = {}
 
+-- Full-screen art behind the station (Assets.Meta.backgrounds).
+Cut.background = "bg_cut"
+
 function Cut.new(ctx: any, container: Frame)
-	local frame = Ui.new("Frame", { Name = "Cut", BackgroundColor3 = Color3.fromRGB(214, 196, 168), Size = UDim2.fromScale(1, 1), Parent = container })
+	local frame = Ui.new("Frame", { Name = "Cut", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
 	-- Composition follows 03-cut: the cutting board fills the work surface with the pizza
 	-- left of centre and the cutter resting to its right; the hint sits top left, Undo
 	-- bottom left, and Serve is the rail's action. The ticket is the rail's own, so the

@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
+local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
@@ -28,18 +29,26 @@ local COUNTER_TOP = 0.72
 local STEP = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
+-- Full-screen art behind the station (Assets.Meta.backgrounds).
+Order.background = "bg_order"
+
 function Order.new(ctx: any, container: Frame)
-	local frame = Ui.new("Frame", { Name = "Order", BackgroundColor3 = C.wall, Size = UDim2.fromScale(1, 1), Parent = container })
+	local frame = Ui.new("Frame", { Name = "Order", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
 	local area = ctx.stationSize :: Vector2
-	Ui.new("Frame", {
+	-- The generated counter front, its top edge on COUNTER_TOP, hides the customers' waists.
+	local cm = Assets.Meta.orderCounter
+	local counterW = area.X + 24
+	local counterH = counterW / cm.aspect
+	local counter = Ui.new("ImageLabel", {
 		Name = "Counter",
-		BackgroundColor3 = C.counter,
-		Position = UDim2.fromScale(0, COUNTER_TOP),
-		Size = UDim2.fromScale(1, 1 - COUNTER_TOP),
-		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		Position = UDim2.fromOffset(-12, area.Y * COUNTER_TOP - counterH * cm.top),
+		Size = UDim2.fromOffset(counterW, counterH),
 		ZIndex = 3,
 		Parent = frame,
 	})
+	Art.apply(counter, "prop_order_counter")
 	-- Figures stand behind the counter, cut at the waist by its top edge.
 	-- Room above each figure for the name and patience meter, and for the selected one to
 	-- step forward without touching its neighbours.

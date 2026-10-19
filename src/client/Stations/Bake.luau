@@ -45,8 +45,11 @@ local function rect(parent: GuiObject, r: any, props: { [string]: any }?): any
 	return p
 end
 
+-- Full-screen art behind the station (Assets.Meta.backgrounds).
+Bake.background = "bg_bake"
+
 function Bake.new(ctx: any, container: Frame)
-	local frame = Ui.new("Frame", { Name = "Bake", BackgroundColor3 = Color3.fromRGB(92, 64, 52), Size = UDim2.fromScale(1, 1), Parent = container })
+	local frame = Ui.new("Frame", { Name = "Bake", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
 	local area = ctx.stationSize :: Vector2
 	local pad = if ctx.compact then 6 else 16
 	local slotW = (area.X - pad * 3) / 2

@@ -9,6 +9,19 @@ local Assets = {
 	counter_topping_2 = "",
 	counter_topping_3 = "",
 	counter_topping_4 = "",
+	bg_order_1 = "",
+	bg_order_2 = "",
+	bg_order_3 = "",
+	bg_order_4 = "",
+	bg_bake_1 = "",
+	bg_bake_2 = "",
+	bg_bake_3 = "",
+	bg_bake_4 = "",
+	bg_cut_1 = "",
+	bg_cut_2 = "",
+	bg_cut_3 = "",
+	bg_cut_4 = "",
+	prop_order_counter = "",
 	board_round = "",
 	pizza_raw = "",
 	tray_pepperoni = "",
@@ -160,6 +173,8 @@ Assets.Meta = {
 	meter = { slice = Rect.new(40, 28, 472, 36), height = 64, width = 512, fillLeft = 14, fillRight = 498 },
 	panel = { slice = Rect.new(40, 40, 800, 560) },
 	clipRail = { aspect = 768 / 96 },
+	-- Order counter front (trimmed 2683x681); its top edge is the first 9% of the image.
+	orderCounter = { aspect = 2683 / 681, top = 0.09 },
 	-- Oven badge (128 canvas, body 6-122) and ring fills (256 canvas, body 8-248).
 	ovenBadge = { body = 116 / 128 },
 	ringFill = { body = 240 / 256 },
@@ -182,6 +197,9 @@ Assets.Meta = {
 	-- Full-screen backgrounds: virtual size and how they are tiled (each tile <= 1024 px).
 	backgrounds = {
 		counter_topping = { width = 1920, height = 1080, cols = 2, rows = 2 },
+		bg_order = { width = 1920, height = 1080, cols = 2, rows = 2 },
+		bg_bake = { width = 1920, height = 1080, cols = 2, rows = 2 },
+		bg_cut = { width = 1920, height = 1080, cols = 2, rows = 2 },
 	},
 	-- Sprite sizes for art whose proportions drive layout.
 	trayAspect = 384 / 313,
