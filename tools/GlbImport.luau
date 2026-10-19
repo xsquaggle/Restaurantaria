@@ -14,7 +14,9 @@ local AssetService = game:GetService("AssetService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Png = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Png") :: ModuleScript)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Png = require(Shared:WaitForChild("Png") :: ModuleScript)
+local Jpeg = require((Shared:FindFirstChild("Jpeg") or game:GetService("ServerStorage"):FindFirstChild("Jpeg")) :: ModuleScript)
 
 local GlbImport = {}
 
@@ -132,13 +134,18 @@ local function editableFromTexture(glb: Glb, texIndex: number?): (EditableImage?
 	end
 	local tex = glb.json.textures[texIndex + 1]
 	local mime, bytes = imageBytes(glb, tex.source)
-	if mime ~= "image/png" then
+	local img
+	if mime == "image/png" then
+		img = shrink(Png.decode(bytes))
+	elseif mime == "image/jpeg" then
+		-- Decoded at quarter size (see Jpeg.luau).
+		img = shrink(Jpeg.decode(bytes))
+	else
 		return nil, mime
 	end
-	local img = shrink(Png.decode(bytes))
 	local e = AssetService:CreateEditableImage({ Size = Vector2.new(img.width, img.height) })
 	e:WritePixelsBuffer(Vector2.zero, Vector2.new(img.width, img.height), img.pixels)
-	return e, string.format("png %dx%d", img.width, img.height)
+	return e, string.format("%s %dx%d", mime, img.width, img.height)
 end
 
 -- Lists what a GLB holds without building anything.
