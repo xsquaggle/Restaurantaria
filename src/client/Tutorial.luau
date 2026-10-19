@@ -25,6 +25,8 @@ local ROTATION = { below = 0, above = 180, left = 90, right = -90 }
 
 -- On phones the card goes to the top (or, with cardSide "bottom" or "middle", the foot or
 -- middle) of the work surface, centred over cardOver, so it never lands on a control.
+-- cardSide "inside" fits the card within cardOver at any size (an empty oven window).
+-- An empty text shows the glove and halo without a card.
 export type Hint = { target: GuiObject?, text: string, from: string?, legend: boolean?, anchor: GuiObject?, cardSide: string?, cardOver: GuiObject? }
 
 -- `avoid` is a control strip (the tab bar) the glove must not cover.
@@ -81,9 +83,11 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 			Padding = UDim.new(0, if compact then 6 else 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
+			Wraps = true,
 		}),
 	})
 	local keyIcon = if compact then 28 else 36
+	local keyText = if compact then 14 else 16
 	local entries = {}
 	for _, id in Recipes.DonenessOrder do
 		local d = Recipes.Doneness[id]
@@ -154,21 +158,43 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 		end
 
 		-- Instruction card: beside the glove, kept on screen.
+		card.Visible = hint.text ~= ""
 		label.Text = hint.text
-		local cardW = math.min(if hint.legend then (if compact then 330 else 460) else (if compact then 230 else 320), area.X - 16)
+		local inside = hint.cardSide == "inside" and hint.cardOver
+		local cardW = if inside then hint.cardOver.AbsoluteSize.X - 8
+			else math.min(if hint.legend then (if compact then 330 else 460) else (if compact then 230 else 320), area.X - 16)
 		-- Lines from an estimate of the display font's average glyph width (0.55 em), so a long
 		-- instruction wraps instead of clipping.
 		local size = if compact then textSize else 20
 		local lines = math.clamp(math.ceil(#hint.text * size * 0.55 / (cardW - cardPad * 2)), if compact then 2 else 1, 3)
 		local textH = size * lines + 6
-		local legendH = if hint.legend then keyIcon + 6 else 0
+		-- Key rows: estimated item widths (icon, gap, label at 0.5 em a glyph) wrapped into
+		-- the card's inner width.
+		local legendRows = 1
+		if hint.legend then
+			local inner, x = cardW - cardPad * 2, 0
+			for i, e in entries do
+				local w = keyIcon + 3 + #e.text * keyText * 0.5 + (if i > 1 then (if compact then 6 else 10) else 0)
+				if x > 0 and x + w > inner then
+					legendRows += 1
+					x = w
+				else
+					x += w
+				end
+			end
+		end
+		local legendH = if hint.legend then keyIcon * legendRows + 6 else 0
 		local cardH = cardPad * 2 + textH + legendH
 		label.Size = UDim2.fromOffset(cardW - cardPad * 2, textH)
 		legend.Visible = hint.legend == true
 		legend.Position = UDim2.fromOffset(cardPad, cardPad + textH)
 		legend.Size = UDim2.fromOffset(cardW - cardPad * 2, legendH)
 		local at: Vector2
-		if compact then
+		if inside then
+			local o = hint.cardOver :: GuiObject
+			local p = o.AbsolutePosition - origin
+			at = Vector2.new(p.X + 4, p.Y + o.AbsoluteSize.Y / 2 - cardH / 2)
+		elseif compact then
 			-- Phones have no spare room beside controls: the card sits at the top of the work
 			-- surface, over the scene rather than any control.
 			local over = hint.cardOver or avoid

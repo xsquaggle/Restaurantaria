@@ -142,7 +142,7 @@ function Bake.new(ctx: any, container: Frame)
 		})
 		Art.apply(glass, "fx_oven_glass")
 
-		local slot: any = { pizza = nil }
+		local slot: any = { pizza = nil, window = window }
 		local button = Widgets.button("Take out", function()
 			local pizza = slot.pizza
 			if pizza and not ctx.pending[pizza.id] then
@@ -223,23 +223,24 @@ function Bake.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- First-shift pointer: Take out on a ready oven. The bake key shows whenever a pizza is in;
-	-- on phones it sits mid-screen so the gauges and Take out stay clear.
+	-- First-shift pointer. The bake key never covers a pizza: it shows inside an empty oven's
+	-- window, and only while one oven is empty. A ready oven gets the glove alone.
 	function station.hint(_snap: any, now: number): any
-		local busy = false
+		local empty = nil
 		for _, slot in slots do
 			local pizza = slot.pizza
 			if pizza then
-				busy = true
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
 				if status.ready and not status.burnt then
-					return { target = slot.button.frame, text = "Ready! Take it out", from = "left", legend = true, cardSide = "middle", cardOver = frame }
+					return { target = slot.button.frame, text = "", from = "left" }
 				end
+			elseif not empty then
+				empty = slot
 			end
 		end
-		if busy then
-			return { text = "Take it out when the needle reaches the ticket's bake", legend = true, anchor = slots[1].button.frame, cardSide = "middle", cardOver = frame }
+		if empty then
+			return { text = "Take it out when the needle reaches the ticket's bake", legend = true, cardSide = "inside", cardOver = empty.window }
 		end
 		return nil
 	end

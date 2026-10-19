@@ -190,11 +190,12 @@ function Topping.new(ctx: any, container: Frame)
 		-- The spare cell of the tray grid.
 		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
 		undo.frame.Position = homes[count + 1]
-		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.max(48, math.min(trayH * 0.6, 56))) -- 48 px touch floor
+		-- 54 px frame: the drawn button fills 90% of it, keeping the visible button at 48 px.
+		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.max(54, math.min(trayH * 0.6, 60)))
 	else
 		undo.frame.AnchorPoint = Vector2.new(1, 0)
 		undo.frame.Position = UDim2.fromOffset(W - margin, margin)
-		undo.frame.Size = if ctx.compact then UDim2.fromOffset(92, 36) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 44, 64))
+		undo.frame.Size = if ctx.compact then UDim2.fromOffset(100, 54) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 54, 64))
 	end
 	undo.frame.ZIndex = 5
 	undo.frame.Parent = frame

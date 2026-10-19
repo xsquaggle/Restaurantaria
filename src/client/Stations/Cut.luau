@@ -28,7 +28,8 @@ function Cut.new(ctx: any, container: Frame)
 	local pad = if ctx.compact then 8 else 16
 	local area = ctx.stationSize :: Vector2
 	local hintH = if ctx.compact then 40 else 64
-	local undoH = if ctx.compact then 48 else math.clamp(math.round(area.Y * 0.08), 52, 64)
+	-- 54 px keeps the drawn button (90% of its frame) at the 48 px floor.
+	local undoH = if ctx.compact then 54 else math.clamp(math.round(area.Y * 0.08), 52, 64)
 	local undoW = if ctx.compact then 112 else math.clamp(math.round(area.X * 0.16), 150, 220)
 	local boardAspect = Assets.Meta.cutBoard.aspect
 	local boardH = math.min(area.Y - pad * 2, (area.X - pad * 2) / boardAspect)

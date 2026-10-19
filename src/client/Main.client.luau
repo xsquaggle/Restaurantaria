@@ -290,7 +290,9 @@ local function buildLayout()
 	local hudInTopbar = inset.Height >= 32 and inset.Width >= 300
 	local hudH = if hudInTopbar then inset.Height else 44
 	local top = if hudInTopbar then 0 else hudH
-	local navH = if compact then 64 else math.clamp(math.round(size.Y * 0.11), 64, 120)
+	-- The drawn bar fills 136 of its 144 px, so phones need a 74 px row (68 px bar) for the
+	-- visible bar to meet the 64 px nav floor.
+	local navH = if compact then 74 else math.clamp(math.round(size.Y * 0.11), 74, 120)
 	-- Rail widths land on Astra's ticket proofs: 168 px tickets on a phone, 420 px at 1920.
 	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
 	local stationH = size.Y - top - navH
@@ -450,19 +452,21 @@ local function buildLayout()
 	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
-	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.121), 56, 110)
+	-- 52 px on phones keeps the drawn button (93% of its frame) above the 48 px floor.
+	local actionH = if compact then 52 else math.clamp(math.round(railH * 0.121), 56, 110)
 	-- Phone tabs are two lines (face and number, then the toppings), still two to a row.
 	local tabH = if compact then 60 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
 	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
-	local ticketH = railH - pad * 2 - actionH - gap - tabRows * (tabH + gap)
-	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
-	ticket.frame.Position = UDim2.fromOffset(pad, pad)
-	ticket.frame.Parent = rail
-	-- Astra's mounting rail grips the active ticket's top edge; it overlaps the paper so it
-	-- takes no row of its own.
+	-- Astra's mounting rail grips the active ticket's top edge. The ticket hangs a little
+	-- below the rail's centre so the torn top edge of ui_ticket_top shows under the clips.
 	local clipW = railW - pad * 2 + (if compact then 4 else 10)
 	local clipH = math.round(clipW / Assets.Meta.clipRail.aspect)
+	local drop = math.round(clipH * 0.4)
+	local ticketH = railH - pad * 2 - drop - actionH - gap - tabRows * (tabH + gap)
+	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
+	ticket.frame.Position = UDim2.fromOffset(pad, pad + drop)
+	ticket.frame.Parent = rail
 	local clipRail = Ui.new("ImageLabel", {
 		Name = "ClipRail",
 		BackgroundTransparency = 1,
@@ -861,7 +865,8 @@ local function refreshSummary(snap: any)
 		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
 		if snap.saved then "Progress saved"
 			elseif snap.saveMessage == "Saving..." then "Saving..."
-			else ("Not saved: " .. tostring(snap.saveMessage or profile.message or "unknown")),
+			-- Player text only: the technical reason stays in the HUD save label.
+			else "Progress not saved",
 	}
 	Ui.text({
 		Text = "Shift complete",
@@ -875,7 +880,7 @@ local function refreshSummary(snap: any)
 	})
 	Ui.text({
 		Text = table.concat(lines, "\n"),
-		FontFace = Theme.Font.body,
+		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Position = UDim2.new(0, 24, 0, 72),
