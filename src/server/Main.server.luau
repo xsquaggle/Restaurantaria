@@ -210,8 +210,17 @@ if RunService:IsStudio() then
 				top(shift.pizzas[open[1].pizzaId], open[1].order.recipe, 1)
 				act("sendToOven", { pizzaId = open[1].pizzaId })
 			end
+			-- value may be { crowd = true, share = n }: both ovens running and the third pizza on
+			-- the topping station (the crowded capture state).
+			local crowd = type(value) == "table" and value.crowd
+			local share = if type(value) == "table" then value.share or 0.7 else value or 0.7
+			if crowd and open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, 1)
+				act("sendToOven", { pizzaId = open[2].pizzaId })
+				table.remove(open, 2)
+			end
 			if open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
-				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, value or 0.7)
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, share)
 			end
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
