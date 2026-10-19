@@ -384,7 +384,7 @@ local function requirementLines(order: any, compact: boolean): { { icon: string?
 		local where = if req.region ~= "whole" then ", " .. REGION_TEXT[req.region] else ""
 		local icon = "topping_" .. info.art .. "_1"
 		if compact then
-			table.insert(lines, { icon = icon, title = string.format("%s x%d%s", info.name, req.count, where) })
+			table.insert(lines, { icon = icon, title = string.format("%s x%d%s", info.short or info.name, req.count, where) })
 		else
 			local sub = string.format("%d piece%s", req.count, if req.count == 1 then "" else "s") .. where
 			table.insert(lines, { icon = icon, title = info.name, sub = sub })
