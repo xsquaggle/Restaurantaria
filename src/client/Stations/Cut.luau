@@ -113,13 +113,13 @@ function Cut.new(ctx: any, container: Frame)
 	local wheelD = pizzaSize * 0.3
 	local handleH = pizzaSize * 0.62
 	local handle = Assets.Meta.cutterHandle
-	local axleY = wheelD / 2
-	local holderH = axleY + handleH * (1 - handle.axle)
+	-- The holder is the wheel's square, so turning it (GUI rotation is about the centre)
+	-- turns the handle around the axle; the handle hangs outside it.
 	local cutter = Ui.new("Frame", {
 		Name = "Cutter",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, axleY / holderH),
-		Size = UDim2.fromOffset(wheelD, holderH),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(wheelD, wheelD),
 		ZIndex = 6,
 		Parent = frame,
 	})
@@ -127,7 +127,7 @@ function Cut.new(ctx: any, container: Frame)
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Crop,
 		AnchorPoint = Vector2.new(0.5, handle.axle),
-		Position = UDim2.new(0.5, 0, 0, axleY),
+		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(handleH * handle.aspect, handleH),
 		ZIndex = 1,
 		Parent = cutter,
@@ -135,14 +135,12 @@ function Cut.new(ctx: any, container: Frame)
 	Art.apply(handleImg, "prop_cutter_handle")
 	local wheel = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, axleY),
-		Size = UDim2.fromOffset(wheelD, wheelD),
+		Size = UDim2.fromScale(1, 1),
 		ZIndex = 2,
 		Parent = cutter,
 	})
 	Art.apply(wheel, "prop_cutter_wheel")
-	local rest = UDim2.fromOffset(math.min(pizzaX + pizzaSize * 0.56, area.X / 2 + boardW * 0.5 - wheelD * 0.6), pizzaY - pizzaSize * 0.12)
+	local rest = UDim2.fromOffset(math.min(pizzaX + pizzaSize * 0.5 + wheelD * 0.45, area.X / 2 + boardW * 0.5 - wheelD * 0.6), pizzaY - pizzaSize * 0.14)
 	local REST_ANGLE = -32
 	cutter.Position = rest
 	cutter.Rotation = REST_ANGLE

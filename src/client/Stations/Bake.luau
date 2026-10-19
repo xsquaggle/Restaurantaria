@@ -109,7 +109,7 @@ function Bake.new(ctx: any, container: Frame)
 			ZIndex = 3,
 		}))
 
-		local window = Ui.new("Frame", rect(oven, OVEN.window, { Name = "Window", ZIndex = 2 }))
+		local window = Ui.new("Frame", rect(oven, OVEN.window, { Name = "Window", ZIndex = 2, ClipsDescendants = true }))
 		local glow = Ui.new("ImageLabel", {
 			BackgroundTransparency = 1,
 			ImageTransparency = 1,
