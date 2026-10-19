@@ -88,7 +88,8 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 	})
 	local sizeLimit = Ui.new("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30, Parent = label })
 	-- Optional supplied icon left of the label (icon_undo, icon_oven_white). When the button
-	-- is too narrow for both, the icon stands alone and the label is kept for screen readers.
+	-- is too narrow for both, the label stands alone; the icon stands alone only where the
+	-- label would not fit either.
 	local icon = Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, AnchorPoint = Vector2.new(0, 0.5), Visible = false, ZIndex = 3, Parent = body })
 	local iconName: string? = nil
 	-- Ivory on coral needs its outline to read (Astra's README).
@@ -136,7 +137,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 			local gap = math.round(iconSize * 0.25)
 			-- The label's width at its smallest allowed size (display font, about 0.55 em a glyph).
 			local need = #label.Text * 16 * 0.55
-			if innerW < iconSize + gap + need then
+			-- Too narrow for both: the words carry the meaning, so the icon gives way, unless
+			-- the words would not fit either (the small square Undo).
+			if innerW < iconSize + gap + need and innerW >= need then
+				icon.Visible = false
+			elseif innerW < iconSize + gap + need then
 				label.Visible = false
 				icon.AnchorPoint = Vector2.new(0.5, 0.5)
 				icon.Position = UDim2.fromScale(0.5, 0.5)
