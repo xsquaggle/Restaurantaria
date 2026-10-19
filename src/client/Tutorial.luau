@@ -156,8 +156,11 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 		-- Instruction card: beside the glove, kept on screen.
 		label.Text = hint.text
 		local cardW = math.min(if hint.legend then (if compact then 330 else 460) else (if compact then 230 else 320), area.X - 16)
-		local lines = if compact then 2 else 1
-		local textH = (if compact then textSize else 20) * lines + 6
+		-- Lines from an estimate of the display font's average glyph width (0.55 em), so a long
+		-- instruction wraps instead of clipping.
+		local size = if compact then textSize else 20
+		local lines = math.clamp(math.ceil(#hint.text * size * 0.55 / (cardW - cardPad * 2)), if compact then 2 else 1, 3)
+		local textH = size * lines + 6
 		local legendH = if hint.legend then keyIcon + 6 else 0
 		local cardH = cardPad * 2 + textH + legendH
 		label.Size = UDim2.fromOffset(cardW - cardPad * 2, textH)
