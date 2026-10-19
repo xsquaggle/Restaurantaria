@@ -28,8 +28,8 @@ function Cut.new(ctx: any, container: Frame)
 	local pad = if ctx.compact then 8 else 16
 	local area = ctx.stationSize :: Vector2
 	local hintH = if ctx.compact then 40 else 64
-	-- 54 px keeps the drawn button (90% of its frame) at the 48 px floor.
-	local undoH = if ctx.compact then 54 else math.clamp(math.round(area.Y * 0.08), 52, 64)
+	-- 56 px keeps the drawn button (its art, without the shadow margin) at 48 px or more.
+	local undoH = if ctx.compact then 56 else math.clamp(math.round(area.Y * 0.08), 52, 64)
 	local undoW = if ctx.compact then 112 else math.clamp(math.round(area.X * 0.16), 150, 220)
 	local boardAspect = Assets.Meta.cutBoard.aspect
 	local boardH = math.min(area.Y - pad * 2, (area.X - pad * 2) / boardAspect)
@@ -59,7 +59,7 @@ function Cut.new(ctx: any, container: Frame)
 
 	-- Live cut count on Astra's cream result card (stand-in backing until the A21 hint chip
 	-- arrives), so it reads over the busy backdrop. Same width as Undo, clear of the pizza.
-	local guideSize = if ctx.compact then 16 else 22
+	local guideSize = if ctx.compact then 18 else 22
 	local guidePad = if ctx.compact then 8 else 12
 	local guideCard = Ui.new("ImageLabel", {
 		Name = "Guide",
@@ -76,7 +76,7 @@ function Cut.new(ctx: any, container: Frame)
 	Art.apply(guideCard, "ui_card_result")
 	local guide = Ui.text({
 		Text = "",
-		FontFace = Theme.Font.bodySemi,
+		FontFace = Theme.Font.display,
 		TextSize = guideSize,
 		TextColor3 = Theme.Colour.ink,
 		TextWrapped = true,

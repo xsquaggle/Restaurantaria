@@ -407,7 +407,7 @@ local function buildLayout()
 		Text = "",
 		Visible = false,
 		FontFace = Theme.Font.bodySemi,
-		TextSize = 14,
+		TextSize = if compact then 16 else 14,
 		TextColor3 = C.label,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -479,8 +479,8 @@ local function buildLayout()
 	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
-	-- 52 px on phones keeps the drawn button (93% of its frame) above the 48 px floor.
-	local actionH = if compact then 52 else math.clamp(math.round(railH * 0.121), 56, 110)
+	-- 56 px on phones keeps the drawn button (its art, without the shadow margin) at 48 px or more.
+	local actionH = if compact then 56 else math.clamp(math.round(railH * 0.121), 56, 110)
 	-- Phone tabs are two lines (face and number, then the toppings), still two to a row.
 	local tabH = if compact then 60 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1

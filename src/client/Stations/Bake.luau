@@ -127,12 +127,36 @@ function Bake.new(ctx: any, container: Frame)
 			FontFace = Theme.Font.display,
 			TextSize = math.max(14, math.round(ovenH * OVEN.plate.h * 0.75)),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			-- One line: at the 14 px floor on phones "Cooking" runs a few px past the plate
-			-- rather than wrapping out of sight.
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			ZIndex = 3,
+			ZIndex = 4,
 		}))
+		-- On phones the drawn plate is narrower than "Cooking" or "Overdone" at the 14 px
+		-- floor, so Astra's cream pill (9-slice) widens behind the word to fit it.
+		if ctx.compact then
+			local pm = Assets.Meta.hudPill
+			local plateH = math.round(reading.TextSize * 1.45)
+			local plate = Ui.new("ImageLabel", {
+				Name = "PlateWide",
+				BackgroundTransparency = 1,
+				ScaleType = Enum.ScaleType.Slice,
+				SliceCenter = pm.slice,
+				SliceScale = plateH / pm.height,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = reading.Position,
+				Size = UDim2.fromOffset(0, plateH),
+				Visible = false,
+				ZIndex = 3,
+				Parent = oven,
+			})
+			Art.apply(plate, "ui_hud_pill")
+			local function fit()
+				plate.Visible = reading.Text ~= ""
+				plate.Size = UDim2.fromOffset(math.max(reading.TextBounds.X + plateH * 0.8, reading.AbsoluteSize.X), plateH)
+			end
+			reading:GetPropertyChangedSignal("TextBounds"):Connect(fit)
+			reading:GetPropertyChangedSignal("Text"):Connect(fit)
+		end
 
 		local window = Ui.new("Frame", rect(oven, OVEN.window, { Name = "Window", ZIndex = 2, ClipsDescendants = true }))
 		local glow = Ui.new("ImageLabel", {
@@ -180,8 +204,8 @@ function Bake.new(ctx: any, container: Frame)
 				end)
 			end
 		end)
-		-- On the oven's lower panel; phones keep the 48 px touch floor.
-		local btnH = math.max(if ctx.compact then 48 else 56, ovenH * OVEN.panel.h * 0.72)
+		-- On the oven's lower panel; 56 px keeps the drawn button at 48 px or more on phones.
+		local btnH = math.max(if ctx.compact then 56 else 56, ovenH * OVEN.panel.h * 0.72)
 		button.frame.AnchorPoint = Vector2.new(0.5, 0.5)
 		button.frame.Position = UDim2.new(0.5, 0, OVEN.panel.y + OVEN.panel.h / 2, 0)
 		button.frame.Size = UDim2.new(OVEN.panel.w * 0.86, 0, 0, btnH)

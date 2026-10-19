@@ -233,6 +233,17 @@ if RunService:IsStudio() then
 			local ok, reason = ShiftService.apply(session, value[1], value[2])
 			push(player)
 			return if ok then "ok" else tostring(reason)
+		elseif command == "pieces" then
+			-- value = pizzaId: the authoritative piece list (continuity evidence).
+			local pizza = session.shift.pizzas[value]
+			if not pizza then
+				return "no such pizza"
+			end
+			local rows = { string.format("pizza %d stage=%s pieces=%d cuts=%d", pizza.id, pizza.stage, #pizza.toppings, #pizza.cuts) }
+			for i, t in pizza.toppings do
+				table.insert(rows, string.format("%02d %s %.3f,%.3f", i, t.ingredient, t.x, t.y))
+			end
+			return table.concat(rows, "\n")
 		elseif command == "setBake" then
 			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
 			local id = session.shift.ovens[value[1]]

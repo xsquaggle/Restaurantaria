@@ -1005,7 +1005,7 @@ function Widgets.hintStrip(width: number, height: number, compact: boolean): Hin
 					key = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = i, Parent = card }, {
 						Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
 						Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1 }),
-						Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = if compact then 14 else 16, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
+						Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = 16, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
 					})
 					keys[i] = key
 				end
