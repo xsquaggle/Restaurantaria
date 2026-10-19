@@ -309,7 +309,6 @@ end
 -- Ticket detail: blank ticket proof with live order text.
 
 local REGION_TEXT = { whole = "all over", left = "left half", right = "right half" }
-local BAKE_TEXT = { light = "Light bake", regular = "Regular bake", well = "Well done" }
 
 function Widgets.orderLines(order: any): { string }
 	local recipe = Recipes.ById[order.recipe]
@@ -356,7 +355,7 @@ function Widgets.ticket(customerName: string, order: any, compact: boolean): Fra
 	for i, text in Widgets.orderLines(order) do
 		line(text, Theme.Font.body, 0, nil, 2 + i)
 	end
-	line(BAKE_TEXT[order.bake], Theme.Font.bodySemi, 0, nil, 20)
+	line(Recipes.Doneness[order.bake].label, Theme.Font.bodySemi, 0, nil, 20)
 	line(order.slices .. " slices", Theme.Font.bodySemi, 0, nil, 21)
 	return frame
 end
@@ -372,26 +371,32 @@ export type RailTicket = {
 	setPatience: (RailTicket, number, string) -> (),
 }
 
--- Compact (phone) tickets put each requirement on one line so the text can stay large.
+-- Every line is a picture plus live text. Phone tickets use the short ingredient name and
+-- put a half-pizza region on a second, smaller line, so nothing drops under 16/14 px. The
+-- bake and slice pictures come from Astra's icon family; until they arrive their space stays
+-- reserved and empty.
 local function requirementLines(order: any, compact: boolean): { { icon: string?, title: string, sub: string? } }
 	local recipe = Recipes.ById[order.recipe]
 	local lines = {}
 	if #recipe.toppings == 0 then
-		table.insert(lines, if compact then { title = "Cheese only" } else { title = "Cheese only", sub = "No toppings" })
+		table.insert(lines, { icon = "pizza_raw", title = "Cheese only", sub = if compact then nil else "No toppings" })
 	end
 	for _, req in recipe.toppings do
 		local info = Recipes.Ingredients[req.ingredient]
-		local where = if req.region ~= "whole" then ", " .. REGION_TEXT[req.region] else ""
 		local icon = "topping_" .. info.art .. "_1"
 		if compact then
-			table.insert(lines, { icon = icon, title = string.format("%s x%d%s", info.short or info.name, req.count, where) })
+			local sub = if req.region ~= "whole" then REGION_TEXT[req.region] else nil
+			table.insert(lines, { icon = icon, title = string.format("%s x%d", info.short or info.name, req.count), sub = sub })
 		else
+			local where = if req.region ~= "whole" then ", " .. REGION_TEXT[req.region] else ""
 			local sub = string.format("%d piece%s", req.count, if req.count == 1 then "" else "s") .. where
 			table.insert(lines, { icon = icon, title = info.name, sub = sub })
 		end
 	end
-	table.insert(lines, { icon = "icon_bake", title = BAKE_TEXT[order.bake] })
-	table.insert(lines, { icon = "icon_cut", title = order.slices .. " wedges" })
+	local doneness = Recipes.Doneness[order.bake]
+	table.insert(lines, { icon = doneness.icon, title = doneness.label })
+	-- The slice picture shows the pizza cut into exactly this many slices.
+	table.insert(lines, { icon = string.format("icon_slices_%d", order.slices), title = order.slices .. " slices" })
 	return lines
 end
 
@@ -472,15 +477,24 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 			number.Text = string.format("#%02d", customer.id)
 			name.Text = Recipes.Cast[customer.cast].name
 			local lines = requirementLines(customer.order, compact)
-			local rowH = math.min(body.Size.Y.Offset / math.max(#lines, 3), if compact then 40 else 76)
-			local icon = math.floor(rowH * 0.78)
+			-- On phones a line with a second row gets a little more height than the others.
+			local weights, total = {}, 0
 			for i, line in lines do
+				weights[i] = if compact and line.sub then 1.3 else 1
+				total += weights[i]
+			end
+			local unit = math.min(body.Size.Y.Offset / math.max(total, 3), if compact then 40 else 76)
+			local icon = if compact then math.clamp(math.floor(unit * 0.8), 24, 30) else math.floor(unit * 0.78)
+			local y = 0
+			for i, line in lines do
+				local rowH = unit * weights[i]
 				local row = Ui.new("Frame", {
 					BackgroundTransparency = 1,
-					Position = UDim2.fromOffset(0, (i - 1) * rowH),
+					Position = UDim2.fromOffset(0, y),
 					Size = UDim2.new(1, 0, 0, rowH),
 					Parent = body,
 				})
+				y += rowH
 				if line.icon then
 					local img = Ui.new("ImageLabel", {
 						BackgroundTransparency = 1,
@@ -504,8 +518,8 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 					Size = UDim2.new(1, -textX, 0, titleSize + 2),
 					Parent = row,
 				})
-				-- Long titles shrink to fit the ticket instead of being cut off.
-				Ui.new("UITextSizeConstraint", { MaxTextSize = titleSize, MinTextSize = 12, Parent = title })
+				-- Long titles shrink to fit, but never under the 16 px floor.
+				Ui.new("UITextSizeConstraint", { MaxTextSize = titleSize, MinTextSize = 16, Parent = title })
 				if line.sub then
 					local subSize = math.clamp(math.floor(rowH * 0.32), 14, 24)
 					Ui.text({
@@ -533,8 +547,8 @@ end
 
 export type RailTab = { button: TextButton, customer: any, setPatience: (RailTab, number, string) -> () }
 
--- Compact tabs sit two to a row: the face, then the toppings as a small overlapping row
--- (the number shows once the tab is opened), so a waiting order still reads at a glance.
+-- Compact tabs sit two to a row on two lines: the face and number, then the toppings side
+-- by side, so waiting orders tell apart by number as well as by their pictures.
 function Widgets.railTab(customer: any, height: number, compact: boolean?, width: number?): RailTab
 	local button = Ui.new("TextButton", {
 		Name = "Tab" .. customer.id,
@@ -544,13 +558,13 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?, width
 		Size = if compact then UDim2.new(0.5, -2, 0, height) else UDim2.new(1, 0, 0, height),
 	})
 	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = button }), "ui_ticket_tab")
-	local faceSize = math.floor(height * (if compact then 0.6 else 0.72))
+	local faceSize = if compact then 24 else math.floor(height * 0.72)
 	local faceX = if compact then 4 else 6
 	-- The patience proofs carry the face in their left square; show just that part.
 	local face = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, faceX, 0.5, 0),
+		Position = if compact then UDim2.fromOffset(faceX, 4 + faceSize / 2) else UDim2.new(0, faceX, 0.5, 0),
 		Size = UDim2.fromOffset(faceSize, faceSize),
 		ImageRectSize = Vector2.new(216, 216),
 		Parent = button,
@@ -558,19 +572,23 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?, width
 	local recipe = Recipes.ById[customer.order.recipe]
 	local textSize = math.clamp(math.floor(height * 0.46), 16, 30)
 	if compact then
-		local x0 = faceX + faceSize + 4
-		local icon = math.floor(height * 0.46)
+		Ui.text({
+			Text = string.format("#%02d", customer.id),
+			FontFace = Theme.Font.display,
+			TextSize = 16,
+			TextWrapped = false,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromOffset(faceX + faceSize + 4, 4 + faceSize / 2),
+			Size = UDim2.fromOffset(40, faceSize),
+			Parent = button,
+		})
+		local icon = 20
 		local list = if #recipe.toppings > 0 then recipe.toppings else { { ingredient = "" } }
-		-- Icons overlap as much as the room right of the face needs.
-		local room = (width or height * 1.7) - x0 - 4
-		local stepX = if #list > 1 then math.min(icon * 0.8, (room - icon) / (#list - 1)) else 0
 		for i, req in list do
 			local img = Ui.new("ImageLabel", {
 				BackgroundTransparency = 1,
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, x0 + (i - 1) * stepX, 0.5, 0),
+				Position = UDim2.fromOffset(faceX + (i - 1) * (icon + 4), height - icon - 6),
 				Size = UDim2.fromOffset(icon, icon),
-				ZIndex = 2 + #list - i,
 				Parent = button,
 			})
 			-- Cheese only: the plain pizza is the picture.

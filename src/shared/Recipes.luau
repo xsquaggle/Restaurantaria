@@ -31,6 +31,18 @@ Recipes.Ingredients = {
 -- Tray order on the topping counter, left to right (matches the approved reference).
 Recipes.IngredientOrder = { "pepperoni", "mushroom", "basil", "olive", "pepper" }
 
+-- Requested doneness as players read it on a ticket (Astra, 2026-10-19). Each has a live
+-- label and its own icon from Astra's oven/pizza icon family, which pairs a colour with a
+-- visible progression: light teal, regular green, well-done amber. Red is kept for burnt or
+-- error and never marks a request. Extra well-done (orange) is pending: it has no oven target
+-- or grading yet (Config.Oven.targets), so it is never offered.
+Recipes.Doneness = {
+	light = { label = "Light bake", short = "Light", tone = "teal", icon = "icon_bake_light" },
+	regular = { label = "Regular bake", short = "Regular", tone = "green", icon = "icon_bake_regular" },
+	well = { label = "Well done", short = "Well done", tone = "amber", icon = "icon_bake_well" },
+}
+Recipes.DonenessOrder = { "light", "regular", "well" }
+
 -- Regions: "whole", "left", "right". Left/right are halves split by the vertical axis.
 Recipes.List = {
 	{ id = "cheese", name = "Cheese", toppings = {} },

@@ -14,7 +14,6 @@ local Widgets = require(Parent.Widgets)
 local C = Theme.Colour
 local Bake = {}
 
-local BAKE_NAME = { light = "Light", regular = "Regular", well = "Well done" }
 
 function Bake.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Bake", BackgroundColor3 = Color3.fromRGB(92, 64, 52), Size = UDim2.fromScale(1, 1), Parent = container })
@@ -116,7 +115,7 @@ function Bake.new(ctx: any, container: Frame)
 			slot.button:setEnabled(pizza ~= nil and not ctx.pending[pizza.id])
 			if pizza then
 				local customer = ctx.customer(snap, pizza.ticketId)
-				slot.info.Text = string.format("%s · %s · %s", Recipes.Cast[customer.cast].name, Recipes.ById[customer.order.recipe].name, BAKE_NAME[customer.order.bake])
+				slot.info.Text = string.format("%s · %s · %s", Recipes.Cast[customer.cast].name, Recipes.ById[customer.order.recipe].name, Recipes.Doneness[customer.order.bake].short)
 			else
 				slot.info.Text = "Empty"
 				slot.ring:set(0, C.oven, "", "")

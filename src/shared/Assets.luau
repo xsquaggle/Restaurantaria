@@ -78,6 +78,9 @@ Assets.Meta = {
 	ringBandWidth = 0.092,
 	ticketAspect = 344 / 512,
 	tabBarAspect = 1024 / 130,
+	-- Hollow badge sockets baked into the V1 tab bar (centres as fractions of the bar, outer
+	-- ring diameter as a fraction of its height), measured from the 1024x130 export.
+	tabBarSockets = { x = { 235 / 1024, 480 / 1024, 725 / 1024, 975 / 1024 }, y = 37 / 130, d = 45 / 130 },
 	-- Full-screen backgrounds: virtual size and how they are tiled (each tile <= 1024 px).
 	backgrounds = {
 		counter_topping = { width = 1920, height = 1080, cols = 2, rows = 2 },

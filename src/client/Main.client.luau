@@ -271,8 +271,11 @@ local function buildLayout()
 	local navH = if compact then 64 else math.clamp(math.round(size.Y * 0.11), 64, 120)
 	-- Rail widths land on Astra's ticket proofs: 168 px tickets on a phone, 420 px at 1920.
 	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
-	local railH = size.Y - top - navH
-	ctx.stationSize = Vector2.new(size.X - railW, railH)
+	local stationH = size.Y - top - navH
+	-- Phones run the rail down beside the tab bar (which centres under the station) so the
+	-- ticket has room for its requirement icons; wide screens keep the full-width tab row.
+	local railH = if compact then size.Y - top else stationH
+	ctx.stationSize = Vector2.new(size.X - railW, stationH)
 
 	local root = Ui.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = gui })
 
@@ -401,7 +404,7 @@ local function buildLayout()
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 		Position = UDim2.fromOffset(0, top),
-		Size = UDim2.fromOffset(ctx.stationSize.X, railH),
+		Size = UDim2.fromOffset(ctx.stationSize.X, stationH),
 		Parent = root,
 	})
 
@@ -420,7 +423,8 @@ local function buildLayout()
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
 	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.121), 56, 110)
-	local tabH = if compact then 48 else math.clamp(math.round(railH * 0.085), 44, 72)
+	-- Phone tabs are two lines (face and number, then the toppings), still two to a row.
+	local tabH = if compact then 60 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
 	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
 	local ticketH = railH - pad * 2 - actionH - gap - tabRows * (tabH + gap)
@@ -476,11 +480,11 @@ local function buildLayout()
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, navH),
+		Size = if compact then UDim2.fromOffset(ctx.stationSize.X, navH) else UDim2.new(1, 0, 0, navH),
 		Parent = root,
 	})
 	local barH = navH - 8
-	local barW = math.min(size.X - 16, barH * Assets.Meta.tabBarAspect)
+	local barW = math.min((if compact then ctx.stationSize.X else size.X) - 16, barH * Assets.Meta.tabBarAspect)
 	barH = barW / Assets.Meta.tabBarAspect
 	local bar = Ui.new("Frame", {
 		BackgroundTransparency = 1,
@@ -531,8 +535,11 @@ local function buildLayout()
 			ZIndex = 2,
 			Parent = hit,
 		}, { Ui.corner(12) })
-		local b = badge(hit, math.max(18, barH * 0.34))
-		b.Position = UDim2.fromScale(0.88, 0.28)
+		-- While the V1 bar is in use its badge sockets are part of the art: each count badge
+		-- sits exactly on its socket, sized to its ring, so the two read as one circle.
+		local socket = Assets.Meta.tabBarSockets
+		local b = badge(bar, barH * socket.d - 4)
+		b.Position = UDim2.fromScale(socket.x[i], socket.y)
 		hit.Activated:Connect(function()
 			ctx.switchTo(name)
 		end)
