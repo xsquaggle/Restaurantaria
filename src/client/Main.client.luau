@@ -356,7 +356,7 @@ local function buildLayout()
 		Padding = UDim.new(0, if compact then 8 else 12),
 		Parent = left,
 	})
-	local function pill(name: string, order: number): TextLabel
+	local function pill(name: string, order: number, iconName: string): TextLabel
 		local holder = Ui.new("ImageLabel", {
 			Name = name,
 			BackgroundTransparency = 1,
@@ -368,6 +368,19 @@ local function buildLayout()
 			Parent = left,
 		})
 		Art.apply(holder, "ui_hud_pill")
+		-- Astra's sun and coin icons lead each pill; the number stays live text.
+		local iconSize = math.round(pillH * 0.72)
+		local icon = Ui.new("ImageLabel", {
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, math.round(pillInset * 0.6), 0.5, 0),
+			Size = UDim2.fromOffset(iconSize, iconSize),
+			Parent = holder,
+		})
+		Art.apply(icon, iconName)
+		local lead = math.round(pillInset * 0.6) + iconSize
 		local text = Ui.text({
 			Name = "Text",
 			FontFace = Theme.Font.display,
@@ -375,18 +388,19 @@ local function buildLayout()
 			TextColor3 = C.labelStroke,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
-			Size = UDim2.fromScale(1, 1),
+			Position = UDim2.fromOffset(lead, 0),
+			Size = UDim2.new(1, -lead, 1, 0),
 			Parent = holder,
 		})
 		-- The pill grows (its middle stretches) when the text needs more room.
 		text:GetPropertyChangedSignal("TextBounds"):Connect(function()
-			holder.Size = UDim2.fromOffset(math.max(pillMinW, text.TextBounds.X + pillInset * 2), pillH)
+			holder.Size = UDim2.fromOffset(math.max(pillMinW, lead + text.TextBounds.X + pillInset * 1.4), pillH)
 		end)
 		return text
 	end
-	local day = pill("Day", 1)
+	local day = pill("Day", 1, "icon_day")
 	day.Text = "Day 1"
-	local coins = pill("Coins", 2)
+	local coins = pill("Coins", 2, "icon_coin")
 	coins.Text = "0 coins"
 	local banner = Ui.text({
 		Name = "SaveBanner",

@@ -113,13 +113,15 @@ function Order.new(ctx: any, container: Frame)
 		local name = Ui.text({
 			Text = cast.name,
 			FontFace = Theme.Font.display,
-			TextSize = if ctx.compact then 16 else 24,
+			TextSize = if ctx.compact then 18 else 28,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -figureH * 1.06 - 4),
-			Size = UDim2.new(1, 0, 0, if ctx.compact then 18 else 28),
+			Size = UDim2.new(1, 0, 0, if ctx.compact then 20 else 32),
 			Parent = slot,
 		})
+		-- A cream outline keeps the name readable over the busy shop interior.
+		Ui.new("UIStroke", { Color = C.label, Thickness = if ctx.compact then 2 else 3, Parent = name })
 		local meter = Widgets.patience()
 		local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
 		aspect.DominantAxis = Enum.DominantAxis.Width

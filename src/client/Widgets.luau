@@ -29,6 +29,7 @@ export type Button = {
 	setEnabled: (Button, boolean) -> (),
 	setHighlighted: (Button, boolean) -> (),
 	setLabel: (Button, string) -> (),
+	setIcon: (Button, string?) -> (),
 	enabled: boolean,
 	highlighted: boolean,
 }
@@ -86,6 +87,10 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		Parent = body,
 	})
 	local sizeLimit = Ui.new("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30, Parent = label })
+	-- Optional supplied icon left of the label (icon_undo, icon_oven_white). When the button
+	-- is too narrow for both, the icon stands alone and the label is kept for screen readers.
+	local icon = Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, AnchorPoint = Vector2.new(0, 0.5), Visible = false, ZIndex = 3, Parent = body })
+	local iconName: string? = nil
 	-- Ivory on coral needs its outline to read (Astra's README).
 	local stroke = Ui.new("UIStroke", { Color = C.labelStroke, Thickness = 1, Enabled = primary, Parent = label })
 	local hit = Ui.new("TextButton", {
@@ -120,8 +125,30 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		-- fixed share of the height. Text keeps the 16 px floor and grows to 32 px.
 		local insetX, insetY = math.round(h * 0.29), math.round(h * 0.215)
 		art.SliceScale = math.max(h / meta.height, 0.05)
-		label.Size = UDim2.fromOffset(math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0))
+		local innerW, innerH = math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0)
 		sizeLimit.MaxTextSize = math.clamp(math.round(h * 0.29), 16, 32)
+		label.Position = UDim2.fromScale(0.5, 0.5)
+		label.Size = UDim2.fromOffset(innerW, innerH)
+		label.Visible = true
+		icon.Visible = iconName ~= nil
+		if iconName then
+			local iconSize = math.round(math.min(innerH * 1.1, h * 0.5))
+			local gap = math.round(iconSize * 0.25)
+			-- The label's width at its smallest allowed size (display font, about 0.55 em a glyph).
+			local need = #label.Text * 16 * 0.55
+			if innerW < iconSize + gap + need then
+				label.Visible = false
+				icon.AnchorPoint = Vector2.new(0.5, 0.5)
+				icon.Position = UDim2.fromScale(0.5, 0.5)
+			else
+				label.Size = UDim2.fromOffset(innerW - iconSize - gap, innerH)
+				label.Position = UDim2.new(0.5, (iconSize + gap) / 2, 0.5, 0)
+				local textW = math.min(label.TextBounds.X, innerW - iconSize - gap)
+				icon.AnchorPoint = Vector2.new(0, 0.5)
+				icon.Position = UDim2.new(0.5, -(textW + iconSize + gap) / 2 + 0, 0.5, 0)
+			end
+			icon.Size = UDim2.fromOffset(iconSize, iconSize)
+		end
 		stroke.Thickness = if h < 64 then 1 else 2
 	end
 
@@ -141,6 +168,13 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		end,
 		setLabel = function(_b: Button, t: string)
 			label.Text = t
+		end,
+		setIcon = function(_b: Button, name: string?)
+			iconName = name
+			if name then
+				Art.apply(icon, name)
+			end
+			layout()
 		end,
 	}
 	hit.MouseButton1Down:Connect(function()
@@ -169,6 +203,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		end
 	end)
 	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	label:GetPropertyChangedSignal("TextBounds"):Connect(function()
+		if iconName and label.Visible then
+			layout()
+		end
+	end)
 	layout()
 	render()
 	return self
@@ -498,13 +537,14 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 		Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.72),
 		Parent = frame,
 	})
+	local nameSize = math.max(16, math.floor(headerH * 0.34))
 	local name = Ui.text({
-		FontFace = Theme.Font.bodySemi,
-		TextSize = math.max(14, math.floor(headerH * 0.3)),
-		TextColor3 = C.mutedInk,
+		FontFace = Theme.Font.display,
+		TextSize = nameSize,
+		TextColor3 = C.ink,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(padX, padTop + headerH * 0.7),
-		Size = UDim2.fromOffset(inner.X * 0.5, math.max(14, math.floor(headerH * 0.3))),
+		Position = UDim2.fromOffset(padX, padTop + headerH * 0.68),
+		Size = UDim2.fromOffset(inner.X * 0.5, nameSize),
 		Parent = frame,
 	})
 	local meter = Widgets.patience()

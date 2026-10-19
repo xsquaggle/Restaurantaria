@@ -186,6 +186,7 @@ function Topping.new(ctx: any, container: Frame)
 			ctx.send("undoTopping", { pizzaId = focus.id })
 		end
 	end, "secondary")
+	undo:setIcon("icon_undo")
 	if side then
 		-- The spare cell of the tray grid.
 		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -224,6 +225,7 @@ function Topping.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
+	send:setIcon("icon_oven_white")
 	send.frame.Size = UDim2.fromScale(1, 1)
 	send.frame.Parent = ctx.actionHost("Topping")
 

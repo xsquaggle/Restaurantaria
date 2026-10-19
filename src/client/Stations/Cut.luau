@@ -104,6 +104,7 @@ function Cut.new(ctx: any, container: Frame)
 			ctx.send("undoCut", { pizzaId = current.id })
 		end
 	end, "secondary")
+	undo:setIcon("icon_undo")
 	undo.frame.AnchorPoint = Vector2.new(0, 1)
 	undo.frame.Position = UDim2.new(0, pad, 1, -pad)
 	undo.frame.Size = UDim2.fromOffset(undoW, undoH)
