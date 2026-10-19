@@ -295,7 +295,7 @@ local function buildLayout()
 	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
 	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
 	local pillH = math.min(if compact then 36 else 44, hudH - 4)
-	local pillMinW = pillH * (if compact then 120 / 36 else 240 / 44)
+	local pillMinW = math.round(pillH * (if compact then 120 / 36 else 240 / 44))
 	local pillScale = pillH / Assets.Meta.hudPill.height
 	-- Live content stays inside the pill's drawn safe area (96 px of 640 at each end).
 	local pillInset = math.round(Assets.Meta.hudPill.inset * pillScale)
@@ -417,7 +417,7 @@ local function buildLayout()
 	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
-	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.115), 56, 110)
+	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.121), 56, 110)
 	local tabH = if compact then 48 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
 	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
