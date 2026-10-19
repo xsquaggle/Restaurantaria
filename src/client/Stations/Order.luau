@@ -41,9 +41,12 @@ function Order.new(ctx: any, container: Frame)
 		Parent = frame,
 	})
 	-- Figures stand behind the counter, cut at the waist by its top edge.
-	local figureH = area.Y * COUNTER_TOP * 0.82
+	-- Room above each figure for the name and patience meter, and for the selected one to
+	-- step forward without touching its neighbours.
+	local labelH = if ctx.compact then 40 else 64
+	local slotW = (area.X - 32) / ROOM_FOR
+	local figureH = math.min(area.Y * COUNTER_TOP - labelH - 12, slotW * 0.9 / FIGURE_ASPECT)
 	local figureW = figureH * FIGURE_ASPECT
-	local slotW = math.min(figureW * 1.08, (area.X - 32) / ROOM_FOR)
 	local row = Ui.new("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 0),
@@ -115,7 +118,7 @@ function Order.new(ctx: any, container: Frame)
 			TextSize = if ctx.compact then 16 else 24,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -figureH - 4),
+			Position = UDim2.new(0.5, 0, 1, -figureH * 1.06 - 4),
 			Size = UDim2.new(1, 0, 0, if ctx.compact then 18 else 28),
 			Parent = slot,
 		})
@@ -123,7 +126,7 @@ function Order.new(ctx: any, container: Frame)
 		local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
 		aspect.DominantAxis = Enum.DominantAxis.Width
 		meter.frame.AnchorPoint = Vector2.new(0.5, 1)
-		meter.frame.Position = UDim2.new(0.5, 0, 1, -figureH - (if ctx.compact then 22 else 34))
+		meter.frame.Position = UDim2.new(0.5, 0, 1, -figureH * 1.06 - (if ctx.compact then 22 else 34))
 		meter.frame.Size = UDim2.new(0, math.min(slotW * 0.9, if ctx.compact then 110 else 200), 0, 200)
 		meter.frame.Parent = slot
 		slot.Activated:Connect(function()
