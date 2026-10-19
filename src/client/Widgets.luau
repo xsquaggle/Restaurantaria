@@ -12,6 +12,7 @@ local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
+local PizzaArt = require(script.Parent.PizzaArt)
 
 local C = Theme.Colour
 local Widgets = {}
@@ -657,164 +658,70 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?, width
 end
 
 ------------------------------------------------------------------------------------------
--- Greybox top-down pizza. Bake changes crust and cheese separately and only lightly darkens
--- toppings, so ingredients stay recognizable (per Astra's correction).
+-- The pizza after the topping station: the same generated base and topping sprites the
+-- Topping station uses (PizzaArt), so one pizza travels through every station. Until the
+-- drawn bake states exist (G6/G7 in visual-pass/audit.md) the bake is shown as a tint on
+-- those approved images: crust and cheese go golden, then dark when burnt, and toppings
+-- only darken lightly so they stay recognizable (per Astra's correction). Contact shadows
+-- keep their own tint.
 
-local RAW_CRUST, GOLD_CRUST, BURNT_CRUST = Color3.fromRGB(236, 214, 170), Color3.fromRGB(205, 140, 72), Color3.fromRGB(70, 42, 28)
-local RAW_CHEESE, GOLD_CHEESE, BURNT_CHEESE = Color3.fromRGB(255, 244, 206), Color3.fromRGB(246, 200, 104), Color3.fromRGB(110, 76, 44)
-local SAUCE = Color3.fromRGB(196, 62, 44)
+local RAW, GOLDEN, BURNT = Color3.new(1, 1, 1), Color3.fromRGB(255, 214, 160), Color3.fromRGB(104, 64, 42)
+local TOPPING_GOLDEN, TOPPING_BURNT = Color3.fromRGB(236, 218, 198), Color3.fromRGB(116, 80, 60)
 
-local function bakeColours(doneness: number): (Color3, Color3, number)
+local function bakeTint(doneness: number): (Color3, Color3)
 	-- doneness: 0 raw, 1 golden (regular target), 1.6+ burnt
 	if doneness <= 1 then
-		return RAW_CRUST:Lerp(GOLD_CRUST, doneness), RAW_CHEESE:Lerp(GOLD_CHEESE, doneness), 0
+		local t = math.max(doneness, 0)
+		return RAW:Lerp(GOLDEN, t), RAW:Lerp(TOPPING_GOLDEN, t)
 	end
 	local t = math.clamp((doneness - 1) / 0.6, 0, 1)
-	return GOLD_CRUST:Lerp(BURNT_CRUST, t), GOLD_CHEESE:Lerp(BURNT_CHEESE, t), t
+	return GOLDEN:Lerp(BURNT, t), TOPPING_GOLDEN:Lerp(TOPPING_BURNT, t)
 end
 
 function Widgets.doneness(seconds: number): number
 	return seconds / Config.Oven.targets.regular
 end
 
-export type PizzaView = { frame: Frame, toppingLayer: Frame, cutLayer: Frame, set: (PizzaView, any, number) -> () }
-
-local BLISTERS = { { -0.3, -0.2 }, { 0.25, -0.35 }, { 0.1, 0.3 }, { -0.35, 0.28 }, { 0.38, 0.1 }, { -0.05, -0.45 }, { -0.1, 0.05 } }
-
-local function toppingDarken(doneness: number, burnt: number): number
-	return math.clamp((doneness - 0.8) * 0.25, 0, 0.35) + burnt * 0.3
-end
+export type PizzaView = { frame: Frame, cutLayer: Frame, set: (PizzaView, any, number) -> () }
 
 function Widgets.pizza(): PizzaView
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 300) })
+	local art = PizzaArt.new()
+	local frame = art.frame
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = frame })
-	local crust = Ui.new("Frame", { BackgroundColor3 = RAW_CRUST, Size = UDim2.fromScale(1, 1), Parent = frame }, {
-		Ui.round(),
-		Ui.stroke(C.ink, 3),
-	})
-	Ui.new("Frame", {
-		BackgroundColor3 = SAUCE,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.88, 0.88),
-		Parent = frame,
-	}, { Ui.round() })
-	local cheese = Ui.new("Frame", {
-		BackgroundColor3 = RAW_CHEESE,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.82, 0.82),
-		Parent = frame,
-	}, { Ui.round() })
-	local blisters = {}
-	for _, b in BLISTERS do
-		table.insert(blisters, Ui.new("Frame", {
-			BackgroundColor3 = GOLD_CRUST,
-			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5 + b[1] * 0.5, 0.5 + b[2] * 0.5),
-			Size = UDim2.fromScale(0.07, 0.05),
-			Parent = frame,
-		}, { Ui.round() }))
-	end
-	local toppingLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = frame })
-	local cutLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
+	-- Inside the pizza's frame, so cut lines move with its wobble.
+	local cutLayer = Ui.new("Frame", { Name = "Cuts", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
 
-	-- Pieces and cut lines are rebuilt only when their content changes; per-frame bake
-	-- updates just recolour what already exists.
-	local contentKey = ""
-	local pieces: { { frame: Frame, base: Color3 } } = {}
-	local lastDarken = -1
-
+	local cutKey = ""
 	local view: PizzaView = {
 		frame = frame,
-		toppingLayer = toppingLayer,
 		cutLayer = cutLayer,
 		set = function(_v: PizzaView, pizza: any, doneness: number)
-			local crustC, cheeseC, burnt = bakeColours(doneness)
-			crust.BackgroundColor3 = crustC
-			cheese.BackgroundColor3 = cheeseC
-			local blisterAlpha = if doneness < 0.6 then 1 else math.clamp(1 - (doneness - 0.6) * 2, 0.15, 1)
-			for _, b in blisters do
-				b.BackgroundTransparency = blisterAlpha
-				b.BackgroundColor3 = GOLD_CRUST:Lerp(BURNT_CRUST, burnt)
+			art:set(pizza, false)
+			local base, topping = bakeTint(doneness)
+			for _, d in frame:GetDescendants() do
+				if d:IsA("ImageLabel") then
+					if d.Name == "Base" then
+						d.ImageColor3 = base
+					elseif d.Name == "Sprite" then
+						d.ImageColor3 = topping
+					end
+				end
 			end
-
 			local parts = { tostring(pizza.id) }
-			for _, piece in pizza.toppings do
-				table.insert(parts, string.format("%s%.3f%.3f%s", piece.ingredient, piece.x, piece.y, if piece.pending then "p" else ""))
-			end
-			table.insert(parts, "|")
 			for _, line in pizza.cuts or {} do
 				table.insert(parts, string.format("%.3f%.3f%.3f%.3f", line.x1, line.y1, line.x2, line.y2))
 			end
 			local key = table.concat(parts, ",")
-			local darken = toppingDarken(doneness, burnt)
-			if key ~= contentKey then
-				contentKey = key
-				Ui.clear(toppingLayer)
-				pieces = {}
-				for _, piece in pizza.toppings do
-					local f = Widgets.drawPiece(toppingLayer, piece, 0, piece.pending == true)
-					table.insert(pieces, { frame = f, base = Recipes.Ingredients[piece.ingredient].colour })
-				end
+			if key ~= cutKey then
+				cutKey = key
 				Ui.clear(cutLayer)
 				for _, line in pizza.cuts or {} do
 					Widgets.drawCut(cutLayer, line, C.paper)
-				end
-				lastDarken = -1
-			end
-			if math.abs(darken - lastDarken) > 0.005 then
-				lastDarken = darken
-				local tint = Color3.new(0.15, 0.08, 0.05)
-				for _, p in pieces do
-					local colour = p.base:Lerp(tint, darken)
-					p.frame.BackgroundColor3 = colour
-					local stroke = p.frame:FindFirstChildOfClass("UIStroke")
-					if stroke and stroke.Color ~= C.ink then
-						stroke.Color = colour
-					end
 				end
 			end
 		end,
 	}
 	return view
-end
-
-function Widgets.drawPiece(layer: Frame, piece: any, darken: number, pending: boolean): Frame
-	local info = Recipes.Ingredients[piece.ingredient]
-	local colour = info.colour:Lerp(Color3.new(0.15, 0.08, 0.05), darken)
-	local s = info.size
-	local f = Ui.new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + piece.x * 0.5, 0.5 + piece.y * 0.5),
-		Size = UDim2.fromScale(s, s),
-		BackgroundColor3 = colour,
-		BackgroundTransparency = if info.shape == "ring" then 1 else (if pending then 0.35 else 0),
-		ZIndex = 2,
-		Parent = layer,
-	}, { Ui.round() })
-	local stroke = Ui.stroke(if info.shape == "ring" then colour else C.ink, if info.shape == "ring" then 4 else 1.5)
-	stroke.Parent = f
-	if info.shape == "disc" then
-		Ui.new("Frame", {
-			BackgroundColor3 = colour:Lerp(Color3.new(0, 0, 0), 0.25),
-			Position = UDim2.fromScale(0.25, 0.3),
-			Size = UDim2.fromScale(0.18, 0.18),
-			ZIndex = 2,
-			Parent = f,
-		}, { Ui.round() })
-	elseif info.shape == "cap" then
-		Ui.new("Frame", {
-			BackgroundColor3 = colour:Lerp(Color3.new(0.3, 0.2, 0.1), 0.4),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0.55),
-			Size = UDim2.fromScale(0.3, 0.4),
-			ZIndex = 2,
-			Parent = f,
-		}, { Ui.corner(3) })
-	end
-	return f
 end
 
 function Widgets.drawCut(layer: Frame, line: any, colour: Color3)

@@ -35,21 +35,25 @@ function Order.new(ctx: any, container: Frame)
 		Ui.new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			Padding = UDim.new(0, 16),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Bottom,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
+	-- Status hints sit on the counter below the customers so they never cover a card.
 	local hint = Ui.text({
 		Text = "",
-		FontFace = Theme.Font.bodySemi,
-		TextSize = if ctx.compact then 16 else 22,
+		FontFace = Theme.Font.display,
+		TextSize = if ctx.compact then 16 else 24,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromScale(0.5, 0.35),
+		Position = UDim2.fromScale(0.5, 0.86),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromScale(0.8, 0.2),
+		Size = UDim2.fromScale(0.9, 0.2),
+		ZIndex = 3,
 		Parent = frame,
 	})
 	local selected: number? = nil
+	-- Take order is the rail's action, like Send to oven and Serve.
 	local takeButton = Widgets.button("Take order", function()
 		if selected then
 			local id = selected
@@ -61,12 +65,8 @@ function Order.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
-	local bh = if ctx.compact then 52 else 72
-	takeButton.frame.Size = UDim2.fromOffset(bh * 3.1, bh)
-	takeButton.frame.AnchorPoint = Vector2.new(1, 1)
-	takeButton.frame.Position = UDim2.new(1, -16, 1, -12)
-	takeButton.frame.ZIndex = 5
-	takeButton.frame.Parent = frame
+	takeButton.frame.Size = UDim2.fromScale(1, 1)
+	takeButton.frame.Parent = ctx.actionHost("Order")
 
 	local cards: { [number]: any } = {}
 
