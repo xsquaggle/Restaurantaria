@@ -1049,7 +1049,8 @@ RunService.RenderStepped:Connect(function()
 		current.tick(now)
 	end
 	-- The pointer runs on the first shift only, until each station's action has been done.
-	local firstShift = ((snap.profile or {}).shiftsCompleted or 0) == 0
+	-- (Studio captures can hide it with the HideTutorial attribute on the screen gui.)
+	local firstShift = ((snap.profile or {}).shiftsCompleted or 0) == 0 and not gui:GetAttribute("HideTutorial")
 	local hint = nil
 	if firstShift and not snap.finished and current and current.hint and not ctx.learned[ctx.station] then
 		hint = current.hint(snap, now)
