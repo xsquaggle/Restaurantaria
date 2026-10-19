@@ -1133,6 +1133,8 @@ RunService.RenderStepped:Connect(function()
 	local status = if current and current.status and not snap.finished then current.status(snap, now) else nil
 	local line = if hint and hint.text ~= "" then hint else status
 	ui.hintStrip:set(line and line.text, line and line.legend)
+	-- Anything shown again (the strip, the summary, a station) gets back art freed while hidden.
+	Art.restore(Players.LocalPlayer.PlayerGui)
 	ui.stations.Order.tick(now)
 end)
 

@@ -157,17 +157,27 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 	return false
 end
 
--- Clear a label so the image it showed can be freed (Studio dev art only holds memory while
--- some live label shows it).
--- Re-apply the art of labels under `root` whose image was freed while they were hidden.
+-- Re-apply the art of labels at or under `root` that are showing again after their image
+-- was freed while they were hidden. Cheap when nothing is stale, so it can run every frame.
 function Art.restore(root: Instance)
-	for label, name in shown do
-		if stale[label] and label:IsDescendantOf(root) then
-			Art.apply(label :: ImageLabel, name)
+	if next(stale) == nil then
+		return
+	end
+	local due = {}
+	for label in stale do
+		if not label:IsDescendantOf(game) or shown[label] == nil then
+			stale[label] = nil
+		elseif (label == root or label:IsDescendantOf(root)) and isShowing(label) then
+			table.insert(due, label)
 		end
+	end
+	for _, label in due do
+		Art.apply(label :: ImageLabel, shown[label])
 	end
 end
 
+-- Clear a label so the image it showed can be freed (Studio dev art only holds memory while
+-- some live label shows it).
 function Art.release(label: ImageLabel | ImageButton)
 	shown[label] = nil
 	stale[label] = nil
