@@ -208,9 +208,13 @@ Assets.Meta = {
 	-- Oven unit v2 (trimmed 1608x1865; v1's layout fractions hold within about 0.5%): the window, gauge dial centre and radius, number
 	-- medallion and the empty lower panel as fractions of the oven image.
 	oven = {
-		aspect = 1608 / 1865,
+		aspect = 1612 / 1857,
 		window = { x = 0.035, y = 0.237, w = 0.922, h = 0.512 },
-		dial = { x = 0.5, y = 0.122, r = 0.117 },
+		-- Gauge arc centre, measured on v3 (band edges agree within 1 degree at three radii).
+		dial = { x = 0.5, y = 0.144, r = 0.117 },
+		-- Angles (degrees from straight up) of the v3 arc's band edges: cold start, teal,
+		-- green, amber, red, and the needle's stop at the red end.
+		gaugeEdges = { -88, -46, -17, 12, 48.5, 88 },
 		plate = { x = 0.5, y = 0.205, w = 0.27, h = 0.05 },
 		medallion = { x = 0.2, y = 0.136, d = 0.12 },
 		panel = { x = 0.05, y = 0.8, w = 0.9, h = 0.17 },
