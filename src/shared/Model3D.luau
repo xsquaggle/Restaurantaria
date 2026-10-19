@@ -1,7 +1,8 @@
 --!strict
 -- Generated 3D models (Higgsfield output, refined in Blender) for the 3D parts of the game.
 --
--- Until models can be uploaded, Studio holds each one as packed geometry in
+-- Imported models (Studio's 3D importer, uploaded) live as MeshParts in
+-- ReplicatedStorage.Models3D. Until a model is imported, Studio can hold each one as packed geometry in
 -- ReplicatedStorage.DevModels.<name> (written by tools/GlbImport.luau) with its colour map in
 -- DevArt as <name>_base. build() turns that into a MeshPart through an EditableMesh. Code
 -- never shapes a model: vertices, UVs and textures come from the file as generated.
@@ -23,12 +24,24 @@ local function folder(name: string): Instance?
 	return root and root:FindFirstChild(name)
 end
 
+-- A model brought in through Studio's 3D importer (uploaded mesh and textures), kept as a
+-- MeshPart in ReplicatedStorage.Models3D. Works on every client, unlike the dev path.
+local function imported(name: string): MeshPart?
+	local root = ReplicatedStorage:FindFirstChild("Models3D")
+	local m = root and root:FindFirstChild(name)
+	return if m and m:IsA("MeshPart") then m else nil
+end
+
 function Model3D.has(name: string): boolean
-	return folder(name) ~= nil
+	return imported(name) ~= nil or folder(name) ~= nil
 end
 
 -- Size in studs the model was stored at (its bounding box).
 function Model3D.size(name: string): Vector3?
+	local m = imported(name)
+	if m then
+		return m.Size
+	end
 	local f = folder(name)
 	return f and f:GetAttribute("Size") :: Vector3
 end
@@ -36,6 +49,13 @@ end
 -- Geometry layout: u32 vertex count, u32 triangle count, then per vertex 8 f32
 -- (position xyz, normal xyz, uv), then 3 u32 per triangle.
 function Model3D.build(name: string): MeshPart?
+	local m = imported(name)
+	if m then
+		local copy = m:Clone()
+		copy.Anchored = true
+		copy.CanCollide = false
+		return copy
+	end
 	local f = folder(name)
 	if not f then
 		warn("[Model3D] missing model: " .. name)
@@ -48,7 +68,13 @@ function Model3D.build(name: string): MeshPart?
 	local packed = EncodingService:Base64Decode(buffer.fromstring(table.concat(parts)))
 	local b = EncodingService:DecompressBuffer(packed, Enum.CompressionAlgorithm.Zstd)
 	local nv, nt = buffer.readu32(b, 0), buffer.readu32(b, 4)
-	local em = AssetService:CreateEditableMesh({})
+	local ok, em = pcall(function()
+		return AssetService:CreateEditableMesh({})
+	end)
+	if not ok or em == nil then
+		warn("[Model3D] no memory budget for " .. name)
+		return nil
+	end
 	local vids, nids, uids = table.create(nv), table.create(nv), table.create(nv)
 	for i = 0, nv - 1 do
 		local o = 8 + i * 32

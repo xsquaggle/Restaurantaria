@@ -34,10 +34,10 @@ local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local WALK_SPEED = 0.45
 local STEP_RATE = 2.2
 
--- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hangs
--- the same art in the world instead, behind the counter.
+-- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hides
+-- it (Main turns the backdrop off for world3D stations) and hangs the same art in the world.
+Order.background = "bg_order"
 local room3D = OrderRoom.available()
-Order.background = if room3D then nil else "bg_order"
 
 function Order.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Order", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
