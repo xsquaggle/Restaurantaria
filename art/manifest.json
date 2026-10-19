@@ -333,6 +333,146 @@
      "square": false
     }
    ]
+  },
+  {
+   "id": "pizza_bake_light_v1",
+   "job": "c3778957-a340-4275-b6ee-0aded2c320a6",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_c3778957-a340-4275-b6ee-0aded2c320a6.png",
+   "kind": "sprite",
+   "note": "G6 bake state: light. References: pizza_raw job + 02-bake.",
+   "outputs": [
+    {
+     "name": "pizza_bake_light",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_regular_v1",
+   "job": "5f7d80d6-4d18-463a-ac7f-4557b0ce332e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025012_5f7d80d6-4d18-463a-ac7f-4557b0ce332e.png",
+   "kind": "sprite",
+   "note": "G6 bake state: regular.",
+   "outputs": [
+    {
+     "name": "pizza_bake_regular",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_well_v1",
+   "job": "bb5bc65b-d106-4df4-a5f7-94ada038aee6",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_bb5bc65b-d106-4df4-a5f7-94ada038aee6.png",
+   "kind": "sprite",
+   "note": "G6 bake state: well done.",
+   "outputs": [
+    {
+     "name": "pizza_bake_well",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_burnt_v1",
+   "job": "feffad93-4b4c-47d1-8c81-e99edc051dc2",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_feffad93-4b4c-47d1-8c81-e99edc051dc2.png",
+   "kind": "sprite",
+   "note": "G6 bake state: burnt.",
+   "outputs": [
+    {
+     "name": "pizza_bake_burnt",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "board_cut_v1",
+   "job": "e1b16b75-0225-40b7-9d5f-b468f6f992b1",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_e1b16b75-0225-40b7-9d5f-b468f6f992b1.png",
+   "kind": "sprite",
+   "note": "G9 cutting board, reference 03-cut.",
+   "outputs": [
+    {
+     "name": "board_cut",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_v1",
+   "job": "4958c7fe-0229-4551-baf3-b7dea153aaa3",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025237_4958c7fe-0229-4551-baf3-b7dea153aaa3.png",
+   "kind": "sprite",
+   "note": "G8 oven unit, empty interior, gauge without needle, blank plates. Reference 02-bake. Trimmed 1727x1938.",
+   "outputs": [
+    {
+     "name": "prop_oven",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_needle_v1",
+   "job": "bbe70561-8abc-44b5-8bf7-db44b23fc4c3",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_bbe70561-8abc-44b5-8bf7-db44b23fc4c3.png",
+   "kind": "sprite",
+   "note": "G8 gauge needle pointing up; hub centre at 0.873 of the trimmed height. Trimmed 263x895.",
+   "outputs": [
+    {
+     "name": "prop_oven_needle",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_cutter_wheel_v1",
+   "job": "3e0f21bd-8c2d-45ed-a35f-ee5ca61aabb7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_3e0f21bd-8c2d-45ed-a35f-ee5ca61aabb7.png",
+   "kind": "sprite",
+   "note": "G9 cutter wheel, face-on. Trimmed 868x878.",
+   "outputs": [
+    {
+     "name": "prop_cutter_wheel",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_cutter_handle_v1",
+   "job": "71fa649b-4907-4b7f-8ecd-c5c8122b0206",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_71fa649b-4907-4b7f-8ecd-c5c8122b0206.png",
+   "kind": "sprite",
+   "note": "G9 cutter handle and fork; axle ring centre at 0.097 of the trimmed height. Trimmed 414x1061.",
+   "outputs": [
+    {
+     "name": "prop_cutter_handle",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "fx_oven_glow_v1",
+   "job": "351cdf3d-b496-4f91-a60a-ab8a58bd706e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_351cdf3d-b496-4f91-a60a-ab8a58bd706e.png",
+   "kind": "sprite",
+   "note": "G8 oven glow, radial.",
+   "outputs": [
+    {
+     "name": "fx_oven_glow",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
   }
  ]
 }

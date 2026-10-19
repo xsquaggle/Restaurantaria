@@ -35,6 +35,17 @@ local Assets = {
 	topping_pepper_red_2 = "",
 	topping_pepper_red_3 = "",
 	tray_pepper_mixed = "",
+	-- Bake and Cut stations: gameplay art (Claude, Higgsfield; visual-pass G6, G8, G9).
+	pizza_bake_light = "",
+	pizza_bake_regular = "",
+	pizza_bake_well = "",
+	pizza_bake_burnt = "",
+	board_cut = "",
+	prop_oven = "",
+	prop_oven_needle = "",
+	prop_cutter_wheel = "",
+	prop_cutter_handle = "",
+	fx_oven_glow = "",
 	-- Interface (Astra, UI V2 integration proof 01).
 	ui_button_primary_idle = "",
 	ui_button_primary_pressed = "",
@@ -89,6 +100,19 @@ Assets.Meta = {
 	trayAspect = 384 / 313,
 	-- The board is drawn this much wider than the pizza that sits on it.
 	boardOverPizza = 1 / 0.9,
+	-- Oven unit (trimmed 1727x1938): the window, gauge dial centre and radius, number
+	-- medallion and the empty lower panel as fractions of the oven image.
+	oven = {
+		aspect = 1727 / 1938,
+		window = { x = 0.035, y = 0.237, w = 0.922, h = 0.512 },
+		dial = { x = 0.5, y = 0.122, r = 0.117 },
+		plate = { x = 0.5, y = 0.205, w = 0.27, h = 0.05 },
+		medallion = { x = 0.2, y = 0.136, d = 0.12 },
+		panel = { x = 0.05, y = 0.8, w = 0.9, h = 0.17 },
+	},
+	needle = { aspect = 263 / 895, hub = 0.873 },
+	cutBoard = { aspect = 2227 / 1476 },
+	cutterHandle = { aspect = 414 / 1061, axle = 0.097 },
 }
 
 function Assets.get(name: string): string?

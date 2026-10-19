@@ -1,11 +1,16 @@
 --!strict
--- Bake station: both oven slots, each with its live ring, the pizza browning and Take out.
+-- Bake station: both ovens side by side as in 02-bake. Each oven is the generated oven
+-- unit; the pizza sits on its rack (scaled flat for the oven's perspective), the gauge
+-- needle sweeps from cold through the target zone toward burnt, and Take out sits on the
+-- oven's lower panel. Numbers and the gauge reading are live text on the oven's blank plates.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local Art = require(Shared.Art)
+local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
-local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
@@ -14,64 +19,116 @@ local Widgets = require(Parent.Widgets)
 local C = Theme.Colour
 local Bake = {}
 
+local OVEN = Assets.Meta.oven
+local NEEDLE = Assets.Meta.needle
+-- The pizza on the rack: share of the window it spans, and how much flatter than round it
+-- is drawn to sit in the oven's perspective.
+local PIZZA_SPAN, PIZZA_FLATTEN = 0.82, 0.58
+local NEEDLE_EASE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local GLOW_PULSE = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+
+-- Needle angle: -90 (cold, pointing left) up to 0 (straight up, the green target zone) at
+-- the order's target, then on toward +90 (brown, burnt).
+local function needleAngle(target: number, seconds: number): number
+	if seconds <= target then
+		return -90 + 90 * math.clamp(seconds / target, 0, 1)
+	end
+	return 90 * math.clamp((seconds - target) / Config.Oven.burntAfter, 0, 1)
+end
+
+local function rect(parent: GuiObject, r: any, props: { [string]: any }?): any
+	local p = props or {}
+	p.Position = UDim2.fromScale(r.x, r.y)
+	p.Size = UDim2.fromScale(r.w, r.h)
+	p.BackgroundTransparency = 1
+	p.Parent = parent
+	return p
+end
 
 function Bake.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Bake", BackgroundColor3 = Color3.fromRGB(92, 64, 52), Size = UDim2.fromScale(1, 1), Parent = container })
 	local area = ctx.stationSize :: Vector2
-	local pad = if ctx.compact then 8 else 16
+	local pad = if ctx.compact then 6 else 16
 	local slotW = (area.X - pad * 3) / 2
+	local ovenH = math.min(area.Y - pad * 2, slotW / OVEN.aspect)
+	local ovenW = ovenH * OVEN.aspect
 	local slots = {}
 
 	for i = 1, Config.Oven.slots do
-		local panel = Ui.new("Frame", {
-			BackgroundColor3 = Color3.fromRGB(60, 40, 34),
-			Position = UDim2.fromOffset(pad + (i - 1) * (slotW + pad), pad),
-			Size = UDim2.fromOffset(slotW, area.Y - pad * 2),
+		local oven = Ui.new("ImageLabel", {
+			Name = "Oven" .. i,
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Crop,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(pad + (i - 1) * (slotW + pad) + slotW / 2, area.Y / 2),
+			Size = UDim2.fromOffset(ovenW, ovenH),
 			Parent = frame,
-		}, { Ui.corner(20), Ui.stroke(C.ink, 3) })
-		local title = Ui.text({
-			Text = "Oven " .. i,
+		})
+		Art.apply(oven, "prop_oven")
+
+		local number = Ui.text({
+			Text = tostring(i),
 			FontFace = Theme.Font.display,
-			TextColor3 = C.paper,
-			TextSize = if ctx.compact then 18 else 26,
-			Position = UDim2.fromOffset(12, 6),
-			Size = UDim2.new(1, -24, 0, if ctx.compact then 22 else 32),
-			Parent = panel,
+			TextSize = math.max(16, math.round(ovenW * OVEN.medallion.d * 0.7)),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(OVEN.medallion.x, OVEN.medallion.y),
+			Size = UDim2.fromOffset(ovenW * OVEN.medallion.d, ovenW * OVEN.medallion.d),
+			ZIndex = 3,
+			Parent = oven,
 		})
-		local info = Ui.text({
-			Text = "Empty",
-			FontFace = Theme.Font.bodySemi,
-			TextColor3 = C.paper,
-			TextSize = if ctx.compact then 16 else 20,
-			Position = UDim2.fromOffset(12, title.Size.Y.Offset + 8),
-			Size = UDim2.new(1, -24, 0, if ctx.compact then 20 else 26),
-			Parent = panel,
+
+		-- The needle turns about its hub, which sits on the dial centre.
+		local dialR = ovenW * OVEN.dial.r
+		local pivot = Ui.new("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(OVEN.dial.x, OVEN.dial.y),
+			Size = UDim2.fromOffset(dialR * 2, dialR * 2),
+			Rotation = -90,
+			ZIndex = 3,
+			Parent = oven,
 		})
-		local btnH = if ctx.compact then 48 else 64
-		local bodyTop = title.Size.Y.Offset + info.Size.Y.Offset + 16
-		local bodyH = area.Y - pad * 2 - bodyTop - btnH - 20
-		local mouth = Ui.new("Frame", {
-			BackgroundColor3 = Color3.fromRGB(34, 22, 18),
-			Position = UDim2.fromOffset(12, bodyTop),
-			Size = UDim2.new(1, -24, 0, bodyH),
-			Parent = panel,
-		}, { Ui.corner(14) })
-		local glow = Ui.new("UIGradient", {
-			Color = ColorSequence.new(Color3.fromRGB(230, 120, 40), Color3.fromRGB(60, 24, 12)),
-			Rotation = 90,
-			Parent = mouth,
+		local needleH = dialR * 0.95 / NEEDLE.hub
+		local needle = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Crop,
+			AnchorPoint = Vector2.new(0.5, NEEDLE.hub),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(needleH * NEEDLE.aspect, needleH),
+			ZIndex = 3,
+			Parent = pivot,
 		})
-		glow.Enabled = false
+		Art.apply(needle, "prop_oven_needle")
+		local reading = Ui.text(rect(oven, OVEN.plate, {
+			Text = "",
+			FontFace = Theme.Font.display,
+			TextSize = math.max(14, math.round(ovenH * OVEN.plate.h * 0.75)),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			ZIndex = 3,
+		}))
+
+		local window = Ui.new("Frame", rect(oven, OVEN.window, { Name = "Window", ZIndex = 2 }))
+		local glow = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			ImageTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.6),
+			Size = UDim2.fromScale(1.1, 1.3),
+			ZIndex = 2,
+			Parent = window,
+		})
+		Art.apply(glow, "fx_oven_glow")
 		local view = Widgets.pizza()
-		view.frame.Size = UDim2.fromScale(0.9, 0.9)
-		view.frame.AnchorPoint = Vector2.new(0, 0.5)
-		view.frame.Position = UDim2.new(0, 10, 0.5, 0)
-		view.frame.Parent = mouth
-		local ringSize = math.min(bodyH * 0.8, (slotW - 24) * 0.42)
-		local ring = Widgets.ring(ringSize)
-		ring.frame.AnchorPoint = Vector2.new(1, 0.5)
-		ring.frame.Position = UDim2.new(1, -10, 0.5, 0)
-		ring.frame.Parent = mouth
+		local aspect = view.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
+		aspect.AspectRatio = 1 / PIZZA_FLATTEN
+		view.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		view.frame.Position = UDim2.fromScale(0.5, 0.58)
+		view.frame.Size = UDim2.fromScale(PIZZA_SPAN, 1)
+		view.frame.ZIndex = 3
+		view.frame.Parent = window
+
 		local slot: any = { pizza = nil }
 		local button = Widgets.button("Take out", function()
 			local pizza = slot.pizza
@@ -88,11 +145,16 @@ function Bake.new(ctx: any, container: Frame)
 				end)
 			end
 		end)
-		button.frame.Size = UDim2.new(1, -24, 0, btnH)
-		button.frame.AnchorPoint = Vector2.new(0.5, 1)
-		button.frame.Position = UDim2.new(0.5, 0, 1, -10)
-		button.frame.Parent = panel
-		slot.panel, slot.info, slot.view, slot.ring, slot.button, slot.glow = panel, info, view, ring, button, glow
+		-- On the oven's lower panel; phones keep the 48 px touch floor.
+		local btnH = math.max(if ctx.compact then 48 else 56, ovenH * OVEN.panel.h * 0.72)
+		button.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		button.frame.Position = UDim2.new(0.5, 0, OVEN.panel.y + OVEN.panel.h / 2, 0)
+		button.frame.Size = UDim2.new(OVEN.panel.w * 0.86, 0, 0, btnH)
+		button.frame.ZIndex = 4
+		button.frame.Parent = oven
+
+		slot.view, slot.button, slot.glow, slot.pivot, slot.reading, slot.number = view, button, glow, pivot, reading, number
+		slot.angle = -90
 		slots[i] = slot
 	end
 
@@ -111,14 +173,16 @@ function Bake.new(ctx: any, container: Frame)
 			end
 			local pizza = slot.pizza
 			slot.view.frame.Visible = pizza ~= nil
-			slot.glow.Enabled = pizza ~= nil
 			slot.button:setEnabled(pizza ~= nil and not ctx.pending[pizza.id])
-			if pizza then
-				local customer = ctx.customer(snap, pizza.ticketId)
-				slot.info.Text = string.format("%s · %s · %s", Recipes.Cast[customer.cast].name, Recipes.ById[customer.order.recipe].name, Recipes.Doneness[customer.order.bake].short)
-			else
-				slot.info.Text = "Empty"
-				slot.ring:set(0, C.oven, "", "")
+			if not pizza then
+				slot.reading.Text = "Empty"
+				slot.angle = -90
+				TweenService:Create(slot.pivot, NEEDLE_EASE, { Rotation = -90 }):Play()
+				if slot.pulse then
+					slot.pulse:Cancel()
+					slot.pulse = nil
+				end
+				slot.glow.ImageTransparency = 1
 			end
 		end
 	end
@@ -130,9 +194,18 @@ function Bake.new(ctx: any, container: Frame)
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local seconds = now - pizza.bakeStart
 				local status = ctx.ovenStatus(customer.order.bake, seconds)
-				slot.ring:set(status.progress, status.colour, "", status.text)
-				slot.view:set(pizza, Widgets.doneness(seconds))
+				slot.reading.Text = if status.ready and not status.burnt and status.text == "Ready!" then "Ready" else status.text
+				slot.pivot.Rotation = needleAngle(Config.Oven.targets[customer.order.bake], seconds)
+				slot.view:set(pizza, Widgets.doneness(seconds), status.burnt)
 				slot.button:setHighlighted(status.ready)
+				-- The glow warms up while baking and pulses once the pizza is ready.
+				if status.ready and not slot.pulse then
+					slot.glow.ImageTransparency = 0.15
+					slot.pulse = TweenService:Create(slot.glow, GLOW_PULSE, { ImageTransparency = 0.5 })
+					slot.pulse:Play()
+				elseif not status.ready then
+					slot.glow.ImageTransparency = 1 - 0.45 * math.clamp(status.progress, 0, 1)
+				end
 			end
 		end
 	end

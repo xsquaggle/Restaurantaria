@@ -176,7 +176,7 @@ function ctx.ovenStatus(bakeId: string, seconds: number): any
 	elseif state == "over" then
 		return { progress = 1, colour = C.tomato, text = string.format("+%ds", math.floor(seconds - target)), ready = true, alert = true }
 	end
-	return { progress = 1, colour = C.tomato, text = "Burnt", ready = true, alert = true }
+	return { progress = 1, colour = C.tomato, text = "Burnt", ready = true, alert = true, burnt = true }
 end
 
 ------------------------------------------------------------------------------------------

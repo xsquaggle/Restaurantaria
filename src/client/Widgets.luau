@@ -659,35 +659,58 @@ end
 
 ------------------------------------------------------------------------------------------
 -- The pizza after the topping station: the same generated base and topping sprites the
--- Topping station uses (PizzaArt), so one pizza travels through every station. Until the
--- drawn bake states exist (G6/G7 in visual-pass/audit.md) the bake is shown as a tint on
--- those approved images: crust and cheese go golden, then dark when burnt, and toppings
--- only darken lightly so they stay recognizable (per Astra's correction). Contact shadows
--- keep their own tint.
+-- Topping station uses (PizzaArt), so one pizza travels through every station. The crust
+-- and cheese crossfade through the drawn bake states (raw, light, regular, well done,
+-- burnt; G6) by how long the pizza has baked. Toppings only darken lightly as a tint until
+-- their baked drawings exist (G7), so ingredients stay recognizable (per Astra's
+-- correction). Contact shadows keep their own tint.
 
-local RAW, GOLDEN, BURNT = Color3.new(1, 1, 1), Color3.fromRGB(255, 214, 160), Color3.fromRGB(104, 64, 42)
-local TOPPING_GOLDEN, TOPPING_BURNT = Color3.fromRGB(236, 218, 198), Color3.fromRGB(116, 80, 60)
+-- Seconds of baking at which each drawn state is fully shown; the last is the burnt look.
+local BAKE_STATES = {
+	{ art = "pizza_raw", at = 0 },
+	{ art = "pizza_bake_light", at = Config.Oven.targets.light },
+	{ art = "pizza_bake_regular", at = Config.Oven.targets.regular },
+	{ art = "pizza_bake_well", at = Config.Oven.targets.well },
+	{ art = "pizza_bake_burnt", at = Config.Oven.targets.well + Config.Oven.burntAfter },
+}
 
-local function bakeTint(doneness: number): (Color3, Color3)
-	-- doneness: 0 raw, 1 golden (regular target), 1.6+ burnt
-	if doneness <= 1 then
-		local t = math.max(doneness, 0)
-		return RAW:Lerp(GOLDEN, t), RAW:Lerp(TOPPING_GOLDEN, t)
+local RAW, TOPPING_GOLDEN, TOPPING_BURNT = Color3.new(1, 1, 1), Color3.fromRGB(236, 218, 198), Color3.fromRGB(116, 80, 60)
+
+local function toppingTint(seconds: number): Color3
+	local regular = Config.Oven.targets.regular
+	if seconds <= regular then
+		return RAW:Lerp(TOPPING_GOLDEN, math.max(seconds, 0) / regular)
 	end
-	local t = math.clamp((doneness - 1) / 0.6, 0, 1)
-	return GOLDEN:Lerp(BURNT, t), TOPPING_GOLDEN:Lerp(TOPPING_BURNT, t)
+	return TOPPING_GOLDEN:Lerp(TOPPING_BURNT, math.clamp((seconds - regular) / (BAKE_STATES[#BAKE_STATES].at - regular), 0, 1))
+end
+
+-- The two neighbouring drawn states and how far the pizza is from the first to the second.
+local function bakeBlend(seconds: number): (number, number)
+	for i = 1, #BAKE_STATES - 1 do
+		if seconds < BAKE_STATES[i + 1].at then
+			return i, math.clamp((seconds - BAKE_STATES[i].at) / (BAKE_STATES[i + 1].at - BAKE_STATES[i].at), 0, 1)
+		end
+	end
+	return #BAKE_STATES - 1, 1
 end
 
 function Widgets.doneness(seconds: number): number
 	return seconds / Config.Oven.targets.regular
 end
 
-export type PizzaView = { frame: Frame, cutLayer: Frame, set: (PizzaView, any, number) -> () }
+export type PizzaView = { frame: Frame, cutLayer: Frame, set: (PizzaView, any, number, boolean?) -> () }
 
 function Widgets.pizza(): PizzaView
 	local art = PizzaArt.new()
 	local frame = art.frame
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = frame })
+	-- The drawn bake states replace PizzaArt's raw base: the lower one is fully shown and
+	-- the upper one fades in over it.
+	local base = frame:FindFirstChild("Base") :: ImageLabel
+	base.ImageTransparency = 1
+	local lower = Ui.new("ImageLabel", { Name = "BakeLower", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
+	local upper = Ui.new("ImageLabel", { Name = "BakeUpper", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
+	local shownState = 0
 	-- Inside the pizza's frame, so cut lines move with its wobble.
 	local cutLayer = Ui.new("Frame", { Name = "Cuts", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
 
@@ -695,16 +718,23 @@ function Widgets.pizza(): PizzaView
 	local view: PizzaView = {
 		frame = frame,
 		cutLayer = cutLayer,
-		set = function(_v: PizzaView, pizza: any, doneness: number)
+		set = function(_v: PizzaView, pizza: any, doneness: number, burnt: boolean?)
 			art:set(pizza, false)
-			local base, topping = bakeTint(doneness)
+			local seconds = doneness * Config.Oven.targets.regular
+			if burnt then
+				seconds = math.max(seconds, BAKE_STATES[#BAKE_STATES].at)
+			end
+			local i, t = bakeBlend(seconds)
+			if i ~= shownState then
+				shownState = i
+				Art.apply(lower, BAKE_STATES[i].art)
+				Art.apply(upper, BAKE_STATES[i + 1].art)
+			end
+			upper.ImageTransparency = 1 - t
+			local tint = toppingTint(seconds)
 			for _, d in frame:GetDescendants() do
-				if d:IsA("ImageLabel") then
-					if d.Name == "Base" then
-						d.ImageColor3 = base
-					elseif d.Name == "Sprite" then
-						d.ImageColor3 = topping
-					end
+				if d:IsA("ImageLabel") and d.Name == "Sprite" then
+					d.ImageColor3 = tint
 				end
 			end
 			local parts = { tostring(pizza.id) }

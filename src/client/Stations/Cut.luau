@@ -2,6 +2,7 @@
 -- Cutting station: drag across the pizza to cut; each line is a chord through the drag.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
@@ -18,49 +19,49 @@ local Cut = {}
 
 function Cut.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Cut", BackgroundColor3 = Color3.fromRGB(214, 196, 168), Size = UDim2.fromScale(1, 1), Parent = container })
-	-- Composition follows 03-cut: the board fills the middle of the work surface, the hint
-	-- sits top left, Undo bottom left, and Serve is the rail's action. The ticket is the
-	-- rail's own, so the station does not repeat it.
+	-- Composition follows 03-cut: the cutting board fills the work surface with the pizza
+	-- left of centre and the cutter resting to its right; the hint sits top left, Undo
+	-- bottom left, and Serve is the rail's action. The ticket is the rail's own, so the
+	-- station does not repeat it.
 	local pad = if ctx.compact then 8 else 16
 	local area = ctx.stationSize :: Vector2
 	local hintH = if ctx.compact then 40 else 64
 	local undoH = if ctx.compact then 48 else math.clamp(math.round(area.Y * 0.08), 52, 64)
 	local undoW = if ctx.compact then 112 else math.clamp(math.round(area.X * 0.16), 150, 220)
-	-- The board takes the height left between the hint and Undo rows when they would
-	-- otherwise overlap it, and the full height when the sides have room for them.
-	local boardD = math.min(area.Y - pad * 2, area.X - pad * 2)
-	local sideRoom = (area.X - boardD) / 2 - pad * 2
-	if sideRoom < undoW then
-		boardD = math.min(area.X - (undoW + pad * 2) * 2, area.Y - pad * 2)
-	end
-	local pizzaSize = boardD / Assets.Meta.boardOverPizza
+	local boardAspect = Assets.Meta.cutBoard.aspect
+	local boardH = math.min(area.Y - pad * 2, (area.X - pad * 2) / boardAspect)
+	local boardW = boardH * boardAspect
+	local pizzaSize = boardH * 0.9
+	-- Pizza centre in station pixels: left of the board's centre to leave the cutter room.
+	local pizzaX, pizzaY = area.X / 2 - boardW * 0.06, area.Y / 2
 
 	local board = Ui.new("ImageLabel", {
 		Name = "Board",
 		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Crop,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(boardD, boardD),
+		Size = UDim2.fromOffset(boardW, boardH),
 		Parent = frame,
 	})
-	Art.apply(board, "board_round")
+	Art.apply(board, "board_cut")
 	local view = Widgets.pizza()
 	view.frame.Size = UDim2.fromOffset(pizzaSize, pizzaSize)
 	view.frame.AnchorPoint = Vector2.new(0.5, 0.5)
-	view.frame.Position = UDim2.fromScale(0.5, 0.5)
+	view.frame.Position = UDim2.fromOffset(pizzaX, pizzaY)
 	view.frame.ZIndex = 2
-	view.frame.Parent = board
+	view.frame.Parent = frame
 	local preview = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4, Parent = view.frame })
 	local empty = Ui.text({
 		Text = "Take a pizza out of the oven to cut it",
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 16 else 24,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.fromScale(0.7, 0.3),
+		Size = UDim2.fromOffset(pizzaSize * 0.7, pizzaSize * 0.3),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromOffset(pizzaX, pizzaY),
 		ZIndex = 5,
-		Parent = board,
+		Parent = frame,
 	})
 
 	local current: any = nil
@@ -73,7 +74,7 @@ function Cut.new(ctx: any, container: Frame)
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(pad, pad),
-		Size = UDim2.fromOffset(math.max(undoW, (area.X - boardD) / 2 - pad * 2 + boardD * 0.18), hintH * 2),
+		Size = UDim2.fromOffset(math.max(undoW, pizzaX - pizzaSize * 0.42 - pad), hintH * 2),
 		ZIndex = 6,
 		Parent = frame,
 	})
@@ -106,6 +107,68 @@ function Cut.new(ctx: any, container: Frame)
 	serve.frame.Size = UDim2.fromScale(1, 1)
 	serve.frame.Parent = ctx.actionHost("Cut")
 
+	-- The cutter: the generated wheel on its handle, resting on the board right of the
+	-- pizza. While cutting it follows the pointer, its handle trailing the stroke and the
+	-- wheel spinning with the distance rolled, then it glides back to rest.
+	local wheelD = pizzaSize * 0.3
+	local handleH = pizzaSize * 0.62
+	local handle = Assets.Meta.cutterHandle
+	local axleY = wheelD / 2
+	local holderH = axleY + handleH * (1 - handle.axle)
+	local cutter = Ui.new("Frame", {
+		Name = "Cutter",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, axleY / holderH),
+		Size = UDim2.fromOffset(wheelD, holderH),
+		ZIndex = 6,
+		Parent = frame,
+	})
+	local handleImg = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Crop,
+		AnchorPoint = Vector2.new(0.5, handle.axle),
+		Position = UDim2.new(0.5, 0, 0, axleY),
+		Size = UDim2.fromOffset(handleH * handle.aspect, handleH),
+		ZIndex = 1,
+		Parent = cutter,
+	})
+	Art.apply(handleImg, "prop_cutter_handle")
+	local wheel = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, axleY),
+		Size = UDim2.fromOffset(wheelD, wheelD),
+		ZIndex = 2,
+		Parent = cutter,
+	})
+	Art.apply(wheel, "prop_cutter_wheel")
+	local rest = UDim2.fromOffset(math.min(pizzaX + pizzaSize * 0.56, area.X / 2 + boardW * 0.5 - wheelD * 0.6), pizzaY - pizzaSize * 0.12)
+	local REST_ANGLE = -32
+	cutter.Position = rest
+	cutter.Rotation = REST_ANGLE
+	local GLIDE = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local PICK = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local lastPoint: Vector2? = nil
+
+	local function toStation(position: Vector3): Vector2
+		return Vector2.new(position.X, position.Y) - frame.AbsolutePosition
+	end
+	local function follow(point: Vector2)
+		local prev = lastPoint
+		lastPoint = point
+		cutter.Position = UDim2.fromOffset(point.X, point.Y)
+		if prev then
+			local d = point - prev
+			if d.Magnitude > 0.5 then
+				-- Handle trails the stroke; turn toward it smoothly so jitter doesn't shake it.
+				local target = math.deg(math.atan2(d.X, -d.Y))
+				local delta = (target - cutter.Rotation + 180) % 360 - 180
+				cutter.Rotation += delta * 0.35
+				wheel.Rotation += math.deg(d.Magnitude / (wheelD / 2))
+			end
+		end
+	end
+
 	-- Drag to cut, with a live preview chord. Drags may start anywhere on the board, so a
 	-- stroke that begins just off the crust still counts.
 	local dragStart: Vector2? = nil
@@ -118,6 +181,9 @@ function Cut.new(ctx: any, container: Frame)
 			local x, y = ctx.toLocal(view.frame, input.Position)
 			dragStart = Vector2.new(math.clamp(x, -1.6, 1.6), math.clamp(y, -1.6, 1.6))
 			dragInput = input
+			local point = toStation(input.Position)
+			lastPoint = point
+			TweenService:Create(cutter, PICK, { Position = UDim2.fromOffset(point.X, point.Y) }):Play()
 		end
 	end)
 	ctx.connect(UserInputService.InputChanged, function(input: InputObject)
@@ -125,6 +191,7 @@ function Cut.new(ctx: any, container: Frame)
 			return
 		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput then
+			follow(toStation(input.Position))
 			local x, y = ctx.toLocal(view.frame, input.Position)
 			Ui.clear(preview)
 			local s = dragStart :: Vector2
@@ -141,8 +208,9 @@ function Cut.new(ctx: any, container: Frame)
 			return
 		end
 		local s = dragStart :: Vector2
-		dragStart, dragInput = nil, nil
+		dragStart, dragInput, lastPoint = nil, nil, nil
 		Ui.clear(preview)
+		TweenService:Create(cutter, GLIDE, { Position = rest, Rotation = REST_ANGLE }):Play()
 		if not current then
 			return
 		end
@@ -164,11 +232,8 @@ function Cut.new(ctx: any, container: Frame)
 		if current then
 			local customer = ctx.customer(snap, current.ticketId)
 			local cuts = #current.cuts
-			-- Phones keep both lines short so they stay clear of the board.
-			guide.Text = if ctx.compact
-				then string.format("Cut into %d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
-				else string.format("Cut into %d slices\nDrag across the centre: %d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
-			view:set(current, Widgets.doneness(current.bakeSeconds or 0))
+			guide.Text = string.format("Cut into %d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)
 		else
 			guide.Text = ""
