@@ -561,6 +561,34 @@
      "square": false
     }
    ]
+  },
+  {
+   "id": "fx_cut_groove_v2",
+   "job": "029131cb-6365-4251-8bb9-7067f0a296f7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_031912_029131cb-6365-4251-8bb9-7067f0a296f7.png",
+   "kind": "sprite",
+   "note": "G9 cut separation with cheese strands, replaces v1 strip if it reads better.",
+   "outputs": [
+    {
+     "name": "fx_cut_groove_b",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_oven_glass_v1",
+   "job": "c93c5042-bdcc-41d2-b66b-fe5a600c6a91",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_031911_c93c5042-bdcc-41d2-b66b-fe5a600c6a91.png",
+   "kind": "sprite",
+   "note": "G8 oven window glass with reflections and steam, over the pizza.",
+   "outputs": [
+    {
+     "name": "fx_oven_glass",
+     "side": 1024,
+     "square": false
+    }
+   ]
   }
  ]
 }

@@ -23,7 +23,8 @@ local sizes: { [string]: Vector2 } = {}
 local reported: { [string]: boolean } = {}
 -- Which art each label shows, so images no label shows any more can be freed when Studio's
 -- EditableImage memory budget runs out.
-local shown: { [Instance]: string } = setmetatable({}, { __mode = "k" }) :: any
+-- (Strong keys: Roblox can collect an Instance's weak-table key while the Instance still lives.)
+local shown: { [Instance]: string } = {}
 
 local function devFolder(name: string): Instance?
 	if not RunService:IsStudio() then
@@ -61,6 +62,8 @@ local function devImage(name: string): EditableImage?
 		for label, shownName in shown do
 			if label:IsDescendantOf(game) then
 				inUse[shownName] = true
+			else
+				shown[label] = nil
 			end
 		end
 		for other, editable in editables do
