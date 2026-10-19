@@ -43,3 +43,8 @@ command bar.
 
 `tests/scoring_check.luau` holds table-driven grading checks; paste it into the command bar
 after a sync.
+
+## Order counter (3D, hybrid proof)
+The Order station's counter is the only 3D model. It must exist in the place as a MeshPart named `prop3d_order_counter` in `ReplicatedStorage.Models3D`, brought in with Studio's File > Import 3D from `counter_v1.fbx` (or the source GLB), with a `Yaw` attribute of -90 so the cupboard side faces the camera. Without it the Order station falls back to the 2D view.
+- Current upload: MeshId `rbxassetid://88229031650519`; SurfaceAppearance ColorMap 111229975630862, NormalMap 130883249966364, RoughnessMap 136996353373536, MetalnessMap 99549641244814. 16,462 tris, 5.68 x 5.51 x 18 studs.
+- `src/client/OrderRoom.luau` applies its own Lighting while Order shows (Ambient 150,132,118; OutdoorAmbient 160,145,130; Brightness 1.2; ClockTime 13.5) and restores the previous values afterwards.
