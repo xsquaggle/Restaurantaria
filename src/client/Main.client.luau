@@ -687,6 +687,8 @@ local function buildLayout()
 	})
 
 	-- The shift summary dims and blocks the HUD too, so the modal covers the whole screen.
+	-- Only needed when the HUD lives in the top bar's own ScreenGui: in the root, the
+	-- summary's scrim already covers it (and a second root scrim would dim the card).
 	local hudScrim = Ui.new("ImageButton", {
 		Name = "HudScrim",
 		AutoButtonColor = false,
@@ -696,7 +698,7 @@ local function buildLayout()
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 50,
-		Parent = if hudInTopbar then topGui else root,
+		Parent = if hudInTopbar then topGui else nil,
 	})
 	Art.apply(hudScrim, "ui_scrim")
 
