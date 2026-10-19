@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
@@ -27,6 +28,8 @@ local Stations = {
 local STATION_ORDER = { "Order", "Topping", "Bake", "Cut" }
 
 local C = Theme.Colour
+local NAV_SLIDE = TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local NAV_POP = TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local player = Players.LocalPlayer
 
 pcall(function()
@@ -170,13 +173,14 @@ function ctx.ovenStatus(bakeId: string, seconds: number): any
 	local state = Scoring.bakeState(target, seconds)
 	local progress = math.clamp(seconds / target, 0, 1)
 	if state == "under" then
-		return { progress = progress, colour = C.oven, text = string.format("%ds", math.ceil(target - seconds)), ready = false, alert = false }
+		return { progress = progress, state = "cooking", text = string.format("%ds", math.ceil(target - seconds)), ready = false, alert = false }
 	elseif state == "perfect" then
-		return { progress = progress, colour = C.basil, text = "Ready!", ready = true, alert = true }
+		return { progress = progress, state = "ready", text = "Ready!", ready = true, alert = true }
 	elseif state == "over" then
-		return { progress = 1, colour = C.tomato, text = string.format("+%ds", math.floor(seconds - target)), ready = true, alert = true }
+		return { progress = 1, state = "ready", text = string.format("+%ds", math.floor(seconds - target)), ready = true, alert = true }
 	end
-	return { progress = 1, colour = C.tomato, text = "Burnt", ready = true, alert = true, burnt = true }
+	-- Red is kept for burnt (and errors) only.
+	return { progress = 1, state = "burnt", text = "Burnt", ready = true, alert = true, burnt = true }
 end
 
 ------------------------------------------------------------------------------------------
@@ -206,23 +210,32 @@ local function destroyLayout()
 	ui = nil
 end
 
-local function badge(parent: GuiObject, size: number): TextLabel
-	local b = Ui.text({
-		Text = "",
-		FontFace = Theme.Font.bodyBold,
-		TextColor3 = C.white,
-		TextSize = math.max(14, math.floor(size * 0.62)),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		BackgroundTransparency = 0,
-		BackgroundColor3 = C.tomato,
+-- One count badge per tab: Astra's badge art with the live number centred on it, hidden at
+-- zero. Red (alert) asks for action; teal (info) is a count that can wait.
+local function badge(parent: GuiObject, size: number): ImageLabel
+	local b = Ui.new("ImageLabel", {
+		Name = "Badge",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(size, size),
 		ZIndex = 6,
 		Visible = false,
 		Parent = parent,
 	})
-	Ui.round().Parent = b
-	Ui.stroke(C.ink, 2).Parent = b
+	Art.apply(b, "ui_badge_alert")
+	Ui.text({
+		Name = "Count",
+		Text = "",
+		FontFace = Theme.Font.display,
+		TextColor3 = C.white,
+		TextSize = math.max(14, math.floor(size * 0.56)),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 7,
+		Parent = b,
+	})
 	return b
 end
 
@@ -295,6 +308,19 @@ local function buildLayout()
 		Size = if hudInTopbar then UDim2.fromOffset(inset.Width, inset.Height) else UDim2.new(1, 0, 0, hudH),
 		Parent = if hudInTopbar then topGui else root,
 	})
+	-- Astra's coral HUD strip runs the full width of the top row, behind Roblox's buttons too.
+	local strip = Ui.new("ImageLabel", {
+		Name = "Strip",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.hudBar.slice,
+		SliceScale = hudH / Assets.Meta.hudBar.height,
+		Position = UDim2.fromOffset(0, if hudInTopbar then inset.Min.Y else 0),
+		Size = UDim2.new(1, 0, 0, hudH),
+		ZIndex = 0,
+		Parent = if hudInTopbar then topGui else root,
+	})
+	Art.apply(strip, "ui_hud_bar")
 	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
 	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
 	local pillH = math.min(if compact then 36 else 44, hudH - 4)
@@ -357,9 +383,10 @@ local function buildLayout()
 		Parent = left,
 	})
 	local ringSize = hudH - 6
-	-- On phones the oven labels drop to the 16 px floor so the pills and the save warning
-	-- still fit beside the ovens.
-	local ovenW = 2 * (ringSize + (if compact then 50 else 64)) + 12
+	-- Each oven is a pill with its badge and ring at the left end and the live status word.
+	-- On phones the status keeps the 16 px floor and the pills narrow instead.
+	local ovenPillW = ringSize + (if compact then 62 else 86)
+	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
@@ -372,27 +399,11 @@ local function buildLayout()
 	})
 	local ovenRings = {}
 	for i = 1, Config.Oven.slots do
-		local cell = Ui.new("Frame", {
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale((i - 1) / Config.Oven.slots, 0),
-			Size = UDim2.fromScale(1 / Config.Oven.slots, 1),
-			Parent = ovenPanel,
-		})
-		local ring = Widgets.ring(ringSize)
-		ring.frame.AnchorPoint = Vector2.new(0, 0.5)
-		ring.frame.Position = UDim2.fromScale(0, 0.5)
-		ring.frame.Parent = cell
-		local label = Ui.text({
-			Text = "Empty",
-			FontFace = Theme.Font.display,
-			TextSize = if compact then 16 else math.clamp(math.floor(hudH * 0.36), 12, 22),
-			TextWrapped = false,
-			Position = UDim2.fromOffset(ringSize + 4, 0),
-			Size = UDim2.new(1, -(ringSize + 4), 1, 0),
-			Parent = cell,
-		})
-		Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = label })
-		ovenRings[i] = { ring = ring, label = label }
+		local oven = Widgets.ovenStatus(ovenPillW, ringSize, compact)
+		oven.frame.AnchorPoint = Vector2.new(0, 0.5)
+		oven.frame.Position = UDim2.new(0, (i - 1) * (ovenPillW + 8), 0.5, 0)
+		oven.frame.Parent = ovenPanel
+		ovenRings[i] = oven
 	end
 	ovenPanel.Activated:Connect(function()
 		ctx.switchTo("Bake")
@@ -417,7 +428,15 @@ local function buildLayout()
 		Size = UDim2.fromOffset(railW, railH),
 		Parent = root,
 	})
-	local panel = Ui.new("ImageLabel", { Name = "Panel", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = rail })
+	local panel = Ui.new("ImageLabel", {
+		Name = "Panel",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.railPanel.slice,
+		SliceScale = math.clamp(railW / Assets.Meta.railPanel.width, 0.4, 1),
+		Size = UDim2.fromScale(1, 1),
+		Parent = rail,
+	})
 	Art.apply(panel, "ui_rail_panel")
 	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
@@ -474,7 +493,8 @@ local function buildLayout()
 		stations[name].holder = holder
 	end
 
-	-- Navigation: proof backplate with four independent hit regions and live badges.
+	-- Navigation: Astra's continuous ivory bar, one coral pill that slides to the selected
+	-- tab, an icon and live label per tab and a single count badge.
 	local nav = Ui.new("Frame", {
 		Name = "Nav",
 		BackgroundTransparency = 1,
@@ -483,68 +503,103 @@ local function buildLayout()
 		Size = if compact then UDim2.fromOffset(ctx.stationSize.X, navH) else UDim2.new(1, 0, 0, navH),
 		Parent = root,
 	})
-	local barH = navH - 8
-	local barW = math.min((if compact then ctx.stationSize.X else size.X) - 16, barH * Assets.Meta.tabBarAspect)
-	barH = barW / Assets.Meta.tabBarAspect
-	local bar = Ui.new("Frame", {
+	local barH = navH - (if compact then 6 else 10)
+	local barW = math.min((if compact then ctx.stationSize.X else size.X) - (if compact then 8 else 24), if compact then 99999 else barH * 14)
+	local bar = Ui.new("ImageLabel", {
+		Name = "Frame",
 		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.navBar.slice,
+		SliceScale = barH / Assets.Meta.navBar.height,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(barW, barH),
 		Parent = nav,
 	})
-	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = bar }), "ui_tabBar_idle")
+	Art.apply(bar, "ui_nav_bar")
+	local edge = math.round(barH * 0.12)
+	local tabW = (barW - edge * 2) / 4
+	local selH = math.round(barH * 0.78)
+	local selected = Ui.new("ImageLabel", {
+		Name = "Selected",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.navSelected.slice,
+		SliceScale = selH / Assets.Meta.navSelected.height,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(tabW - edge, selH),
+		ZIndex = 2,
+		Parent = bar,
+	})
+	Art.apply(selected, "ui_nav_tab_selected")
+	local iconNames = {}
+	for _, name in STATION_ORDER do
+		table.insert(iconNames, "icon_nav_" .. name:lower() .. "_idle")
+		table.insert(iconNames, "icon_nav_" .. name:lower() .. "_selected")
+	end
+	Art.preload(iconNames)
 	local tabs = {}
-	local tabNames = { Order = "Order", Topping = "Topping", Bake = "Bake", Cut = "Cut" }
+	local labelSize = if compact then 16 else math.clamp(math.floor(barH * 0.3), 18, 30)
+	local iconSize = math.round(barH * (if compact then 0.5 else 0.56))
+	local badgeSize = if compact then 22 else math.clamp(math.round(barH * 0.32), 24, 36)
 	for i, name in STATION_ORDER do
+		local centreX = edge + tabW * (i - 0.5)
 		local hit = Ui.new("TextButton", {
 			Name = name .. "Tab",
 			Text = "",
+			AutoButtonColor = false,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale((i - 1) / 4, 0),
-			Size = UDim2.fromScale(0.25, 1),
-			ZIndex = 3,
+			Position = UDim2.fromOffset(edge + tabW * (i - 1), 0),
+			Size = UDim2.new(0, tabW, 1, 0),
+			ZIndex = 5,
 			Parent = bar,
 		})
-		local label = Ui.text({
-			Text = tabNames[name],
-			FontFace = Theme.Font.display,
-			TextSize = if compact then 18 else math.clamp(math.floor(barH * 0.34), 18, 30),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Size = UDim2.fromScale(0.8, 0.6),
-			Position = UDim2.fromScale(0.08, 0.16),
-			ZIndex = 4,
-			Parent = hit,
-		})
-		local indicator = Ui.new("Frame", {
-			BackgroundColor3 = C.action,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.86),
-			Size = UDim2.new(0.5, 0, 0, if compact then 4 else 6),
-			ZIndex = 4,
-			Visible = false,
-			Parent = hit,
-		}, { Ui.round() })
-		local glow = Ui.new("Frame", {
-			BackgroundColor3 = C.action,
+		local content = Ui.new("Frame", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.86, 0.78),
-			ZIndex = 2,
-			Parent = hit,
-		}, { Ui.corner(12) })
-		-- While the V1 bar is in use its badge sockets are part of the art: each count badge
-		-- sits exactly on its socket, sized to its ring, so the two read as one circle.
-		local socket = Assets.Meta.tabBarSockets
-		local b = badge(bar, barH * socket.d - 4)
-		b.Position = UDim2.fromScale(socket.x[i], socket.y)
+			Position = UDim2.fromOffset(centreX, barH / 2),
+			Size = UDim2.fromOffset(tabW, barH),
+			ZIndex = 3,
+			Parent = bar,
+		}, {
+			Ui.new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, if compact then 4 else 10),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		local pop = Ui.new("UIScale", { Scale = 1, Parent = content })
+		local icon = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(iconSize, iconSize),
+			LayoutOrder = 1,
+			ZIndex = 3,
+			Parent = content,
+		})
+		local label = Ui.text({
+			Text = name,
+			FontFace = Theme.Font.display,
+			TextSize = labelSize,
+			TextWrapped = false,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, labelSize + 4),
+			LayoutOrder = 2,
+			ZIndex = 3,
+			Parent = content,
+		})
+		local stroke = Ui.new("UIStroke", { Color = C.labelStroke, Thickness = if compact then 1 else 2, Enabled = false, Parent = label })
+		-- The badge sits at the tab's top right, over the bar's upper edge.
+		local b = badge(bar, badgeSize)
+		b.Position = UDim2.fromOffset(edge + tabW * i - badgeSize * 0.7, badgeSize * 0.42)
 		hit.Activated:Connect(function()
 			ctx.switchTo(name)
 		end)
-		tabs[name] = { label = label, indicator = indicator, badge = b, glow = glow }
+		tabs[name] = { label = label, icon = icon, stroke = stroke, badge = b, pop = pop, x = centreX }
 	end
+	local navSelected = selected
 
 	-- Results appear top-centre over the work surface and never take input, so they can't
 	-- cover or swallow a tap meant for a button or the pizza.
@@ -556,10 +611,13 @@ local function buildLayout()
 		ZIndex = 9,
 		Parent = root,
 	})
-	local summary = Ui.new("Frame", {
+	-- End-of-shift modal: an invisible button takes the input; Astra's scrim image dims the
+	-- game behind the summary panel.
+	local summary = Ui.new("TextButton", {
 		Name = "Summary",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 20,
@@ -581,6 +639,8 @@ local function buildLayout()
 		ovenRings = ovenRings,
 		stations = stations,
 		tabs = tabs,
+		navSelected = navSelected,
+		navBarH = barH,
 		banner = banner,
 		toastHolder = toastHolder,
 		summary = summary,
@@ -609,9 +669,17 @@ function ctx.switchTo(name: string, instant: boolean?)
 	end
 	for n, t in ui.tabs do
 		local on = n == name
-		t.indicator.Visible = on
-		t.label.FontFace = if on then Theme.Font.bodyBold else Theme.Font.bodySemi
-		t.label.TextColor3 = if on then C.action else C.ink
+		Art.apply(t.icon, string.format("icon_nav_%s_%s", n:lower(), if on then "selected" else "idle"))
+		t.label.TextColor3 = if on then C.label else C.ink
+		t.stroke.Enabled = on
+		if on then
+			local target = UDim2.fromOffset(t.x, ui.navBarH / 2)
+			if instant or not changed then
+				ui.navSelected.Position = target
+			else
+				TweenService:Create(ui.navSelected, NAV_SLIDE, { Position = target }):Play()
+			end
+		end
 	end
 	if changed and not instant then
 		Widgets.tweenIn(ui.stations[name].holder, 24)
@@ -623,7 +691,10 @@ end
 -- second tap can't land on whatever control sits in the same spot on the next station.
 function ctx.nudge(name: string)
 	if ui and ctx.station ~= name then
-		Widgets.flash(ui.tabs[name].glow, 0.55)
+		-- The destination tab's icon and label pop once.
+		local pop = ui.tabs[name].pop
+		pop.Scale = 1.18
+		TweenService:Create(pop, NAV_POP, { Scale = 1 }):Play()
 	end
 end
 
@@ -705,7 +776,7 @@ local function refreshBadges(snap: any)
 	end
 	for name, t in ui.tabs do
 		t.badge.Visible = counts[name] > 0
-		t.badge.Text = tostring(counts[name])
+		(t.badge:FindFirstChild("Count") :: TextLabel).Text = tostring(counts[name])
 	end
 end
 
@@ -720,14 +791,28 @@ local function refreshSummary(snap: any)
 	ui.summaryShift = key
 	Ui.clear(summary)
 	local area = ui.root.AbsoluteSize
-	local card = Ui.new("Frame", {
-		BackgroundColor3 = C.paper,
+	local scrim = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ImageTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 20,
+		Parent = summary,
+	})
+	Art.apply(scrim, "ui_scrim")
+	TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
+	local card = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.panel.slice,
+		SliceScale = if ctx.compact then 0.6 else 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(math.min(if ctx.compact then 420 else 560, area.X - 24), math.min(if ctx.compact then 300 else 400, area.Y - 24)),
 		ZIndex = 21,
 		Parent = summary,
-	}, { Ui.corner(24), Ui.stroke(C.ink, 3) })
+	})
+	Art.apply(card, "ui_panel_summary")
 	local profile = snap.profile or {}
 	local lines = {
 		string.format("Tips this shift: %d", snap.tips),
@@ -789,12 +874,16 @@ function ctx.showResult(ticketId: number)
 		end
 	end
 	local compact = ctx.compact
-	local toast = Ui.new("Frame", {
-		BackgroundColor3 = C.paper,
+	local toast = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceScale = if compact then 0.5 else 0.7,
 		Size = UDim2.new(1, 0, 0, (if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20)),
 		ZIndex = 9,
 		Parent = ui.toastHolder,
-	}, { Ui.corner(16), Ui.stroke(C.ink, 3) })
+	})
+	Art.apply(toast, "ui_card_result")
 	Ui.text({
 		Text = string.format("%s · %d%% · +%d tips", Recipes.Cast[customer.cast].name, r.overall, r.tip),
 		FontFace = Theme.Font.display,
@@ -903,15 +992,17 @@ RunService.RenderStepped:Connect(function()
 		if pizza then
 			local customer = ctx.customer(snap, pizza.ticketId)
 			local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
-			slot.ring:set(status.progress, status.colour, tostring(i), "")
-			slot.label.Text = status.text
+			slot:set(status.progress, status.state, tostring(i), status.text)
 			alert = alert or status.alert
 		else
-			slot.ring:set(0, C.oven, tostring(i), "")
-			slot.label.Text = "Empty"
+			slot:set(0, "idle", tostring(i), "Empty")
 		end
 	end
-	ui.tabs.Bake.badge.BackgroundColor3 = if alert then C.tomato else C.mutedInk
+	-- Bake's count is teal while pizzas just bake, red once one needs taking out.
+	if alert ~= ui.bakeAlert then
+		ui.bakeAlert = alert
+		Art.apply(ui.tabs.Bake.badge, if alert then "ui_badge_alert" else "ui_badge_info")
+	end
 	local current = ui.stations[ctx.station]
 	if current then
 		current.tick(now)

@@ -39,7 +39,7 @@ Recipes.IngredientOrder = { "pepperoni", "mushroom", "basil", "olive", "pepper" 
 Recipes.Doneness = {
 	light = { label = "Light bake", short = "Light", tone = "teal", icon = "icon_bake_light" },
 	regular = { label = "Regular bake", short = "Regular", tone = "green", icon = "icon_bake_regular" },
-	well = { label = "Well done", short = "Well done", tone = "amber", icon = "icon_bake_well" },
+	well = { label = "Well done", short = "Well done", tone = "amber", icon = "icon_bake_well_done" },
 }
 Recipes.DonenessOrder = { "light", "regular", "well" }
 
