@@ -55,18 +55,6 @@ function Cut.new(ctx: any, container: Frame)
 	view.frame.ZIndex = 2
 	view.frame.Parent = frame
 	local preview = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4, Parent = view.frame })
-	local empty = Ui.text({
-		Text = "Take a pizza out of the oven to cut it",
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 16 else 24,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.fromOffset(pizzaSize * 0.7, pizzaSize * 0.3),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(pizzaX, pizzaY),
-		ZIndex = 5,
-		Parent = frame,
-	})
-
 	local current: any = nil
 
 	-- Live cut count on Astra's cream result card (stand-in backing until the A21 hint chip
@@ -248,7 +236,6 @@ function Cut.new(ctx: any, container: Frame)
 	function station.refresh(snap: any)
 		current = ctx.focusPizza(snap, "cutting")
 		view.frame.Visible = current ~= nil
-		empty.Visible = current == nil
 		serve:setEnabled(current ~= nil and not ctx.pending[current.id])
 		undo:setEnabled(current ~= nil and #current.cuts > 0)
 		serve:setLabel(if current and ctx.pending[current.id] then "Serving..." else "Serve")
@@ -265,6 +252,11 @@ function Cut.new(ctx: any, container: Frame)
 	end
 
 	function station.tick(_now: number) end
+
+	-- Why there is nothing to cut, on the hint strip.
+	function station.status(_snap: any): any
+		return if current then nil else { text = "Take a pizza out of the oven to cut it" }
+	end
 
 	-- First-shift pointer: drag across the pizza for the first cut.
 	function station.hint(_snap: any): any

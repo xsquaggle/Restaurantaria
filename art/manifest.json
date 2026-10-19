@@ -643,10 +643,24 @@
    "job": "029131cb-6365-4251-8bb9-7067f0a296f7",
    "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_031912_029131cb-6365-4251-8bb9-7067f0a296f7.png",
    "kind": "sprite",
-   "note": "G9 cut separation with cheese strands, replaces v1 strip if it reads better.",
+   "note": "G9 cut separation with cheese strands, replaces v1 strip if it reads better. Superseded by fx_cut_groove_v3: it drew a strip of pizza inside the cut, which read as a stretched food strip (QA Q10).",
    "outputs": [
     {
      "name": "fx_cut_groove_b",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_cut_groove_v3",
+   "job": "f0a3bc71-de10-41ed-abfd-e6418a6df251",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_061112_f0a3bc71-de10-41ed-abfd-e6418a6df251.png",
+   "kind": "sprite",
+   "note": "G9 v3 cut crevice: dark slit with shadowed lifted edges, tapered ends, no food drawn inside (generated 8420d87f, background removed f0a3bc71). Stretched along each cut chord over the pizza, which stays the food.",
+   "outputs": [
+    {
+     "name": "fx_cut_groove_c",
      "side": 1024,
      "square": false
     }

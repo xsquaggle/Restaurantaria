@@ -54,7 +54,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		end
 		Art.preload(names)
 	end
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
+	local frame = Ui.new("Frame", { Name = (text:gsub("%W", "")) .. "Button", BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
 	-- Art and label share one body, so the press motion moves them together.
 	local body = Ui.new("Frame", {
 		Name = "Body",
@@ -892,8 +892,9 @@ function Widgets.pizza(): PizzaView
 	return view
 end
 
--- A cut: the generated groove (G9) stretched along the chord of the infinite line through
--- the two points, clipped to the pizza circle. `transparency` fades it (the live preview).
+-- A cut: the generated cut crevice (G9 v3: a dark slit with shadowed, lifted edges and no
+-- food drawn inside it) stretched along the chord of the infinite line through the two
+-- points, clipped to the pizza circle, so the pizza underneath stays the food. `transparency` fades it (the live preview).
 local CRUST_EDGE = 0.95
 
 function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
@@ -917,12 +918,12 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5 + cx * 0.5, 0.5 + cy * 0.5),
-		Size = UDim2.fromScale(half, 0.034),
+		Size = UDim2.fromScale(half, 0.03),
 		Rotation = math.deg(math.atan2(dy, dx)),
 		ZIndex = 3,
 		Parent = layer,
 	})
-	Art.apply(groove, "fx_cut_groove_b")
+	Art.apply(groove, "fx_cut_groove_c")
 end
 
 -- Reserved hint strip between the work surface and the tab bar: one line of live text and,

@@ -80,6 +80,7 @@ local Assets = {
 	fx_oven_glow = "",
 	fx_cut_groove = "",
 	fx_cut_groove_b = "",
+	fx_cut_groove_c = "",
 	fx_oven_glass = "",
 	chr_marta_happy = "",
 	chr_marta_neutral = "",

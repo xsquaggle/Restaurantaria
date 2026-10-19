@@ -490,6 +490,12 @@ local function buildLayout()
 	local clipH = math.round(clipW / Assets.Meta.clipRail.aspect)
 	local drop = math.round(clipH * 0.4)
 	local ticketH = railH - pad * 2 - drop - actionH - gap - tabRows * (tabH + gap)
+	-- Wide screens: the ticket is only as tall as its content needs (header plus up to
+	-- five requirement rows at their largest), in Astra's 420x600 proportion at most; the
+	-- spare rail height goes under the waiting tabs instead of into blank paper.
+	if not compact then
+		ticketH = math.min(ticketH, math.round((railW - pad * 2) * 600 / 420))
+	end
 	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
 	ticket.frame.Position = UDim2.fromOffset(pad, pad + drop)
 	ticket.frame.Parent = rail
@@ -679,11 +685,26 @@ local function buildLayout()
 		Parent = root,
 	})
 
+	-- The shift summary dims and blocks the HUD too, so the modal covers the whole screen.
+	local hudScrim = Ui.new("ImageButton", {
+		Name = "HudScrim",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ImageTransparency = 0.55,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		ZIndex = 50,
+		Parent = if hudInTopbar then topGui else root,
+	})
+	Art.apply(hudScrim, "ui_scrim")
+
 	local tutorial = Tutorial.new(root, compact, bar)
 
 	ui = {
 		tutorial = tutorial,
 		hintStrip = hintStrip,
+		hudScrim = hudScrim,
 		root = root,
 		day = day,
 		coins = coins,
@@ -855,6 +876,7 @@ end
 local function refreshSummary(snap: any)
 	local summary = ui.summary
 	summary.Visible = snap.finished == true
+	ui.hudScrim.Visible = snap.finished == true
 	-- Rebuilt when the save result arrives, which can be after the shift ends.
 	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.saved), tostring(snap.saveMessage)) else nil
 	if not snap.finished or ui.summaryShift == key then
@@ -873,14 +895,18 @@ local function refreshSummary(snap: any)
 	})
 	Art.apply(scrim, "ui_scrim")
 	TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
+	local cardW = math.min(if ctx.compact then 420 else 560, area.X - 24)
+	local cardH = math.min(if ctx.compact then 300 else 400, area.Y - 24)
 	local card = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Assets.Meta.panel.slice,
-		SliceScale = if ctx.compact then 0.6 else 1,
+		-- Astra's metadata candidate (QA review, diagnostics/summary-slice-override-candidate):
+		-- 80 px margins so the slices clear the drawn corners, scaled by the smaller axis.
+		SliceCenter = Rect.new(80, 80, 760, 520),
+		SliceScale = math.min(cardW / 840, cardH / 600),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(math.min(if ctx.compact then 420 else 560, area.X - 24), math.min(if ctx.compact then 300 else 400, area.Y - 24)),
+		Size = UDim2.fromOffset(cardW, cardH),
 		ZIndex = 21,
 		Parent = summary,
 	})
