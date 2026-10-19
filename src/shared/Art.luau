@@ -21,6 +21,9 @@ local Art = {}
 local editables: { [string]: EditableImage } = {}
 local sizes: { [string]: Vector2 } = {}
 local reported: { [string]: boolean } = {}
+-- Which art each label shows, so images no label shows any more can be freed when Studio's
+-- EditableImage memory budget runs out.
+local shown: { [Instance]: string } = setmetatable({}, { __mode = "k" }) :: any
 
 local function devFolder(name: string): Instance?
 	if not RunService:IsStudio() then
@@ -45,10 +48,30 @@ local function devImage(name: string): EditableImage?
 	local packed = EncodingService:Base64Decode(buffer.fromstring(table.concat(parts)))
 	local pixels = EncodingService:DecompressBuffer(packed, Enum.CompressionAlgorithm.Zstd)
 	local size = Vector2.new(folder:GetAttribute("Width") :: number, folder:GetAttribute("Height") :: number)
-	local ok, image = pcall(function()
-		return AssetService:CreateEditableImage({ Size = size })
-	end)
-	if not ok or not image then
+	local function create(): EditableImage?
+		local ok, image = pcall(function()
+			return AssetService:CreateEditableImage({ Size = size })
+		end)
+		return if ok then image else nil
+	end
+	local image = create()
+	if not image then
+		-- Free every image no live label still shows, then try once more.
+		local inUse = {}
+		for label, shownName in shown do
+			if label:IsDescendantOf(game) then
+				inUse[shownName] = true
+			end
+		end
+		for other, editable in editables do
+			if not inUse[other] then
+				editable:Destroy()
+				editables[other] = nil
+			end
+		end
+		image = create()
+	end
+	if not image then
 		warn("[Art] no memory budget left for " .. name)
 		return nil
 	end
@@ -87,8 +110,10 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 		label.Image = id
 		return true
 	end
+	shown[label] = nil
 	local image = devImage(name)
 	if image then
+		shown[label] = name
 		label.ImageContent = Content.fromObject(image)
 		return true
 	end
