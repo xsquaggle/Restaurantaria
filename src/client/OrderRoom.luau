@@ -148,6 +148,15 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 		camera.FieldOfView = fov
 		local f = camera:WorldToViewportPoint(far)
 		room.line = f.Y - rectPos.Y
+		-- The background plane fills the view at its depth, so the painted room keeps the
+		-- framing it had as a full-screen backdrop (cover-fit, centred on the view).
+		local depth = plane.Position.Z - cf.Position.Z
+		local viewH = 2 * depth * math.tan(math.rad(fov) / 2) / math.cos(pitch)
+		local viewW = viewH * camera.ViewportSize.X / camera.ViewportSize.Y
+		local k = math.max(viewW / meta.width, viewH / meta.height) * 1.02
+		plane.Size = Vector3.new(meta.width * k, meta.height * k, 0.1)
+		local hit = cf.Position + cf.LookVector * (depth / cf.LookVector.Z)
+		plane.CFrame = CFrame.new(hit.X, hit.Y, plane.Position.Z)
 		return cf
 	end
 
