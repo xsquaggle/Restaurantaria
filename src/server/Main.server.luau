@@ -123,45 +123,49 @@ if RunService:IsStudio() then
 				end
 			end
 			shift.startedAt -= 1000
-			ShiftService.tick(session)
-			local clock = workspace:GetServerTimeNow()
-			-- Open tickets first so taking new orders never hits the rail limit.
-			for _, pass in { "ordered", "waiting" } do
-				for _, c in shift.customers do
-					if c.status ~= pass then
-						continue
-					end
-					if c.status == "waiting" then
-						c.arrivedAt = clock - 20
-						act("takeOrder", { customerId = c.id })
-					end
-					local pizza = shift.pizzas[c.pizzaId]
-					if not pizza then
-						continue
-					end
-					if pizza.stage == "topping" then
-						for _, req in Recipes.ById[c.order.recipe].toppings do
-							for i = 1, req.count do
-								local t = (i - 0.5) / req.count
-								local a = if req.region == "left" then math.rad(90 + t * 180)
-									elseif req.region == "right" then math.rad(-90 + t * 180)
-									else math.rad(22.5 + (i - 1) * 360 / req.count)
-								act("placeTopping", { pizzaId = pizza.id, ingredient = req.ingredient, x = math.cos(a) * 0.5, y = -math.sin(a) * 0.5 })
+			-- A character can only be in the shop once, so later customers walk in as earlier
+			-- ones are served: repeat until everyone has come and gone.
+			for _round = 1, Config.Shift.customerCount + 1 do
+				ShiftService.tick(session)
+				local clock = workspace:GetServerTimeNow()
+				-- Open tickets first so taking new orders never hits the rail limit.
+				for _, pass in { "ordered", "waiting" } do
+					for _, c in shift.customers do
+						if c.status ~= pass then
+							continue
+						end
+						if c.status == "waiting" then
+							c.arrivedAt = clock - 20
+							act("takeOrder", { customerId = c.id })
+						end
+						local pizza = shift.pizzas[c.pizzaId]
+						if not pizza then
+							continue
+						end
+						if pizza.stage == "topping" then
+							for _, req in Recipes.ById[c.order.recipe].toppings do
+								for i = 1, req.count do
+									local t = (i - 0.5) / req.count
+									local a = if req.region == "left" then math.rad(90 + t * 180)
+										elseif req.region == "right" then math.rad(-90 + t * 180)
+										else math.rad(22.5 + (i - 1) * 360 / req.count)
+									act("placeTopping", { pizzaId = pizza.id, ingredient = req.ingredient, x = math.cos(a) * 0.5, y = -math.sin(a) * 0.5 })
+								end
 							end
+							act("sendToOven", { pizzaId = pizza.id })
 						end
-						act("sendToOven", { pizzaId = pizza.id })
-					end
-					if pizza.stage == "oven" then
-						pizza.bakeStart = workspace:GetServerTimeNow() - Config.Oven.targets[c.order.bake]
-						act("takeOut", { pizzaId = pizza.id })
-					end
-					if pizza.stage == "cutting" then
-						local n = c.order.slices // 2
-						for k = 0, n - 1 do
-							local a = math.rad(k * 180 / n)
-							act("cut", { pizzaId = pizza.id, x1 = math.cos(a) * 1.05, y1 = math.sin(a) * 1.05, x2 = -math.cos(a) * 1.05, y2 = -math.sin(a) * 1.05 })
+						if pizza.stage == "oven" then
+							pizza.bakeStart = workspace:GetServerTimeNow() - Config.Oven.targets[c.order.bake]
+							act("takeOut", { pizzaId = pizza.id })
 						end
-						act("serve", { pizzaId = pizza.id })
+						if pizza.stage == "cutting" then
+							local n = c.order.slices // 2
+							for k = 0, n - 1 do
+								local a = math.rad(k * 180 / n)
+								act("cut", { pizzaId = pizza.id, x1 = math.cos(a) * 1.05, y1 = math.sin(a) * 1.05, x2 = -math.cos(a) * 1.05, y2 = -math.sin(a) * 1.05 })
+							end
+							act("serve", { pizzaId = pizza.id })
+						end
 					end
 				end
 			end
@@ -210,11 +214,36 @@ if RunService:IsStudio() then
 				top(shift.pizzas[open[1].pizzaId], open[1].order.recipe, 1)
 				act("sendToOven", { pizzaId = open[1].pizzaId })
 			end
+			-- value may be { crowd = true, share = n }: both ovens running and the third pizza on
+			-- the topping station (the crowded capture state).
+			local crowd = type(value) == "table" and value.crowd
+			local share = if type(value) == "table" then value.share or 0.7 else value or 0.7
+			if crowd and open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, 1)
+				act("sendToOven", { pizzaId = open[2].pizzaId })
+				table.remove(open, 2)
+			end
 			if open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
-				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, value or 0.7)
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, share)
 			end
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "act" then
+			-- value = { action, args }: one real player action, as if the client sent it.
+			local ok, reason = ShiftService.apply(session, value[1], value[2])
+			push(player)
+			return if ok then "ok" else tostring(reason)
+		elseif command == "pieces" then
+			-- value = pizzaId: the authoritative piece list (continuity evidence).
+			local pizza = session.shift.pizzas[value]
+			if not pizza then
+				return "no such pizza"
+			end
+			local rows = { string.format("pizza %d stage=%s pieces=%d cuts=%d", pizza.id, pizza.stage, #pizza.toppings, #pizza.cuts) }
+			for i, t in pizza.toppings do
+				table.insert(rows, string.format("%02d %s %.3f,%.3f", i, t.ingredient, t.x, t.y))
+			end
+			return table.concat(rows, "\n")
 		elseif command == "setBake" then
 			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
 			local id = session.shift.ovens[value[1]]
@@ -223,6 +252,20 @@ if RunService:IsStudio() then
 				return "empty slot"
 			end
 			pizza.bakeStart = workspace:GetServerTimeNow() - value[2]
+			push(player)
+			return "ok"
+		elseif command == "age" then
+			-- value = { customerId, seconds }: that customer arrived `seconds` ago (mood captures).
+			local customer = nil
+			for _, c in session.shift.customers do
+				if c.id == value[1] then
+					customer = c
+				end
+			end
+			if not customer then
+				return "no such customer"
+			end
+			customer.arrivedAt = workspace:GetServerTimeNow() - value[2]
 			push(player)
 			return "ok"
 		end

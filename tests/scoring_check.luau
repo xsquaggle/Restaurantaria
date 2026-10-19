@@ -5,6 +5,7 @@
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Scoring = require(Shared.Scoring)
 local Recipes = require(Shared.Recipes)
+local Config = require(Shared.Config)
 
 -- n pieces of one ingredient evenly round a ring, optionally limited to one half.
 local function ring(ingredient: string, n: number, radius: number, half: string?)
@@ -63,6 +64,25 @@ for _, c in cases do
 		failed += 1
 	end
 	table.insert(lines, string.format("%s %-30s %3d  (want %d-%d)  %s", if pass then "ok  " else "FAIL", name, g.score, lo, hi, table.concat(g.notes, "; ")))
+end
+
+-- Bake boundary sweep: each bake's grade and state just inside and outside its perfect
+-- window, at the gauge's band edges, and either side of the absolute burnt line.
+local bakeCases = {
+	{ "light", 15.9, "under" }, { "light", 16, "perfect" }, { "light", 20, "perfect" }, { "light", 20.1, "over" },
+	{ "regular", 21.9, "under" }, { "regular", 22, "perfect" }, { "regular", 26, "perfect" }, { "regular", 26.1, "over" },
+	{ "well", 27.9, "under" }, { "well", 28, "perfect" }, { "well", 32, "perfect" }, { "well", 32.1, "over" },
+	{ "light", 36, "over" }, { "light", 36.1, "burnt" }, { "well", 36, "over" }, { "well", 36.1, "burnt" },
+}
+for _, c in bakeCases do
+	local bake, seconds, want = c[1], c[2], c[3]
+	local state = Scoring.bakeState(Config.Oven.targets[bake], seconds)
+	local g = Scoring.bake(bake, seconds)
+	local pass = state == want and (want ~= "perfect" or g.score == 100) and (want ~= "burnt" or g.score == 0)
+	if not pass then
+		failed += 1
+	end
+	table.insert(lines, string.format("%s bake %-8s %5.1fs %-8s %3d  (want %s)", if pass then "ok  " else "FAIL", bake, seconds, state, g.score, want))
 end
 local report = table.concat(lines, "\n")
 if failed > 0 then

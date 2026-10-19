@@ -38,7 +38,17 @@ function PizzaArt.look(pizzaId: number, ingredient: string, n: number): (string,
 	-- A seeded Random spreads neighbouring counts apart (the raw hash moves in even steps).
 	local rng = Random.new(hash(string.format("%d:%s:%d", pizzaId, ingredient, n)))
 	local info = Recipes.Ingredients[ingredient]
-	local art = if info.variants then info.variants[rng:NextInteger(1, #info.variants)] else string.format("topping_%s_%d", info.art, rng:NextInteger(1, 3))
+	-- Variant sets come in colour families of three drawings (green then red bell pepper):
+	-- pieces alternate family so every pizza shows both colours, and the drawing within the
+	-- family is seeded. (A seeded pick across all six could leave a pizza all one colour.)
+	local art
+	if info.variants then
+		local families = #info.variants // 3
+		local family = (n + pizzaId) % families
+		art = info.variants[family * 3 + rng:NextInteger(1, 3)]
+	else
+		art = string.format("topping_%s_%d", info.art, rng:NextInteger(1, 3))
+	end
 	return art, rng:NextInteger(0, 359)
 end
 
@@ -93,6 +103,7 @@ local function build(root: GuiObject, art: string, rotation: number, shadow: typ
 		Parent = root,
 	})
 	sprite:SetAttribute("Rest", 0)
+	sprite:SetAttribute("Look", art)
 	Art.apply(sprite, art)
 	return sprite, shade
 end
@@ -241,6 +252,8 @@ function PizzaArt.new(): View
 						ZIndex = 2,
 						Parent = layer,
 					})
+					-- Pieces stay round when the pizza is drawn flattened (in the oven).
+					Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height, Parent = root })
 					local scale = Ui.new("UIScale", { Scale = 1, Parent = root })
 					local sprite, shade = build(root, art, rotation, REST)
 					shown[key] = root

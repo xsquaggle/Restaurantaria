@@ -186,15 +186,17 @@ function Topping.new(ctx: any, container: Frame)
 			ctx.send("undoTopping", { pizzaId = focus.id })
 		end
 	end, "secondary")
+	undo:setIcon("icon_undo")
 	if side then
 		-- The spare cell of the tray grid.
 		undo.frame.AnchorPoint = Vector2.new(0.5, 0.5)
 		undo.frame.Position = homes[count + 1]
-		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.max(48, math.min(trayH * 0.6, 56))) -- 48 px touch floor
+		-- 54 px frame: the drawn button fills 90% of it, keeping the visible button at 48 px.
+		undo.frame.Size = UDim2.fromOffset(trayW * 0.86, math.max(56, math.min(trayH * 0.6, 60)))
 	else
 		undo.frame.AnchorPoint = Vector2.new(1, 0)
 		undo.frame.Position = UDim2.fromOffset(W - margin, margin)
-		undo.frame.Size = if ctx.compact then UDim2.fromOffset(92, 36) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 44, 64))
+		undo.frame.Size = if ctx.compact then UDim2.fromOffset(100, 56) else UDim2.fromOffset(math.clamp(W * 0.14, 120, 180), math.clamp(H * 0.08, 56, 64))
 	end
 	undo.frame.ZIndex = 5
 	undo.frame.Parent = frame
@@ -223,6 +225,7 @@ function Topping.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
+	send:setIcon("icon_oven_white")
 	send.frame.Size = UDim2.fromScale(1, 1)
 	send.frame.Parent = ctx.actionHost("Topping")
 
@@ -371,7 +374,7 @@ function Topping.new(ctx: any, container: Frame)
 		end
 		local busy = current ~= nil and ctx.pending[current.id] == true
 		send:setEnabled(current ~= nil and not busy and ctx.freeOvenSlot(snap))
-		send:setLabel(if busy then "Sending..." elseif current and not ctx.freeOvenSlot(snap) then "Ovens full" else "Send to oven")
+		send:setLabel(if busy then "Sending..." else "Send to oven")
 		undo:setEnabled(current ~= nil and not busy and #current.toppings > 0)
 		view:set(if current then ctx.withOptimistic(current) else nil, true)
 		updatePick()
@@ -382,6 +385,37 @@ function Topping.new(ctx: any, container: Frame)
 	end
 
 	function station.tick(_now: number) end
+
+	-- Why Send to oven is unavailable, on the hint strip.
+	function station.status(snap: any): any
+		if current and not ctx.freeOvenSlot(snap) then
+			return { text = "Ovens full: take a pizza out on Bake" }
+		end
+		return nil
+	end
+
+	-- First-shift pointer: the tray of the first topping the ticket still needs.
+	function station.hint(snap: any): any
+		if not current then
+			return nil
+		end
+		local customer = ctx.customer(snap, current.ticketId)
+		if not customer then
+			return nil
+		end
+		for _, req in Recipes.ById[customer.order.recipe].toppings do
+			local have = 0
+			for _, piece in current.toppings do
+				if piece.ingredient == req.ingredient then
+					have += 1
+				end
+			end
+			if have < req.count and trays[req.ingredient] then
+				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below" }
+			end
+		end
+		return nil
+	end
 
 	showChosen()
 	return station

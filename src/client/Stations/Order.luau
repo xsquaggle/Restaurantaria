@@ -1,9 +1,14 @@
 --!strict
--- Order station: waiting customers at the counter. Tap one to select, then take the order.
+-- Order station: waiting customers stand at the counter. Tap one to select, then take the
+-- order from the rail. Each customer is a generated character (G10) whose expression
+-- follows their patience band; the selected one steps forward while the others wait.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local Art = require(Shared.Art)
+local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
@@ -15,41 +20,60 @@ local Widgets = require(Parent.Widgets)
 local C = Theme.Colour
 local Order = {}
 
+-- Character frames are waist-up drawings, 0.68 (Marta) to 0.81 (Ines) as wide as they are
+-- tall; each is fitted into a box of the widest shape so all stand at the same height.
+local FIGURE_ASPECT = 0.81
+-- Customers the counter is laid out for; more still fit, just closer together.
+local ROOM_FOR = 4
+local COUNTER_TOP = 0.72
+local STEP = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+-- Full-screen art behind the station (Assets.Meta.backgrounds).
+Order.background = "bg_order"
+
 function Order.new(ctx: any, container: Frame)
-	local frame = Ui.new("Frame", { Name = "Order", BackgroundColor3 = C.wall, Size = UDim2.fromScale(1, 1), Parent = container })
-	Ui.new("Frame", {
+	local frame = Ui.new("Frame", { Name = "Order", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
+	local area = ctx.stationSize :: Vector2
+	-- The generated counter front, its top edge on COUNTER_TOP, hides the customers' waists.
+	local cm = Assets.Meta.orderCounter
+	local counterW = area.X + 24
+	local counterH = counterW / cm.aspect
+	local counter = Ui.new("ImageLabel", {
 		Name = "Counter",
-		BackgroundColor3 = C.counter,
-		Position = UDim2.fromScale(0, 0.72),
-		Size = UDim2.fromScale(1, 0.28),
-		BorderSizePixel = 0,
-		ZIndex = 2,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		Position = UDim2.fromOffset(-12, area.Y * COUNTER_TOP - counterH * cm.top),
+		Size = UDim2.fromOffset(counterW, counterH),
+		ZIndex = 3,
 		Parent = frame,
 	})
+	Art.apply(counter, "prop_order_counter")
+	-- Figures stand behind the counter, cut at the waist by its top edge.
+	-- Room above each figure for the name and patience meter, and for the selected one to
+	-- step forward without touching its neighbours.
+	local labelH = if ctx.compact then 40 else 64
+	local slotW = (area.X - 32) / ROOM_FOR
+	local figureH = math.min(area.Y * COUNTER_TOP - labelH - 12, slotW * 0.9 / FIGURE_ASPECT)
+	local figureW = figureH * FIGURE_ASPECT
 	local row = Ui.new("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 16, 0.04, 0),
-		Size = UDim2.new(1, -32, 0.72, 0),
+		Position = UDim2.new(0, 16, 0, 0),
+		Size = UDim2.new(1, -32, COUNTER_TOP, figureH * 0.12),
+		ZIndex = 2,
 		Parent = frame,
 	}, {
 		Ui.new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
-			Padding = UDim.new(0, 16),
+			Padding = UDim.new(0, 0),
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Bottom,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	local hint = Ui.text({
-		Text = "",
-		FontFace = Theme.Font.bodySemi,
-		TextSize = if ctx.compact then 16 else 22,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromScale(0.5, 0.35),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromScale(0.8, 0.2),
-		Parent = frame,
-	})
+	local statusText: string? = nil
 	local selected: number? = nil
+	-- Take order is the rail's action, like Send to oven and Serve.
 	local takeButton = Widgets.button("Take order", function()
 		if selected then
 			local id = selected
@@ -61,65 +85,70 @@ function Order.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
-	local bh = if ctx.compact then 52 else 72
-	takeButton.frame.Size = UDim2.fromOffset(bh * 3.1, bh)
-	takeButton.frame.AnchorPoint = Vector2.new(1, 1)
-	takeButton.frame.Position = UDim2.new(1, -16, 1, -12)
-	takeButton.frame.ZIndex = 5
-	takeButton.frame.Parent = frame
+	takeButton.frame.Size = UDim2.fromScale(1, 1)
+	takeButton.frame.Parent = ctx.actionHost("Order")
 
-	local cards: { [number]: any } = {}
+	local people: { [number]: any } = {}
 
-	local function cardFor(customer: any)
-		local w = if ctx.compact then 120 else 180
-		local card = Ui.new("TextButton", {
+	local function personFor(customer: any)
+		local cast = Recipes.Cast[customer.cast]
+		local slot = Ui.new("TextButton", {
 			Text = "",
 			AutoButtonColor = false,
-			BackgroundColor3 = C.paper,
-			BackgroundTransparency = 0.2,
-			Size = UDim2.new(0, w, 1, 0),
+			BackgroundTransparency = 1,
+			Size = UDim2.new(0, slotW, 1, 0),
 			LayoutOrder = customer.id,
 			Parent = row,
-		}, { Ui.corner(16) })
-		local stroke = Ui.stroke(C.ink, 2)
-		stroke.Parent = card
-		local cast = Recipes.Cast[customer.cast]
-		-- Placeholder figure until the illustrated cast exists.
-		Ui.new("Frame", {
-			BackgroundColor3 = cast.colour,
+		})
+		local figure = Ui.new("ImageLabel", {
+			Name = "Figure",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromScale(0.5, 1),
-			Size = UDim2.fromScale(0.7, 0.32),
-			Parent = card,
-		}, { Ui.corner(30), Ui.stroke(C.ink, 3) })
-		Ui.new("Frame", {
-			BackgroundColor3 = Color3.fromRGB(248, 214, 178),
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.72),
-			Size = UDim2.fromScale(0.5, 0.5),
-			SizeConstraint = Enum.SizeConstraint.RelativeXX,
-			Parent = card,
-		}, { Ui.round(), Ui.stroke(C.ink, 3) })
+			Size = UDim2.fromOffset(figureW, figureH),
+			Parent = slot,
+		})
+		local scale = Ui.new("UIScale", { Scale = 1, Parent = figure })
 		local name = Ui.text({
 			Text = cast.name,
 			FontFace = Theme.Font.display,
-			TextSize = if ctx.compact then 18 else 24,
+			TextSize = if ctx.compact then 18 else 28,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			Position = UDim2.new(0, 4, 0, 4),
-			Size = UDim2.new(1, -8, 0, if ctx.compact then 20 else 28),
-			Parent = card,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -figureH * 1.06 - 4),
+			Size = UDim2.new(1, 0, 0, if ctx.compact then 20 else 32),
+			Parent = slot,
 		})
+		-- A cream outline keeps the name readable over the busy shop interior.
+		Ui.new("UIStroke", { Color = C.label, Thickness = if ctx.compact then 2 else 3, Parent = name })
 		local meter = Widgets.patience()
-		meter.frame.Position = UDim2.new(0, 6, 0, name.Size.Y.Offset + 6)
 		local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
 		aspect.DominantAxis = Enum.DominantAxis.Width
-		meter.frame.Size = UDim2.new(1, -12, 0, 200)
-		meter.frame.Parent = card
-		card.Activated:Connect(function()
+		meter.frame.AnchorPoint = Vector2.new(0.5, 1)
+		meter.frame.Position = UDim2.new(0.5, 0, 1, -figureH * 1.06 - (if ctx.compact then 22 else 34))
+		meter.frame.Size = UDim2.new(0, math.min(slotW * 0.9, if ctx.compact then 110 else 200), 0, 200)
+		meter.frame.Parent = slot
+		slot.Activated:Connect(function()
 			selected = customer.id
 			ctx.refresh()
 		end)
-		return { card = card, stroke = stroke, meter = meter, customer = customer }
+		local person = { slot = slot, figure = figure, scale = scale, name = name, meter = meter, customer = customer, art = cast.name:lower(), band = "", phase = math.random() * math.pi * 2, chosen = false }
+		return person
+	end
+
+	local function setBand(p: any, band: string)
+		if p.band == band then
+			return
+		end
+		local first = p.band == ""
+		p.band = band
+		Art.apply(p.figure, string.format("chr_%s_%s", p.art, band))
+		if not first then
+			-- A small pop so the change of mood reads.
+			p.scale.Scale = (if p.chosen then 1.06 else 1) * 1.05
+			TweenService:Create(p.scale, POP, { Scale = if p.chosen then 1.06 else 1 }):Play()
+		end
 	end
 
 	local station = {}
@@ -131,16 +160,17 @@ function Order.new(ctx: any, container: Frame)
 			if customer.status == "waiting" then
 				waiting += 1
 				seen[customer.id] = true
-				if not cards[customer.id] then
-					cards[customer.id] = cardFor(customer)
+				if not people[customer.id] then
+					people[customer.id] = personFor(customer)
+					setBand(people[customer.id], "happy")
 				end
-				cards[customer.id].customer = customer
+				people[customer.id].customer = customer
 			end
 		end
-		for id, c in cards do
+		for id, p in people do
 			if not seen[id] then
-				c.card:Destroy()
-				cards[id] = nil
+				p.slot:Destroy()
+				people[id] = nil
 				if selected == id then
 					selected = nil
 				end
@@ -149,17 +179,21 @@ function Order.new(ctx: any, container: Frame)
 		if selected == nil then
 			-- Default to the longest-waiting customer so one tap is enough.
 			local first = nil
-			for id in cards do
+			for id in people do
 				if first == nil or id < first then
 					first = id
 				end
 			end
 			selected = first
 		end
-		for id, c in cards do
-			local isSel = id == selected
-			c.stroke.Color = if isSel then C.action else C.ink
-			c.stroke.Thickness = if isSel then 5 else 2
+		for id, p in people do
+			local chosen = id == selected
+			if chosen ~= p.chosen then
+				p.chosen = chosen
+				TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
+				TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
+			end
+			p.name.TextColor3 = if chosen then C.action else C.ink
 		end
 		local active = 0
 		for _, customer in snap.customers do
@@ -169,21 +203,33 @@ function Order.new(ctx: any, container: Frame)
 		end
 		local full = active >= Config.Shift.maxActiveTickets
 		takeButton:setEnabled(selected ~= nil and not full)
-		takeButton:setLabel(if full then "Rail full" else "Take order")
-		if waiting == 0 then
-			hint.Text = if snap.finished then "" else "No one waiting. Check your pizzas."
-		elseif full then
-			hint.Text = "Finish a pizza to free a ticket slot"
-		else
-			hint.Text = ""
-		end
+		-- The action keeps its name; why it is unavailable goes on the hint strip.
+		statusText = if waiting == 0 then "No one waiting. Check your pizzas."
+			elseif full then "Rail full: serve a pizza to free a ticket"
+			else nil
 	end
 
 	function station.tick(now: number)
-		for _, c in cards do
-			local f = Scoring.patienceFraction(c.customer.arrivedAt, now)
-			c.meter:set(f, Scoring.patienceBand(f))
+		for _, p in people do
+			local f = Scoring.patienceFraction(p.customer.arrivedAt, now)
+			local band = Scoring.patienceBand(f)
+			p.meter:set(f, band)
+			setBand(p, band)
+			-- Idle breathing: a slow, slight rise and fall, out of step between customers.
+			p.figure.Position = UDim2.new(0.5, 0, 1, math.sin(now * 2.2 + p.phase) * figureH * 0.006)
 		end
+	end
+
+	function station.status(_snap: any): any
+		return if statusText then { text = statusText } else nil
+	end
+
+	-- First-shift pointer: Take order, once someone is waiting and a ticket slot is free.
+	function station.hint(snap: any): any
+		if selected and takeButton.enabled then
+			return { target = takeButton.frame, text = "Tap Take order to start a ticket", from = "left" }
+		end
+		return nil
 	end
 
 	station.frame = frame

@@ -28,9 +28,10 @@ Theme.Colour = {
 
 Theme.Font = {
 	display = Font.new("rbxasset://fonts/families/FredokaOne.json"),
-	body = Font.new("rbxasset://fonts/families/SourceSansPro.json"),
-	bodySemi = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.SemiBold),
-	bodyBold = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold),
+	-- Rounded body face to sit with Fredoka; its larger x-height keeps TextSize 14 legible.
+	body = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.SemiBold),
+	bodySemi = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Bold),
+	bodyBold = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.ExtraBold),
 }
 
 Theme.Motion = {

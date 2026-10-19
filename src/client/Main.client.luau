@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
@@ -18,6 +19,7 @@ local Remote = require(script.Parent.Remote)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local Widgets = require(script.Parent.Widgets)
+local Tutorial = require(script.Parent.Tutorial)
 local Stations = {
 	Order = require(script.Parent.Stations.Order),
 	Topping = require(script.Parent.Stations.Topping),
@@ -27,6 +29,8 @@ local Stations = {
 local STATION_ORDER = { "Order", "Topping", "Bake", "Cut" }
 
 local C = Theme.Colour
+local NAV_SLIDE = TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local NAV_POP = TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local player = Players.LocalPlayer
 
 pcall(function()
@@ -78,9 +82,15 @@ local ctx: any = {
 	compact = false,
 	stationSize = Vector2.zero,
 	connections = {},
+	-- Stations whose first-shift pointer is done (see Tutorial).
+	learned = {},
 }
 
 function ctx.send(action: string, args: any, done: any)
+	local lesson = Tutorial.Lesson[action]
+	if lesson then
+		ctx.learned[lesson] = true
+	end
 	Remote.send(action, args, done)
 end
 
@@ -165,18 +175,24 @@ function ctx.withOptimistic(pizza: any): any
 	return copy
 end
 
+-- One status word per oven, the same on the HUD pill and the oven's plate, judged against
+-- the ticket's requested bake: Cooking with the seconds until it is ready, Ready inside the
+-- bake's perfect window, Overdone once past it, Burnt past the gauge's red line. There is no
+-- unexplained "+N s": time is only ever shown as the wait until Ready.
 function ctx.ovenStatus(bakeId: string, seconds: number): any
 	local target = Config.Oven.targets[bakeId]
 	local state = Scoring.bakeState(target, seconds)
 	local progress = math.clamp(seconds / target, 0, 1)
 	if state == "under" then
-		return { progress = progress, colour = C.oven, text = string.format("%ds", math.ceil(target - seconds)), ready = false, alert = false }
+		local wait = math.max(1, math.ceil(target - Config.Oven.perfectWindow - seconds))
+		return { progress = progress, state = "cooking", word = "Cooking", text = string.format("Cooking %ds", wait), ready = false, alert = false }
 	elseif state == "perfect" then
-		return { progress = progress, colour = C.basil, text = "Ready!", ready = true, alert = true }
+		return { progress = progress, state = "ready", word = "Ready", text = "Ready", ready = true, alert = true }
 	elseif state == "over" then
-		return { progress = 1, colour = C.tomato, text = string.format("+%ds", math.floor(seconds - target)), ready = true, alert = true }
+		return { progress = 1, state = "ready", word = "Overdone", text = "Overdone", ready = true, alert = true, over = true }
 	end
-	return { progress = 1, colour = C.tomato, text = "Burnt", ready = true, alert = true }
+	-- Red is kept for burnt (and errors) only.
+	return { progress = 1, state = "burnt", word = "Burnt", text = "Burnt", ready = true, alert = true, burnt = true }
 end
 
 ------------------------------------------------------------------------------------------
@@ -206,23 +222,32 @@ local function destroyLayout()
 	ui = nil
 end
 
-local function badge(parent: GuiObject, size: number): TextLabel
-	local b = Ui.text({
-		Text = "",
-		FontFace = Theme.Font.bodyBold,
-		TextColor3 = C.white,
-		TextSize = math.max(14, math.floor(size * 0.62)),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		BackgroundTransparency = 0,
-		BackgroundColor3 = C.tomato,
+-- One count badge per tab: Astra's badge art with the live number centred on it, hidden at
+-- zero. Red (alert) asks for action; teal (info) is a count that can wait.
+local function badge(parent: GuiObject, size: number): ImageLabel
+	local b = Ui.new("ImageLabel", {
+		Name = "Badge",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(size, size),
 		ZIndex = 6,
 		Visible = false,
 		Parent = parent,
 	})
-	Ui.round().Parent = b
-	Ui.stroke(C.ink, 2).Parent = b
+	Art.apply(b, "ui_badge_alert")
+	Ui.text({
+		Name = "Count",
+		Text = "",
+		FontFace = Theme.Font.display,
+		TextColor3 = C.white,
+		TextSize = math.max(14, math.floor(size * 0.56)),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 7,
+		Parent = b,
+	})
 	return b
 end
 
@@ -251,7 +276,9 @@ local function background(name: string): Frame
 				Size = UDim2.new(1 / meta.cols, 1, 1 / meta.rows, 1),
 				Parent = holder,
 			})
-			Art.apply(tile, string.format("%s_%d", name, r * meta.cols + c + 1))
+			-- Tiles get their art only while the station shows (see switchTo): four
+			-- full-screen backgrounds at once overrun Studio's dev-art memory budget.
+			tile:SetAttribute("Art", string.format("%s_%d", name, r * meta.cols + c + 1))
 		end
 	end
 	return holder
@@ -268,13 +295,18 @@ local function buildLayout()
 	local hudInTopbar = inset.Height >= 32 and inset.Width >= 300
 	local hudH = if hudInTopbar then inset.Height else 44
 	local top = if hudInTopbar then 0 else hudH
-	local navH = if compact then 64 else math.clamp(math.round(size.Y * 0.11), 64, 120)
+	-- The drawn bar fills 136 of its 144 px, so phones need a 74 px row (68 px bar) for the
+	-- visible bar to meet the 64 px nav floor.
+	local navH = if compact then 74 else math.clamp(math.round(size.Y * 0.11), 74, 120)
 	-- Rail widths land on Astra's ticket proofs: 168 px tickets on a phone, 420 px at 1920.
 	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
-	local stationH = size.Y - top - navH
+	-- A reserved hint strip runs between the work surface and the tab bar, so tutorial
+	-- instructions and status reasons never cover food, ovens, trays or controls.
+	local stripH = if compact then 34 else math.clamp(math.round(size.Y * 0.05), 40, 56)
+	local stationH = size.Y - top - navH - stripH
 	-- Phones run the rail down beside the tab bar (which centres under the station) so the
 	-- ticket has room for its requirement icons; wide screens keep the full-width tab row.
-	local railH = if compact then size.Y - top else stationH
+	local railH = if compact then size.Y - top else stationH + stripH
 	ctx.stationSize = Vector2.new(size.X - railW, stationH)
 
 	local root = Ui.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = gui })
@@ -295,10 +327,23 @@ local function buildLayout()
 		Size = if hudInTopbar then UDim2.fromOffset(inset.Width, inset.Height) else UDim2.new(1, 0, 0, hudH),
 		Parent = if hudInTopbar then topGui else root,
 	})
+	-- Astra's coral HUD strip runs the full width of the top row, behind Roblox's buttons too.
+	local strip = Ui.new("ImageLabel", {
+		Name = "Strip",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.hudBar.slice,
+		SliceScale = hudH / Assets.Meta.hudBar.height,
+		Position = UDim2.fromOffset(0, if hudInTopbar then inset.Min.Y else 0),
+		Size = UDim2.new(1, 0, 0, hudH),
+		ZIndex = 0,
+		Parent = if hudInTopbar then topGui else root,
+	})
+	Art.apply(strip, "ui_hud_bar")
 	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
 	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
 	local pillH = math.min(if compact then 36 else 44, hudH - 4)
-	local pillMinW = math.round(pillH * (if compact then 120 / 36 else 240 / 44))
+	local pillMinW = math.round(pillH * (if compact then 96 / 36 else 240 / 44))
 	local pillScale = pillH / Assets.Meta.hudPill.height
 	-- Live content stays inside the pill's drawn safe area (96 px of 640 at each end).
 	local pillInset = math.round(Assets.Meta.hudPill.inset * pillScale)
@@ -311,7 +356,7 @@ local function buildLayout()
 		Padding = UDim.new(0, if compact then 8 else 12),
 		Parent = left,
 	})
-	local function pill(name: string, order: number): TextLabel
+	local function pill(name: string, order: number, iconName: string): TextLabel
 		local holder = Ui.new("ImageLabel", {
 			Name = name,
 			BackgroundTransparency = 1,
@@ -323,6 +368,19 @@ local function buildLayout()
 			Parent = left,
 		})
 		Art.apply(holder, "ui_hud_pill")
+		-- Astra's sun and coin icons lead each pill; the number stays live text.
+		local iconSize = math.round(pillH * 0.72)
+		local icon = Ui.new("ImageLabel", {
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, math.round(pillInset * 0.6), 0.5, 0),
+			Size = UDim2.fromOffset(iconSize, iconSize),
+			Parent = holder,
+		})
+		Art.apply(icon, iconName)
+		local lead = math.round(pillInset * 0.6) + iconSize
 		local text = Ui.text({
 			Name = "Text",
 			FontFace = Theme.Font.display,
@@ -330,26 +388,27 @@ local function buildLayout()
 			TextColor3 = C.labelStroke,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
-			Size = UDim2.fromScale(1, 1),
+			Position = UDim2.fromOffset(lead, 0),
+			Size = UDim2.new(1, -lead, 1, 0),
 			Parent = holder,
 		})
 		-- The pill grows (its middle stretches) when the text needs more room.
 		text:GetPropertyChangedSignal("TextBounds"):Connect(function()
-			holder.Size = UDim2.fromOffset(math.max(pillMinW, text.TextBounds.X + pillInset * 2), pillH)
+			holder.Size = UDim2.fromOffset(math.max(pillMinW, lead + text.TextBounds.X + pillInset * 1.4), pillH)
 		end)
 		return text
 	end
-	local day = pill("Day", 1)
+	local day = pill("Day", 1, "icon_day")
 	day.Text = "Day 1"
-	local coins = pill("Coins", 2)
-	coins.Text = "0 coins"
+	local coins = pill("Coins", 2, "icon_coin")
+	coins.Text = if compact then "0" else "0 coins"
 	local banner = Ui.text({
 		Name = "SaveBanner",
 		Text = "",
 		Visible = false,
 		FontFace = Theme.Font.bodySemi,
 		TextSize = 14,
-		TextColor3 = C.mutedInk,
+		TextColor3 = C.label,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
 		LayoutOrder = 3,
@@ -357,9 +416,11 @@ local function buildLayout()
 		Parent = left,
 	})
 	local ringSize = hudH - 6
-	-- On phones the oven labels drop to the 16 px floor so the pills and the save warning
-	-- still fit beside the ovens.
-	local ovenW = 2 * (ringSize + (if compact then 50 else 64)) + 12
+	-- Each oven is a pill with its badge and ring at the left end and the live status word.
+	-- On phones the pill shows the status word alone ("Cooking", the longest) at the 16 px
+	-- floor; desktop pills fit "Cooking 12s" at their 22 px cap.
+	local ovenPillW = ringSize + (if compact then 82 else 124)
+	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
@@ -372,27 +433,11 @@ local function buildLayout()
 	})
 	local ovenRings = {}
 	for i = 1, Config.Oven.slots do
-		local cell = Ui.new("Frame", {
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale((i - 1) / Config.Oven.slots, 0),
-			Size = UDim2.fromScale(1 / Config.Oven.slots, 1),
-			Parent = ovenPanel,
-		})
-		local ring = Widgets.ring(ringSize)
-		ring.frame.AnchorPoint = Vector2.new(0, 0.5)
-		ring.frame.Position = UDim2.fromScale(0, 0.5)
-		ring.frame.Parent = cell
-		local label = Ui.text({
-			Text = "Empty",
-			FontFace = Theme.Font.display,
-			TextSize = if compact then 16 else math.clamp(math.floor(hudH * 0.36), 12, 22),
-			TextWrapped = false,
-			Position = UDim2.fromOffset(ringSize + 4, 0),
-			Size = UDim2.new(1, -(ringSize + 4), 1, 0),
-			Parent = cell,
-		})
-		Ui.new("UIStroke", { Color = C.paper, Thickness = 2, Parent = label })
-		ovenRings[i] = { ring = ring, label = label }
+		local oven = Widgets.ovenStatus(ovenPillW, ringSize, compact)
+		oven.frame.AnchorPoint = Vector2.new(0, 0.5)
+		oven.frame.Position = UDim2.new(0, (i - 1) * (ovenPillW + 8), 0.5, 0)
+		oven.frame.Parent = ovenPanel
+		ovenRings[i] = oven
 	end
 	ovenPanel.Activated:Connect(function()
 		ctx.switchTo("Bake")
@@ -408,6 +453,10 @@ local function buildLayout()
 		Parent = root,
 	})
 
+	local hintStrip = Widgets.hintStrip(ctx.stationSize.X, stripH, compact)
+	hintStrip.frame.Position = UDim2.fromOffset(0, top + stationH)
+	hintStrip.frame.Parent = root
+
 	-- Rail: active ticket, the other open tickets as tabs, then the station's main action.
 	local rail = Ui.new("Frame", {
 		Name = "Rail",
@@ -417,23 +466,55 @@ local function buildLayout()
 		Size = UDim2.fromOffset(railW, railH),
 		Parent = root,
 	})
-	local panel = Ui.new("ImageLabel", { Name = "Panel", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = rail })
+	local panel = Ui.new("ImageLabel", {
+		Name = "Panel",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.railPanel.slice,
+		SliceScale = math.clamp(railW / Assets.Meta.railPanel.width, 0.4, 1),
+		Size = UDim2.fromScale(1, 1),
+		Parent = rail,
+	})
 	Art.apply(panel, "ui_rail_panel")
 	local pad = if compact then 6 else math.clamp(math.round(railW * 0.045), 12, 20)
 	local gap = if compact then 4 else 8
 	-- Phones keep the 48 px touch floor by putting the waiting tabs side by side.
-	local actionH = if compact then 48 else math.clamp(math.round(railH * 0.121), 56, 110)
+	-- 56 px on phones keeps the drawn button (its art, without the shadow margin) at 48 px or more.
+	local actionH = if compact then 56 else math.clamp(math.round(railH * 0.121), 56, 110)
 	-- Phone tabs are two lines (face and number, then the toppings), still two to a row.
 	local tabH = if compact then 60 else math.clamp(math.round(railH * 0.085), 44, 72)
 	local tabsN = Config.Shift.maxActiveTickets - 1
 	local tabRows = if compact then math.ceil(tabsN / 2) else tabsN
-	local ticketH = railH - pad * 2 - actionH - gap - tabRows * (tabH + gap)
+	-- Astra's mounting rail grips the active ticket's top edge. The ticket hangs a little
+	-- below the rail's centre so the torn top edge of ui_ticket_top shows under the clips.
+	local clipW = railW - pad * 2 + (if compact then 4 else 10)
+	local clipH = math.round(clipW / Assets.Meta.clipRail.aspect)
+	local drop = math.round(clipH * 0.4)
+	local ticketH = railH - pad * 2 - drop - actionH - gap - tabRows * (tabH + gap)
+	-- Wide screens: the ticket is only as tall as its content needs (header plus up to
+	-- five requirement rows at their largest), in Astra's 420x600 proportion at most; the
+	-- spare rail height goes under the waiting tabs instead of into blank paper.
+	if not compact then
+		ticketH = math.min(ticketH, math.round((railW - pad * 2) * 600 / 420))
+	end
 	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
-	ticket.frame.Position = UDim2.fromOffset(pad, pad)
+	ticket.frame.Position = UDim2.fromOffset(pad, pad + drop)
 	ticket.frame.Parent = rail
+	local clipRail = Ui.new("ImageLabel", {
+		Name = "ClipRail",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(railW / 2, pad - 2),
+		Size = UDim2.fromOffset(clipW, clipH),
+		ZIndex = 3,
+		Parent = rail,
+	})
+	Art.apply(clipRail, "ui_ticket_clip_rail")
 	local railEmpty = Ui.text({
 		Text = "No open tickets",
 		FontFace = Theme.Font.display,
+		TextColor3 = C.label,
 		TextSize = if compact then 16 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Position = UDim2.fromOffset(pad, pad),
@@ -451,6 +532,10 @@ local function buildLayout()
 			then Ui.new("UIGridLayout", { CellPadding = UDim2.fromOffset(gap, gap), CellSize = UDim2.new(0.5, -gap / 2, 0, tabH), SortOrder = Enum.SortOrder.LayoutOrder })
 			else Ui.new("UIListLayout", { Padding = UDim.new(0, gap), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	-- The tabs hang under the active ticket, whose height follows its content on desktop.
+	ticket.frame:GetPropertyChangedSignal("Size"):Connect(function()
+		tabList.Position = UDim2.fromOffset(pad, pad + drop + ticket.frame.Size.Y.Offset + gap)
+	end)
 	local actionArea = Ui.new("Frame", {
 		Name = "Action",
 		BackgroundTransparency = 1,
@@ -474,7 +559,8 @@ local function buildLayout()
 		stations[name].holder = holder
 	end
 
-	-- Navigation: proof backplate with four independent hit regions and live badges.
+	-- Navigation: Astra's continuous ivory bar, one coral pill that slides to the selected
+	-- tab, an icon and live label per tab and a single count badge.
 	local nav = Ui.new("Frame", {
 		Name = "Nav",
 		BackgroundTransparency = 1,
@@ -483,68 +569,103 @@ local function buildLayout()
 		Size = if compact then UDim2.fromOffset(ctx.stationSize.X, navH) else UDim2.new(1, 0, 0, navH),
 		Parent = root,
 	})
-	local barH = navH - 8
-	local barW = math.min((if compact then ctx.stationSize.X else size.X) - 16, barH * Assets.Meta.tabBarAspect)
-	barH = barW / Assets.Meta.tabBarAspect
-	local bar = Ui.new("Frame", {
+	local barH = navH - (if compact then 6 else 10)
+	local barW = math.min((if compact then ctx.stationSize.X else size.X) - (if compact then 8 else 24), if compact then 99999 else barH * 14)
+	local bar = Ui.new("ImageLabel", {
+		Name = "Frame",
 		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.navBar.slice,
+		SliceScale = barH / Assets.Meta.navBar.height,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(barW, barH),
 		Parent = nav,
 	})
-	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = bar }), "ui_tabBar_idle")
+	Art.apply(bar, "ui_nav_bar")
+	local edge = math.round(barH * 0.12)
+	local tabW = (barW - edge * 2) / 4
+	local selH = math.round(barH * 0.78)
+	local selected = Ui.new("ImageLabel", {
+		Name = "Selected",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Assets.Meta.navSelected.slice,
+		SliceScale = selH / Assets.Meta.navSelected.height,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(tabW - edge, selH),
+		ZIndex = 2,
+		Parent = bar,
+	})
+	Art.apply(selected, "ui_nav_tab_selected")
+	local iconNames = {}
+	for _, name in STATION_ORDER do
+		table.insert(iconNames, "icon_nav_" .. name:lower() .. "_idle")
+		table.insert(iconNames, "icon_nav_" .. name:lower() .. "_selected")
+	end
+	Art.preload(iconNames)
 	local tabs = {}
-	local tabNames = { Order = "Order", Topping = "Topping", Bake = "Bake", Cut = "Cut" }
+	local labelSize = if compact then 16 else math.clamp(math.floor(barH * 0.3), 18, 30)
+	local iconSize = math.round(barH * (if compact then 0.5 else 0.56))
+	local badgeSize = if compact then 22 else math.clamp(math.round(barH * 0.32), 24, 36)
 	for i, name in STATION_ORDER do
+		local centreX = edge + tabW * (i - 0.5)
 		local hit = Ui.new("TextButton", {
 			Name = name .. "Tab",
 			Text = "",
+			AutoButtonColor = false,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale((i - 1) / 4, 0),
-			Size = UDim2.fromScale(0.25, 1),
-			ZIndex = 3,
+			Position = UDim2.fromOffset(edge + tabW * (i - 1), 0),
+			Size = UDim2.new(0, tabW, 1, 0),
+			ZIndex = 5,
 			Parent = bar,
 		})
-		local label = Ui.text({
-			Text = tabNames[name],
-			FontFace = Theme.Font.display,
-			TextSize = if compact then 18 else math.clamp(math.floor(barH * 0.34), 18, 30),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Size = UDim2.fromScale(0.8, 0.6),
-			Position = UDim2.fromScale(0.08, 0.16),
-			ZIndex = 4,
-			Parent = hit,
-		})
-		local indicator = Ui.new("Frame", {
-			BackgroundColor3 = C.action,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.86),
-			Size = UDim2.new(0.5, 0, 0, if compact then 4 else 6),
-			ZIndex = 4,
-			Visible = false,
-			Parent = hit,
-		}, { Ui.round() })
-		local glow = Ui.new("Frame", {
-			BackgroundColor3 = C.action,
+		local content = Ui.new("Frame", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.86, 0.78),
-			ZIndex = 2,
-			Parent = hit,
-		}, { Ui.corner(12) })
-		-- While the V1 bar is in use its badge sockets are part of the art: each count badge
-		-- sits exactly on its socket, sized to its ring, so the two read as one circle.
-		local socket = Assets.Meta.tabBarSockets
-		local b = badge(bar, barH * socket.d - 4)
-		b.Position = UDim2.fromScale(socket.x[i], socket.y)
+			Position = UDim2.fromOffset(centreX, barH / 2),
+			Size = UDim2.fromOffset(tabW, barH),
+			ZIndex = 3,
+			Parent = bar,
+		}, {
+			Ui.new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, if compact then 4 else 10),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		local pop = Ui.new("UIScale", { Scale = 1, Parent = content })
+		local icon = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(iconSize, iconSize),
+			LayoutOrder = 1,
+			ZIndex = 3,
+			Parent = content,
+		})
+		local label = Ui.text({
+			Text = name,
+			FontFace = Theme.Font.display,
+			TextSize = labelSize,
+			TextWrapped = false,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, labelSize + 4),
+			LayoutOrder = 2,
+			ZIndex = 3,
+			Parent = content,
+		})
+		local stroke = Ui.new("UIStroke", { Color = C.labelStroke, Thickness = if compact then 1 else 2, Enabled = false, Parent = label })
+		-- The badge sits at the tab's top right, over the bar's upper edge.
+		local b = badge(bar, badgeSize)
+		b.Position = UDim2.fromOffset(edge + tabW * i - badgeSize * 0.7, badgeSize * 0.42)
 		hit.Activated:Connect(function()
 			ctx.switchTo(name)
 		end)
-		tabs[name] = { label = label, indicator = indicator, badge = b, glow = glow }
+		tabs[name] = { label = label, icon = icon, stroke = stroke, badge = b, pop = pop, x = centreX }
 	end
+	local navSelected = selected
 
 	-- Results appear top-centre over the work surface and never take input, so they can't
 	-- cover or swallow a tap meant for a button or the pizza.
@@ -556,21 +677,47 @@ local function buildLayout()
 		ZIndex = 9,
 		Parent = root,
 	})
-	local summary = Ui.new("Frame", {
+	-- End-of-shift modal: an invisible button takes the input; Astra's scrim image dims the
+	-- game behind the summary panel.
+	local summary = Ui.new("TextButton", {
 		Name = "Summary",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		ZIndex = 20,
 		Parent = root,
 	})
 
+	-- The shift summary dims and blocks the HUD too, so the modal covers the whole screen.
+	-- Only needed when the HUD lives in the top bar's own ScreenGui, which draws above the
+	-- root; there it covers the HUD band alone so the summary card below stays undimmed. In
+	-- the root, the summary's own scrim already covers the HUD.
+	local hudScrim = Ui.new("ImageButton", {
+		Name = "HudScrim",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ImageTransparency = 0.55,
+		Size = UDim2.new(1, 0, 0, if hudInTopbar then inset.Min.Y + hudH else 0),
+		Visible = false,
+		ZIndex = 50,
+		Parent = if hudInTopbar then topGui else nil,
+	})
+	Art.apply(hudScrim, "ui_scrim")
+
+	local tutorial = Tutorial.new(root, compact, bar)
+
 	ui = {
+		tutorial = tutorial,
+		hintStrip = hintStrip,
+		hudScrim = hudScrim,
 		root = root,
 		day = day,
 		coins = coins,
 		ticket = ticket,
+		clipRail = clipRail,
 		railEmpty = railEmpty,
 		tabList = tabList,
 		tabH = tabH,
@@ -581,6 +728,8 @@ local function buildLayout()
 		ovenRings = ovenRings,
 		stations = stations,
 		tabs = tabs,
+		navSelected = navSelected,
+		navBarH = barH,
 		banner = banner,
 		toastHolder = toastHolder,
 		summary = summary,
@@ -601,17 +750,38 @@ function ctx.switchTo(name: string, instant: boolean?)
 	for n, s in ui.stations do
 		s.holder.Visible = n == name
 	end
+	-- Studio dev art: images freed while this station was hidden come back now.
+	Art.restore(ui.stations[name].holder)
 	for n, f in ui.backgrounds do
 		f.Visible = n == name
+		if n ~= name then
+			for _, tile in f:GetChildren() do
+				Art.release(tile :: ImageLabel)
+			end
+		end
+	end
+	local shownBackground = ui.backgrounds[name]
+	if shownBackground then
+		for _, tile in shownBackground:GetChildren() do
+			Art.apply(tile :: ImageLabel, tile:GetAttribute("Art") :: string)
+		end
 	end
 	for n, f in ui.actions do
 		f.Visible = n == name
 	end
 	for n, t in ui.tabs do
 		local on = n == name
-		t.indicator.Visible = on
-		t.label.FontFace = if on then Theme.Font.bodyBold else Theme.Font.bodySemi
-		t.label.TextColor3 = if on then C.action else C.ink
+		Art.apply(t.icon, string.format("icon_nav_%s_%s", n:lower(), if on then "selected" else "idle"))
+		t.label.TextColor3 = if on then C.label else C.ink
+		t.stroke.Enabled = on
+		if on then
+			local target = UDim2.fromOffset(t.x, ui.navBarH / 2)
+			if instant or not changed then
+				ui.navSelected.Position = target
+			else
+				TweenService:Create(ui.navSelected, NAV_SLIDE, { Position = target }):Play()
+			end
+		end
 	end
 	if changed and not instant then
 		Widgets.tweenIn(ui.stations[name].holder, 24)
@@ -623,7 +793,10 @@ end
 -- second tap can't land on whatever control sits in the same spot on the next station.
 function ctx.nudge(name: string)
 	if ui and ctx.station ~= name then
-		Widgets.flash(ui.tabs[name].glow, 0.55)
+		-- The destination tab's icon and label pop once.
+		local pop = ui.tabs[name].pop
+		pop.Scale = 1.18
+		TweenService:Create(pop, NAV_POP, { Scale = 1 }):Play()
 	end
 end
 
@@ -654,6 +827,7 @@ local function refreshRail(snap: any)
 	shown = shown or open[1]
 	ui.ticket:set(shown)
 	ui.ticket.frame.Visible = shown ~= nil
+	ui.clipRail.Visible = shown ~= nil
 	ui.railEmpty.Visible = shown == nil
 	local seen = {}
 	for _, customer in open do
@@ -684,7 +858,7 @@ local function refreshHud(snap: any)
 	local profile = snap.profile or {}
 	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
 	local total = (profile.tips or 0) + (if snap.saved then 0 else snap.tips)
-	ui.coins.Text = string.format("%d coins", total)
+	ui.coins.Text = if ctx.compact then tostring(total) else string.format("%d coins", total)
 end
 
 local function refreshBadges(snap: any)
@@ -705,13 +879,14 @@ local function refreshBadges(snap: any)
 	end
 	for name, t in ui.tabs do
 		t.badge.Visible = counts[name] > 0
-		t.badge.Text = tostring(counts[name])
+		(t.badge:FindFirstChild("Count") :: TextLabel).Text = tostring(counts[name])
 	end
 end
 
 local function refreshSummary(snap: any)
 	local summary = ui.summary
 	summary.Visible = snap.finished == true
+	ui.hudScrim.Visible = snap.finished == true
 	-- Rebuilt when the save result arrives, which can be after the shift ends.
 	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.saved), tostring(snap.saveMessage)) else nil
 	if not snap.finished or ui.summaryShift == key then
@@ -720,22 +895,54 @@ local function refreshSummary(snap: any)
 	ui.summaryShift = key
 	Ui.clear(summary)
 	local area = ui.root.AbsoluteSize
-	local card = Ui.new("Frame", {
-		BackgroundColor3 = C.paper,
+	local scrim = Ui.new("ImageLabel", {
+		Name = "Scrim",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Stretch,
+		ImageTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 20,
+		Parent = summary,
+	})
+	Art.apply(scrim, "ui_scrim")
+	TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
+	local cardW = math.min(if ctx.compact then 420 else 560, area.X - 24)
+	local cardH = math.min(if ctx.compact then 300 else 400, area.Y - 24)
+	local card = Ui.new("ImageLabel", {
+		Name = "Card",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		-- Astra's metadata candidate (QA review, diagnostics/summary-slice-override-candidate):
+		-- 80 px margins so the slices clear the drawn corners, scaled by the smaller axis.
+		SliceCenter = Rect.new(80, 80, 760, 520),
+		SliceScale = math.min(cardW / 840, cardH / 600),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(math.min(if ctx.compact then 420 else 560, area.X - 24), math.min(if ctx.compact then 300 else 400, area.Y - 24)),
+		Size = UDim2.fromOffset(cardW, cardH),
 		ZIndex = 21,
 		Parent = summary,
-	}, { Ui.corner(24), Ui.stroke(C.ink, 3) })
+	})
+	Art.apply(card, "ui_panel_summary")
 	local profile = snap.profile or {}
+	-- Reward first and largest; rank and the save line are secondary.
+	Ui.text({
+		Text = string.format("+%d tips", snap.tips),
+		FontFace = Theme.Font.display,
+		TextSize = if ctx.compact then 30 else 44,
+		TextColor3 = C.tomato,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Size = UDim2.new(1, 0, 0, if ctx.compact then 36 else 52),
+		Position = UDim2.fromOffset(0, if ctx.compact then 50 else 72),
+		ZIndex = 22,
+		Parent = card,
+	})
 	local lines = {
-		string.format("Tips this shift: %d", snap.tips),
 		string.format("Experience: +%d", snap.xp),
 		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
 		if snap.saved then "Progress saved"
 			elseif snap.saveMessage == "Saving..." then "Saving..."
-			else ("Not saved: " .. tostring(snap.saveMessage or profile.message or "unknown")),
+			-- Player text only: the technical reason stays in the HUD save label.
+			else "Progress not saved",
 	}
 	Ui.text({
 		Text = "Shift complete",
@@ -749,11 +956,11 @@ local function refreshSummary(snap: any)
 	})
 	Ui.text({
 		Text = table.concat(lines, "\n"),
-		FontFace = Theme.Font.body,
+		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.new(0, 24, 0, 72),
-		Size = UDim2.new(1, -48, 0.5, 0),
+		Position = UDim2.new(0, 24, 0, if ctx.compact then 92 else 132),
+		Size = UDim2.new(1, -48, 0, if ctx.compact then 80 else 100),
 		ZIndex = 22,
 		Parent = card,
 	})
@@ -789,12 +996,16 @@ function ctx.showResult(ticketId: number)
 		end
 	end
 	local compact = ctx.compact
-	local toast = Ui.new("Frame", {
-		BackgroundColor3 = C.paper,
+	local toast = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceScale = if compact then 0.5 else 0.7,
 		Size = UDim2.new(1, 0, 0, (if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20)),
 		ZIndex = 9,
 		Parent = ui.toastHolder,
-	}, { Ui.corner(16), Ui.stroke(C.ink, 3) })
+	})
+	Art.apply(toast, "ui_card_result")
 	Ui.text({
 		Text = string.format("%s · %d%% · +%d tips", Recipes.Cast[customer.cast].name, r.overall, r.tip),
 		FontFace = Theme.Font.display,
@@ -844,7 +1055,7 @@ function ctx.refresh()
 	local profile = snap.profile
 	ui.banner.Visible = profile ~= nil and profile.status ~= "ok"
 	if profile and profile.message then
-		ui.banner.Text = if ctx.compact then "Not saving"
+		ui.banner.Text = if ctx.compact then "Not\nsaving"
 			elseif profile.status == "unavailable" then "Not saving: unpublished place"
 			else "Not saving: load failed"
 	end
@@ -903,19 +1114,36 @@ RunService.RenderStepped:Connect(function()
 		if pizza then
 			local customer = ctx.customer(snap, pizza.ticketId)
 			local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
-			slot.ring:set(status.progress, status.colour, tostring(i), "")
-			slot.label.Text = status.text
+			slot:set(status.progress, status.state, tostring(i), if ctx.compact then status.word else status.text)
 			alert = alert or status.alert
 		else
-			slot.ring:set(0, C.oven, tostring(i), "")
-			slot.label.Text = "Empty"
+			slot:set(0, "idle", tostring(i), "Empty")
 		end
 	end
-	ui.tabs.Bake.badge.BackgroundColor3 = if alert then C.tomato else C.mutedInk
+	-- Bake's count is teal while pizzas just bake, red once one needs taking out.
+	if alert ~= ui.bakeAlert then
+		ui.bakeAlert = alert
+		Art.apply(ui.tabs.Bake.badge, if alert then "ui_badge_alert" else "ui_badge_info")
+	end
 	local current = ui.stations[ctx.station]
 	if current then
 		current.tick(now)
 	end
+	-- The pointer runs on the first shift only, until each station's action has been done.
+	-- (Studio captures can hide it with the HideTutorial attribute on the screen gui.)
+	local firstShift = ((snap.profile or {}).shiftsCompleted or 0) == 0 and not gui:GetAttribute("HideTutorial")
+	local hint = nil
+	if firstShift and not snap.finished and current and current.hint and not ctx.learned[ctx.station] then
+		hint = current.hint(snap, now)
+	end
+	ui.tutorial.show(hint, now)
+	-- The strip carries the tutorial line while there is one, otherwise the station's status
+	-- reason (why its action is unavailable and what to do next).
+	local status = if current and current.status and not snap.finished then current.status(snap, now) else nil
+	local line = if hint and hint.text ~= "" then hint else status
+	ui.hintStrip:set(line and line.text, line and line.legend)
+	-- Anything shown again (the strip, the summary, a station) gets back art freed while hidden.
+	Art.restore(Players.LocalPlayer.PlayerGui)
 	ui.stations.Order.tick(now)
 end)
 

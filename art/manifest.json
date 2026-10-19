@@ -115,8 +115,8 @@
   },
   {
    "id": "ui_patience_grumpy",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_grumpy.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_grumpy.png",
    "kind": "copy",
    "outputs": [
     {
@@ -126,8 +126,8 @@
   },
   {
    "id": "ui_patience_happy",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_happy.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_happy.png",
    "kind": "copy",
    "outputs": [
     {
@@ -137,8 +137,8 @@
   },
   {
    "id": "ui_patience_impatient",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_impatient.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_impatient.png",
    "kind": "copy",
    "outputs": [
     {
@@ -148,8 +148,8 @@
   },
   {
    "id": "ui_patience_neutral",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_neutral.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_neutral.png",
    "kind": "copy",
    "outputs": [
     {
@@ -331,6 +331,997 @@
      ],
      "side": 384,
      "square": false
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_light_v1",
+   "job": "c3778957-a340-4275-b6ee-0aded2c320a6",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_c3778957-a340-4275-b6ee-0aded2c320a6.png",
+   "kind": "sprite",
+   "note": "G6 bake state: light. References: pizza_raw job + 02-bake.",
+   "outputs": [
+    {
+     "name": "pizza_bake_light",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_regular_v1",
+   "job": "5f7d80d6-4d18-463a-ac7f-4557b0ce332e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025012_5f7d80d6-4d18-463a-ac7f-4557b0ce332e.png",
+   "kind": "sprite",
+   "note": "G6 bake state: regular.",
+   "outputs": [
+    {
+     "name": "pizza_bake_regular",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_well_v1",
+   "job": "bb5bc65b-d106-4df4-a5f7-94ada038aee6",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_bb5bc65b-d106-4df4-a5f7-94ada038aee6.png",
+   "kind": "sprite",
+   "note": "G6 bake state: well done.",
+   "outputs": [
+    {
+     "name": "pizza_bake_well",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "pizza_bake_burnt_v1",
+   "job": "feffad93-4b4c-47d1-8c81-e99edc051dc2",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_feffad93-4b4c-47d1-8c81-e99edc051dc2.png",
+   "kind": "sprite",
+   "note": "G6 bake state: burnt.",
+   "outputs": [
+    {
+     "name": "pizza_bake_burnt",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "board_cut_v1",
+   "job": "e1b16b75-0225-40b7-9d5f-b468f6f992b1",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025013_e1b16b75-0225-40b7-9d5f-b468f6f992b1.png",
+   "kind": "sprite",
+   "note": "G9 cutting board, reference 03-cut.",
+   "outputs": [
+    {
+     "name": "board_cut",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_v1",
+   "job": "4958c7fe-0229-4551-baf3-b7dea153aaa3",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025237_4958c7fe-0229-4551-baf3-b7dea153aaa3.png",
+   "kind": "sprite",
+   "note": "G8 oven unit, empty interior, gauge without needle, blank plates. Reference 02-bake. Trimmed 1727x1938. Superseded by prop_oven_v2 (gauge recoloured to the doneness key); output renamed so it is not stored.",
+   "outputs": [
+    {
+     "name": "prop_oven_v1_superseded",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_v2",
+   "job": "8ca8c146-7d6f-4b53-8926-c566f1470edd",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_053628_8ca8c146-7d6f-4b53-8926-c566f1470edd.png",
+   "kind": "sprite",
+   "note": "G8 oven unit v2: edit of prop_oven_v1 (job ec3f1162, reference 4958c7fe) with the gauge arc in the doneness key order teal, green, amber, orange, red at the burnt end; background removed (job 8ca8c146). Layout matches v1 within about 0.5% (window 0.230-0.776 of height, dome centred). Superseded by prop_oven_v3 (gauge bands matched to grading); output renamed so it is not stored.",
+   "outputs": [
+    {
+     "name": "prop_oven_v2_superseded",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_v3",
+   "job": "b6583528-886a-406b-a58a-8146e73d2770",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_055333_b6583528-886a-406b-a58a-8146e73d2770.png",
+   "kind": "sprite",
+   "note": "G8 oven unit v3: edit of prop_oven_v2 (job 2e6385b4) with the gauge arc as five bands matched to grading: cold neutral, teal Light, green Regular, amber Well done, red Burnt; no orange. Background removed (job b6583528). Band divider angles measured in Studio into Assets.Meta.oven.gaugeEdges.",
+   "outputs": [
+    {
+     "name": "prop_oven",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_needle_v1",
+   "job": "bbe70561-8abc-44b5-8bf7-db44b23fc4c3",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_bbe70561-8abc-44b5-8bf7-db44b23fc4c3.png",
+   "kind": "sprite",
+   "note": "G8 gauge needle pointing up; hub centre at 0.873 of the trimmed height. Trimmed 263x895.",
+   "outputs": [
+    {
+     "name": "prop_oven_needle",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_cutter_wheel_v1",
+   "job": "3e0f21bd-8c2d-45ed-a35f-ee5ca61aabb7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_3e0f21bd-8c2d-45ed-a35f-ee5ca61aabb7.png",
+   "kind": "sprite",
+   "note": "G9 cutter wheel, face-on. Trimmed 868x878.",
+   "outputs": [
+    {
+     "name": "prop_cutter_wheel",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_cutter_handle_v1",
+   "job": "71fa649b-4907-4b7f-8ecd-c5c8122b0206",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_71fa649b-4907-4b7f-8ecd-c5c8122b0206.png",
+   "kind": "sprite",
+   "note": "G9 cutter handle and fork; axle ring centre at 0.097 of the trimmed height. Trimmed 414x1061.",
+   "outputs": [
+    {
+     "name": "prop_cutter_handle",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "fx_oven_glow_v1",
+   "job": "351cdf3d-b496-4f91-a60a-ab8a58bd706e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025238_351cdf3d-b496-4f91-a60a-ab8a58bd706e.png",
+   "kind": "sprite",
+   "note": "G8 oven glow, radial.",
+   "outputs": [
+    {
+     "name": "fx_oven_glow",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "chr_marta_v1",
+   "job": "4e65e68c-4fac-43e0-8840-32645750e96a",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_4e65e68c-4fac-43e0-8840-32645750e96a.png",
+   "kind": "frames",
+   "note": "G10 customer Marta: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_marta_happy",
+      "chr_marta_neutral",
+      "chr_marta_impatient",
+      "chr_marta_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "chr_bo_v1",
+   "job": "7569118f-4a09-4830-b67a-020ec7c4ac07",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_7569118f-4a09-4830-b67a-020ec7c4ac07.png",
+   "kind": "frames",
+   "note": "G10 customer Bo: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_bo_happy",
+      "chr_bo_neutral",
+      "chr_bo_impatient",
+      "chr_bo_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "chr_ines_v1",
+   "job": "8d84f58b-3322-4418-98c0-c598cd97dbaf",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025921_8d84f58b-3322-4418-98c0-c598cd97dbaf.png",
+   "kind": "frames",
+   "note": "G10 customer Ines: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_ines_happy",
+      "chr_ines_neutral",
+      "chr_ines_impatient",
+      "chr_ines_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "toppings_baked_v1",
+   "job": "ca4362db-7cee-48cc-a2b1-40cf80b5ae8e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_ca4362db-7cee-48cc-a2b1-40cf80b5ae8e.png",
+   "kind": "sheet",
+   "note": "Superseded by toppings_baked_v2 and toppings_pepper_red_baked_v1 (one baked drawing per raw variant). Outputs renamed so they are not stored.",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_baked_v1_unused",
+      "topping_mushroom_baked_v1_unused",
+      "topping_basil_baked_v1_unused",
+      "topping_olive_baked_v1_unused",
+      "topping_pepper_baked_v1_unused"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "toppings_baked_v2",
+   "job": "960d06ea-b79b-4720-bada-37a2f0556727",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_060222_960d06ea-b79b-4720-bada-37a2f0556727.png",
+   "kind": "sheet",
+   "note": "G7 v2: baked edit of toppings_raw_v1 (job 8c1db13d), same 15 pieces in the same layout so each baked drawing maps to its raw variant; background removed (job 960d06ea).",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_1_baked",
+      "topping_pepperoni_2_baked",
+      "topping_pepperoni_3_baked",
+      "topping_mushroom_1_baked",
+      "topping_mushroom_2_baked",
+      "topping_mushroom_3_baked",
+      "topping_basil_1_baked",
+      "topping_basil_2_baked",
+      "topping_basil_3_baked",
+      "topping_olive_1_baked",
+      "topping_olive_2_baked",
+      "topping_olive_3_baked",
+      "topping_pepper_1_baked",
+      "topping_pepper_2_baked",
+      "topping_pepper_3_baked"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "toppings_pepper_red_baked_v1",
+   "job": "e8dda604-8d61-4dfa-bc9a-a836488e8098",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_060225_e8dda604-8d61-4dfa-bc9a-a836488e8098.png",
+   "kind": "sheet",
+   "note": "Baked red bell pepper: edit of toppings_pepper_red_v1 (job 8e03484f), piece for piece; background removed (job e8dda604).",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepper_red_1_baked",
+      "topping_pepper_red_2_baked",
+      "topping_pepper_red_3_baked"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "fx_cut_groove_v1",
+   "job": "8ece9757-5253-410e-8b88-fe8079c4df18",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025921_8ece9757-5253-410e-8b88-fe8079c4df18.png",
+   "kind": "sprite",
+   "note": "G9 cut groove, stretched along each cut chord. Trimmed 1344x40.",
+   "outputs": [
+    {
+     "name": "fx_cut_groove",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_cut_groove_v2",
+   "job": "029131cb-6365-4251-8bb9-7067f0a296f7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_031912_029131cb-6365-4251-8bb9-7067f0a296f7.png",
+   "kind": "sprite",
+   "note": "G9 cut separation with cheese strands, replaces v1 strip if it reads better. Superseded by fx_cut_groove_v3: it drew a strip of pizza inside the cut, which read as a stretched food strip (QA Q10).",
+   "outputs": [
+    {
+     "name": "fx_cut_groove_b",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_cut_groove_v3",
+   "job": "f0a3bc71-de10-41ed-abfd-e6418a6df251",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_061112_f0a3bc71-de10-41ed-abfd-e6418a6df251.png",
+   "kind": "sprite",
+   "note": "G9 v3 cut crevice: dark slit with shadowed lifted edges, tapered ends, no food drawn inside (generated 8420d87f, background removed f0a3bc71). Stretched along each cut chord over the pizza, which stays the food.",
+   "outputs": [
+    {
+     "name": "fx_cut_groove_c",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_oven_glass_v1",
+   "job": "c93c5042-bdcc-41d2-b66b-fe5a600c6a91",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_031911_c93c5042-bdcc-41d2-b66b-fe5a600c6a91.png",
+   "kind": "sprite",
+   "note": "G8 oven window glass with reflections and steam, over the pizza.",
+   "outputs": [
+    {
+     "name": "fx_oven_glass",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_select_ring",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/fx_select_ring.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "fx_select_ring"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_extra_well",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_extra_well.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_extra_well"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_light",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_light.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_light"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_regular",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_regular.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_regular"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_well_done",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_well_done.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_well_done"
+    }
+   ]
+  },
+  {
+   "id": "icon_coin",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_coin.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_coin"
+    }
+   ]
+  },
+  {
+   "id": "icon_day",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_day.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_day"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_bake_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_bake_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_bake_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_bake_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_bake_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_bake_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_cut_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_cut_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_cut_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_cut_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_cut_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_cut_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_order_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_order_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_order_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_order_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_order_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_order_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_topping_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_topping_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_topping_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_topping_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_topping_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_topping_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_oven_white",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_oven_white.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_oven_white"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_4",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_4.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_4"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_6",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_6.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_6"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_8",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_8.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_8"
+    }
+   ]
+  },
+  {
+   "id": "icon_undo",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_undo.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_undo"
+    }
+   ]
+  },
+  {
+   "id": "ui_badge_alert",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_badge_alert.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_badge_alert"
+    }
+   ]
+  },
+  {
+   "id": "ui_badge_info",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_badge_info.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_badge_info"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_disabled",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_pressed",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_card_result",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_card_result.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_card_result"
+    }
+   ]
+  },
+  {
+   "id": "ui_hud_bar",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_hud_bar.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_hud_bar"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_bar",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_bar.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_bar"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_divider",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_divider.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_divider"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_tab_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_tab_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_tab_selected"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_burnt",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_burnt.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_burnt"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_cooking",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_cooking.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_cooking"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_ready",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_ready.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_ready"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_pill",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_pill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_pill"
+    }
+   ]
+  },
+  {
+   "id": "ui_panel_summary",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_panel_summary.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_panel_summary"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_amber",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_amber.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_amber"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_green",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_green.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_green"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_red",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_red.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_red"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_track",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_track.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_track"
+    }
+   ]
+  },
+  {
+   "id": "ui_rail_panel",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_rail_panel.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_rail_panel"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_burnt",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_burnt.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_burnt"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_cooking",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_cooking.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_cooking"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_ready",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_ready.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_ready"
+    }
+   ]
+  },
+  {
+   "id": "ui_scrim",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_scrim.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_scrim"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_clip_rail",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_clip_rail.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_clip_rail"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_divider",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_divider.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_divider"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_tab_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_tab_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_tab_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_tab_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_tab_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_tab_selected"
+    }
+   ]
+  },
+  {
+   "id": "ui_timer_fill",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_timer_fill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_timer_fill"
+    }
+   ]
+  },
+  {
+   "id": "ui_timer_track",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_timer_track.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_timer_track"
+    }
+   ]
+  },
+  {
+   "id": "ui_tutorial_hand",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_tutorial_hand.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tutorial_hand"
+    }
+   ]
+  },
+  {
+   "id": "ui_tutorial_target_halo",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_tutorial_target_halo.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tutorial_target_halo"
+    }
+   ]
+  },
+  {
+   "id": "bg_order_v1",
+   "job": "fe473294-69a7-46ca-83c1-28b9fe967457",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045617_fe473294-69a7-46ca-83c1-28b9fe967457.png",
+   "kind": "tiles",
+   "note": "Order station shop interior behind the counter, quiet right quarter and foot.",
+   "outputs": [
+    {
+     "name": "bg_order",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "prop_order_counter_v1",
+   "job": "dbbdce6f-7d66-4c48-8c41-b5314c0ef8e7",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045616_dbbdce6f-7d66-4c48-8c41-b5314c0ef8e7.png",
+   "kind": "sprite",
+   "note": "Order counter front; customers stand behind it.",
+   "outputs": [
+    {
+     "name": "prop_order_counter",
+     "side": 1024,
+     "square": false
+    }
+   ]
+  },
+  {
+   "id": "bg_bake_v1",
+   "job": "0e356d64-5592-4365-b592-3110cf3a4583",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045618_0e356d64-5592-4365-b592-3110cf3a4583.png",
+   "kind": "tiles",
+   "note": "Bake station kitchen wall behind the ovens.",
+   "outputs": [
+    {
+     "name": "bg_bake",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
+    }
+   ]
+  },
+  {
+   "id": "bg_cut_v1",
+   "job": "2fbd401d-8ae9-40e6-a377-de3205c25dc9",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_045617_2fbd401d-8ae9-40e6-a377-de3205c25dc9.png",
+   "kind": "tiles",
+   "note": "Cut station prep counter under the board.",
+   "outputs": [
+    {
+     "name": "bg_cut",
+     "width": 1920,
+     "height": 1080,
+     "cols": 2,
+     "rows": 2
     }
    ]
   }

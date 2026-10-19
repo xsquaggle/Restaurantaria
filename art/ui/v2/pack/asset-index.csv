@@ -1,0 +1,68 @@
+﻿asset,family,width,height,rendering,slice_center_source_pixels,alias_of,sha256
+icon_coin,core,128,128,Fit,,,638aa74a6f57fa3b45ca5522d9d7ffcc99a2026dcbed8363c41c908537a9fe9a
+icon_day,core,128,128,Fit,,,e2c9b6b018836cd5ce8dfa383da6e87e1ad3d2d9d03d887dac0ac7a81b0f9aab
+icon_undo,core,128,128,Fit,,,739f6892dd4469656b11a4f7f0a96e5d05533e8ac18c4ed60f17a1b3f7243671
+ui_ticket_top,core,840,96,Stretch,,,ba04780ad8e6a4d7b6202a2a2530c0897b5b11f7adecd8a220506fc0ccc4899c
+ui_ticket_mid,core,840,746,Stretch,,,841a7319e2e57adbfb8349be7dcc038d7801c6adeb5e466de2d2f186742788ae
+ui_ticket_bottom,core,840,96,Stretch,,,824405dba9e93d01d1ff4f51b1b589943d0388c321851cdee684867b20aff8c0
+ui_button_primary_highlighted,core,896,240,Slice,"[128, 112, 768, 128]",,52ffd38afe02e90bd580e8cfd522a5ad3c619fce382dc8ecbc19159f83657e53
+ui_button_primary_pressed,core,896,240,Slice,"[128, 112, 768, 128]",,92e1ba17365f1a4c5017427b01e88914c476911ebfd82802f4fb5dfaff4bfab6
+ui_button_secondary_disabled,core,512,160,Slice,"[88, 72, 424, 88]",,84008f53c1b42daf773e3c7e8b8c4f1cd3051512543a18ea78172db6d9aef065
+ui_button_secondary_idle,core,512,160,Slice,"[88, 72, 424, 88]",,06220c58d6f3f9760fecafa47177e409bace9ee35dffe1ed9c243dd7a57aaa67
+ui_button_secondary_pressed,core,512,160,Slice,"[88, 72, 424, 88]",,d8100c47bc815d1d261aaa702c9a4fffecc22134e8cfb6cb6fbb6bb93e9e9b18
+ui_card_result,core,880,400,Slice,"[40, 40, 840, 360]",,da44f1d5fd660a0f3713671d6058e299850163599948975d4acff33806cb6073
+ui_hud_bar,core,1024,128,Slice,"[32, 32, 992, 96]",,8ce5541ab40665c572bd272d6fa0d958716d0a9b0fe022318c85f479d8d27041
+ui_panel_summary,core,840,600,Slice,"[40, 40, 800, 560]",,5398f55e45728efeea4ba8db33ecf59f3f554e5e76764310d6e4f2c529e728bc
+ui_rail_panel,core,448,768,Slice,"[32, 32, 416, 736]",,5f261518b2c76bcf70f018c2720a77e7cc2034c27cd917bf045014475ec33689
+ui_ticket_clip_rail,core,768,96,Fit,,,6f2030c69683b096cfb76067f39895749465ece2d41d93e0af773ea12b38b768
+ui_button_primary_idle,core,896,240,Slice,"[128, 112, 768, 128]",,9360d2b92266a20cb012aad2b0dfb113c7db27eb1a48d63391076df8acd6942f
+ui_button_primary_disabled,core,896,240,Slice,"[128, 112, 768, 128]",,018ef2fe310cb677f3b9906d8e4ee5a1219a85af1d610ddf2807c5779540728d
+ui_hud_pill,core,640,152,Slice,"[88, 70, 552, 82]",,5423904e9acdca3c4611f4ced33581cbabaa6a3e3070f975eeaef7d7d16d3bc1
+ui_nav_bar,navigation,1024,144,Slice,"[72, 70, 952, 74]",,f2c16b1d67bbd915bae5e4bf6787f24c21799abeb41a2781fd968fc53a10374f
+ui_nav_tab_selected,navigation,512,144,Slice,"[72, 70, 440, 74]",,0d40e205e7accd011eb01ce54d5cb2d4fb9a4ad3cec1b289bd876c5cdcf3136a
+ui_ticket_tab_idle,navigation,512,144,Slice,"[40, 40, 472, 104]",,ca565639874654f70f4b5c45f6af1c4c6667490335b673360b3a1d9bb01fec08
+ui_ticket_divider,navigation,640,12,Stretch,,,0856305188ae146af42963c24cfed3a3480d73ce8636a744552856533cd459d3
+icon_nav_order_idle,navigation,128,128,Fit,,,3764b44ef00126caaa1284d3be3a3e87dcbd02791592dd177748914141cf3ff5
+icon_nav_topping_idle,navigation,128,128,Fit,,,980503163698041d5974cb178308c5cd1c8653949194f0b881e85332a802761c
+icon_nav_bake_idle,navigation,128,128,Fit,,,282fb11efbca9923eba33c017fba206b24ec32119513b0bbe603d8ada630ffdc
+ui_ticket_tab_selected,navigation,512,144,Slice,"[40, 40, 472, 104]",,0da2b3f73640ce97d4193e788c48d7dbed838139052cf9c4dbf651435e14c303
+icon_nav_cut_idle,navigation,128,128,Fit,,,dcdb53da9a4cb4510972dbc4c4d62cad73d49f5bcad2c539ea8b9915e3ca6308
+ui_nav_divider,navigation,12,128,Stretch,,,b5ff71d5d1b510ed0aa8ccd05967b2957e9d1ba97211d20c790f8ea7f4339fbf
+ui_badge_alert,navigation,96,96,Fit,,,e55a559bce01f54187ad32afb93f4368435897c2aa583357449cd64e3d16796b
+ui_badge_info,navigation,96,96,Fit,,,91c397d195ac46caaf391e3d911b253a38bb4073d143b37d4646ac8bac2f4fb0
+icon_nav_order_selected,navigation,128,128,Fit,,,a6ef4852a15a633e5faf33d2637c1c485c5d1356cbc977b07593e63732e4414e
+icon_nav_topping_selected,navigation,128,128,Fit,,,0f5cc1533843242e4d0384729d30536ba24d856caaa26616dc8d9665d41d3d15
+icon_nav_bake_selected,navigation,128,128,Fit,,,737e2cc6a0ac47d4f00bcc59ab746425d0b8ed1db0a793d003215dee7380e944
+icon_nav_cut_selected,navigation,128,128,Fit,,,4d12275988eabb4a0550bcf6a3bb72209b681472bf427544654dd7ccf783e63d
+icon_bake_extra_well,oven,128,128,Fit,,,99fbc7d8be8ca7b4386bcf81c6ddd93d22ec6290f85c5408d0568f5c97d5f4b2
+icon_bake_light,oven,128,128,Fit,,,154174905912b83237bba2273ffc84a39c4dbefa0cabf1a66a2c6fc2818b7533
+icon_bake_regular,oven,128,128,Fit,,,e125ba4faf6e3ef9841d759aacb70b8bf04e89e762db8cef4cbf5a43db44e931
+icon_bake_well_done,oven,128,128,Fit,,,89ce39578bb3faa2d6dbf1290f23b23f52f433d1f7f3929fb4d1fdab4c8fddcd
+icon_oven_white,oven,128,128,Fit,,,97df31ba78edd4e99579e1e512e952718214078c7a8535cb85415c048d3c82da
+icon_slices_4,oven,256,256,Fit,,,1749c387e822efa16b1da0caa28a501d45b30e876a0152ae8af65f93ff548735
+icon_slices_6,oven,256,256,Fit,,,a81c29ccc577d0ff597ab4fd7b4a3330c719632a355778c86c9d618a2ac9cca4
+icon_slices_8,oven,256,256,Fit,,,0137c7f337da5d027035df7f314dad25b3c9e02276f2a50d3744655401ffb8d2
+ui_oven_badge_burnt,oven,128,128,Fit,,,17e20508abfc57a7ff2f63c05d3955ab797d194a2771638a03e50670e594bf25
+ui_oven_badge_cooking,oven,128,128,Fit,,,f8294fbab9f350cc269ad915069cbce85fb72595864cb4171897ecc20768121c
+ui_oven_badge_idle,oven,128,128,Fit,,,73c72e6d321987b4b3393e7fb24e82caeb8733ebd96ee3e03bbff312085ed65d
+ui_oven_badge_ready,oven,128,128,Fit,,,88355f66c9e631bbe08cdea68563e04aa90c73aa90976428d3bd28d017b1f276
+ui_oven_pill,oven,800,200,Slice,"[100, 94, 700, 106]",,057dbfaedf70512eabdfed74bae21717b6d43079807d68d4cc2c145dc4427fca
+ui_ring_fill_burnt,oven,256,256,Fit,,,50238448eb63e5aa4ad15a51bc2f50610b278b70f46a810c2aaef2f3acddc3ca
+ui_ring_fill_cooking,oven,256,256,Fit,,,176f8ca138987662dc38645239e9a7e65b15cd9e9e7d277a393eaa4f6a02f095
+ui_ring_fill_ready,oven,256,256,Fit,,,1cb6f25b5ee3f749e6cd73aad6e1a17fc96028e0a48249087605f9ad2f1f461f
+ui_timer_fill,oven,512,64,Stretch,,,02badf155103e36e541c592cb6a9c1070c86e9433a7b6989e4d59cf1435c787c
+ui_timer_track,oven,512,64,Slice,"[32, 24, 480, 40]",,1f2df234ca4220ef6c2e3bbae50f15ee3102384100c2b5c7d30e475db47846dd
+ui_patience_happy,patience,128,128,Fit,,,ad826502a6568f3297fb92927e9023e77ab38b6628ea1e173cb5fd4bd6193574
+ui_patience_neutral,patience,128,128,Fit,,,155833bfeefc8dc5a3fc87aaa7c4a2281c80e79fe9b9b4d9fc666f8cbb6957cf
+ui_patience_impatient,patience,128,128,Fit,,,cdd610d48d577d459e257171b524de22e2cf860ae6d4bf507317d64cfb8ace97
+ui_patience_grumpy,patience,128,128,Fit,,,cb8bced9830fd27258d12b159ef8c9a35d3a28a6a5ad2a49375b41e1e968d44c
+ui_patience_track,patience,512,64,Slice,"[40, 28, 472, 36]",,6c8b8d2b31fb95014cef87343b2a507123ab58cc821011c8fc4f780ff98d003e
+ui_patience_fill_green,patience,512,64,Slice,"[40, 28, 472, 36]",,efbfce6758fa3374f61ca5586cadfeb1133106c3c5ff216e860e95c61d9b5be9
+ui_patience_fill_amber,patience,512,64,Slice,"[40, 28, 472, 36]",,e962d43aa0dc892c79475ec185a4a42bb252284f846b4322509f1bd0ae371416
+ui_patience_fill_red,patience,512,64,Slice,"[40, 28, 472, 36]",,cba305c211a5da837ecdd5de9da294242b87258918a54f31fe8e90e5a2bc63b2
+fx_select_ring,patience,256,256,Fit,,,38232c9fac2e1b11475f28b36e0287ccdfad43e1470058310edc7d938277a71b
+ui_tutorial_hand,patience,256,256,Fit,,,07c2ef7b4a1b36b3bad9e2c85937610f2c2eb3be81e6b4a233a3d65fb94fd01a
+ui_tutorial_target_halo,patience,256,256,Fit,,,397ac8fbf560b6f8c2cd2c39ae1bc7a901875d6a7e72625376e02a271489d796
+ui_scrim,patience,256,256,Stretch,,,975bd133256870a801840355a83e7bf09554e21ffea575e49de671a3d63a91fc
+icon_bake,oven,128,128,Fit,,icon_bake_regular,e125ba4faf6e3ef9841d759aacb70b8bf04e89e762db8cef4cbf5a43db44e931
+icon_cut,navigation,128,128,Fit,,icon_nav_cut_idle,dcdb53da9a4cb4510972dbc4c4d62cad73d49f5bcad2c539ea8b9915e3ca6308

@@ -1,0 +1,3900 @@
+{
+  "schemaVersion": 2,
+  "package": "Pizzeria UI V2 handoff",
+  "date": "2026-10-19",
+  "status": "Complete requested art pack; offline export QA passed; Studio integration and Lawson acceptance pending.",
+  "assetFiles": 67,
+  "distinctArtExports": 65,
+  "aliases": 2,
+  "artOrigin": "Native image generation. Code used for technical crop, resize, alignment, alpha preparation, packaging and QA previews only.",
+  "paths": "All file/master paths in this root manifest are relative to package root. Original family manifests are provenance records only.",
+  "coordinates": "All rectangles [left,top,right,bottom], right/bottom exclusive. SliceCenter is in delivered runtime PNG source pixels, not high-resolution master pixels.",
+  "defaults": {
+    "BackgroundTransparency": 1,
+    "BorderSizePixel": 0,
+    "ImageColor3": "#FFFFFF",
+    "AutoButtonColor": false
+  },
+  "requestCoverage": {
+    "A1": [
+      "ui_hud_bar"
+    ],
+    "A2": [
+      "ui_hud_pill"
+    ],
+    "A3": [
+      "icon_day",
+      "icon_coin"
+    ],
+    "A4": [
+      "ui_oven_pill",
+      "ui_oven_badge_idle",
+      "ui_oven_badge_cooking",
+      "ui_oven_badge_ready",
+      "ui_oven_badge_burnt",
+      "ui_ring_fill_cooking",
+      "ui_ring_fill_ready",
+      "ui_ring_fill_burnt",
+      "ui_timer_track",
+      "ui_timer_fill"
+    ],
+    "A5": [
+      "ui_rail_panel"
+    ],
+    "A6": [
+      "ui_button_primary_idle",
+      "ui_button_primary_pressed",
+      "ui_button_primary_disabled",
+      "ui_button_primary_highlighted",
+      "ui_button_secondary_idle",
+      "ui_button_secondary_pressed",
+      "ui_button_secondary_disabled"
+    ],
+    "A7": [
+      "ui_ticket_top",
+      "ui_ticket_mid",
+      "ui_ticket_bottom",
+      "ui_ticket_divider",
+      "ui_ticket_tab_idle",
+      "ui_ticket_tab_selected"
+    ],
+    "A8": [
+      "icon_bake",
+      "icon_cut",
+      "icon_undo",
+      "icon_oven_white"
+    ],
+    "A9": [
+      "ui_nav_bar"
+    ],
+    "A10": [
+      "ui_nav_divider",
+      "ui_nav_tab_selected"
+    ],
+    "A11": [
+      "icon_nav_order_idle",
+      "icon_nav_order_selected",
+      "icon_nav_topping_idle",
+      "icon_nav_topping_selected",
+      "icon_nav_bake_idle",
+      "icon_nav_bake_selected",
+      "icon_nav_cut_idle",
+      "icon_nav_cut_selected"
+    ],
+    "A12": [
+      "ui_patience_happy",
+      "ui_patience_neutral",
+      "ui_patience_impatient",
+      "ui_patience_grumpy",
+      "ui_patience_track",
+      "ui_patience_fill_green",
+      "ui_patience_fill_amber",
+      "ui_patience_fill_red"
+    ],
+    "A13": [
+      "fx_select_ring"
+    ],
+    "A14": [
+      "ui_badge_alert",
+      "ui_badge_info"
+    ],
+    "A15": [
+      "ui_card_result"
+    ],
+    "A16": [
+      "ui_panel_summary"
+    ],
+    "A17": [
+      "ui_scrim"
+    ]
+  },
+  "assets": [
+    {
+      "name": "icon_coin",
+      "file": "assets/icon_coin.png",
+      "request": "A3",
+      "sizePx": [
+        128,
+        128
+      ],
+      "alphaBoundsGt16": [
+        8,
+        9,
+        119,
+        118
+      ],
+      "bodyBoundsGt128": [
+        9,
+        10,
+        119,
+        118
+      ],
+      "sha256": "638aa74a6f57fa3b45ca5522d9d7ffcc99a2026dcbed8363c41c908537a9fe9a",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 6539,
+      "scaleType": "Fit",
+      "targetsPx": [
+        40,
+        28
+      ],
+      "master": "sources/core/masters/icon_coin_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "b3c8820075049df1491d90e3d86e6d943e7ee8ba7efed7d709b01d3349905b0f",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "icon_day",
+      "file": "assets/icon_day.png",
+      "request": "A3",
+      "sizePx": [
+        128,
+        128
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        120,
+        120
+      ],
+      "bodyBoundsGt128": [
+        9,
+        9,
+        119,
+        119
+      ],
+      "sha256": "e2c9b6b018836cd5ce8dfa383da6e87e1ad3d2d9d03d887dac0ac7a81b0f9aab",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 9938,
+      "scaleType": "Fit",
+      "targetsPx": [
+        40,
+        28
+      ],
+      "master": "sources/core/masters/icon_day_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "2d8cea9238644ec0957fe15fd0d46d88779b187fc3630f31bba30670be6cd7fa",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "icon_undo",
+      "file": "assets/icon_undo.png",
+      "request": "A8",
+      "sizePx": [
+        128,
+        128
+      ],
+      "alphaBoundsGt16": [
+        8,
+        10,
+        120,
+        118
+      ],
+      "bodyBoundsGt128": [
+        9,
+        11,
+        119,
+        117
+      ],
+      "sha256": "739f6892dd4469656b11a4f7f0a96e5d05533e8ac18c4ed60f17a1b3f7243671",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 9961,
+      "scaleType": "Fit",
+      "targetsPx": [
+        64,
+        24
+      ],
+      "master": "sources/core/masters/icon_undo_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "414b90e28044268da89db366d86d50d603f72ceae825be2ccdcbd07338e87da6",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_ticket_top",
+      "file": "assets/ui_ticket_top.png",
+      "request": "A7 body",
+      "sizePx": [
+        840,
+        96
+      ],
+      "alphaBoundsGt16": [
+        6,
+        7,
+        834,
+        96
+      ],
+      "bodyBoundsGt128": [
+        7,
+        7,
+        833,
+        96
+      ],
+      "sha256": "ba04780ad8e6a4d7b6202a2a2530c0897b5b11f7adecd8a220506fc0ccc4899c",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 13394,
+      "scaleType": "Stretch",
+      "segmentCropRegisteredPx": [
+        0,
+        0,
+        840,
+        96
+      ],
+      "registeredMasterSizePx": [
+        840,
+        938
+      ],
+      "capHeightRule": "round(targetWidth*96/840); only the middle gets remaining height.",
+      "targets": [
+        {
+          "widthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "widthPx": 168,
+          "capHeightPx": 19
+        }
+      ],
+      "master": "sources/core/masters/ticket_master_clean_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "b2ab1b64e5b3f5d362f2bd858fdacc342806cc63e4f414d8d1bf1aa7617a6a6a",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_ticket_mid",
+      "file": "assets/ui_ticket_mid.png",
+      "request": "A7 body",
+      "sizePx": [
+        840,
+        746
+      ],
+      "alphaBoundsGt16": [
+        6,
+        0,
+        834,
+        746
+      ],
+      "bodyBoundsGt128": [
+        7,
+        0,
+        833,
+        746
+      ],
+      "sha256": "841a7319e2e57adbfb8349be7dcc038d7801c6adeb5e466de2d2f186742788ae",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 8207,
+      "scaleType": "Stretch",
+      "segmentCropRegisteredPx": [
+        0,
+        96,
+        840,
+        842
+      ],
+      "registeredMasterSizePx": [
+        840,
+        938
+      ],
+      "capHeightRule": "round(targetWidth*96/840); only the middle gets remaining height.",
+      "targets": [
+        {
+          "widthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "widthPx": 168,
+          "capHeightPx": 19
+        }
+      ],
+      "master": "sources/core/masters/ticket_master_clean_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "b2ab1b64e5b3f5d362f2bd858fdacc342806cc63e4f414d8d1bf1aa7617a6a6a",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_ticket_bottom",
+      "file": "assets/ui_ticket_bottom.png",
+      "request": "A7 body",
+      "sizePx": [
+        840,
+        96
+      ],
+      "alphaBoundsGt16": [
+        6,
+        0,
+        834,
+        90
+      ],
+      "bodyBoundsGt128": [
+        7,
+        0,
+        833,
+        89
+      ],
+      "sha256": "824405dba9e93d01d1ff4f51b1b589943d0388c321851cdee684867b20aff8c0",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 13060,
+      "scaleType": "Stretch",
+      "segmentCropRegisteredPx": [
+        0,
+        842,
+        840,
+        938
+      ],
+      "registeredMasterSizePx": [
+        840,
+        938
+      ],
+      "capHeightRule": "round(targetWidth*96/840); only the middle gets remaining height.",
+      "targets": [
+        {
+          "widthPx": 420,
+          "capHeightPx": 48
+        },
+        {
+          "widthPx": 168,
+          "capHeightPx": 19
+        }
+      ],
+      "master": "sources/core/masters/ticket_master_clean_generated.png",
+      "masterSizePx": [
+        1254,
+        1254
+      ],
+      "masterSha256": "b2ab1b64e5b3f5d362f2bd858fdacc342806cc63e4f414d8d1bf1aa7617a6a6a",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_primary_highlighted",
+      "file": "assets/ui_button_primary_highlighted.png",
+      "request": "A6 primary",
+      "sizePx": [
+        896,
+        240
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "sha256": "52ffd38afe02e90bd580e8cfd522a5ad3c619fce382dc8ecbc19159f83657e53",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 26960,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333
+        },
+        {
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2
+        }
+      ],
+      "sharedBodyRectPx": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "preparation": "Premultiplied-alpha body registration; alpha<=16 cleared; all pixels outside registered body rectangle cleared, including below row232.",
+      "text": "Live ivory #FFF8E8 with warm-brown #643027 outline; disabled dark brown. No automatic image tint.",
+      "phoneContentInsetsPx": [
+        14,
+        10,
+        14,
+        10
+      ],
+      "minHitHeightPx": 48,
+      "master": "sources/core/masters/ui_button_primary_highlighted_generated.png",
+      "masterSizePx": [
+        1774,
+        887
+      ],
+      "masterSha256": "d999ae56b3fcbb6f9a0826b3a59e6a088988eed68e569b7887b0895eaf8e6a0c",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_primary_pressed",
+      "file": "assets/ui_button_primary_pressed.png",
+      "request": "A6 primary",
+      "sizePx": [
+        896,
+        240
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "sha256": "92e1ba17365f1a4c5017427b01e88914c476911ebfd82802f4fb5dfaff4bfab6",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 26486,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333
+        },
+        {
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2
+        }
+      ],
+      "sharedBodyRectPx": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "preparation": "Premultiplied-alpha body registration; alpha<=16 cleared; all pixels outside registered body rectangle cleared, including below row232.",
+      "text": "Live ivory #FFF8E8 with warm-brown #643027 outline; disabled dark brown. No automatic image tint.",
+      "phoneContentInsetsPx": [
+        14,
+        10,
+        14,
+        10
+      ],
+      "minHitHeightPx": 48,
+      "master": "sources/core/masters/ui_button_primary_pressed_generated.png",
+      "masterSizePx": [
+        1774,
+        887
+      ],
+      "masterSha256": "c0aa680278b602b9ad97ecfe8ba1712b3f40e2f1ddcfeec2405b96af2d35c5bb",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_secondary_disabled",
+      "file": "assets/ui_button_secondary_disabled.png",
+      "request": "A6 secondary",
+      "sizePx": [
+        512,
+        160
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "sha256": "84008f53c1b42daf773e3c7e8b8c4f1cd3051512543a18ea78172db6d9aef065",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 13550,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 88,
+        "top": 72,
+        "right": 88,
+        "bottom": 72
+      },
+      "sliceCenterRectSourcePx": [
+        88,
+        72,
+        424,
+        88
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            210,
+            64
+          ],
+          "sliceScale": 0.4
+        },
+        {
+          "sizePx": [
+            86,
+            48
+          ],
+          "sliceScale": 0.3
+        }
+      ],
+      "master": "sources/core/masters/ui_button_secondary_disabled_generated.png",
+      "masterSizePx": [
+        2172,
+        724
+      ],
+      "masterSha256": "b32c9c15513a0a614d6c2af580077c9460a626a9b5ce0b4a9c2067e8a71294b9",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "sharedBodyRectPx": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "text": "Live dark-brown label; optional separate Undo icon. Preserve 16px primary font.",
+      "minHitHeightPx": 48,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_secondary_idle",
+      "file": "assets/ui_button_secondary_idle.png",
+      "request": "A6 secondary",
+      "sizePx": [
+        512,
+        160
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "sha256": "06220c58d6f3f9760fecafa47177e409bace9ee35dffe1ed9c243dd7a57aaa67",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 13535,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 88,
+        "top": 72,
+        "right": 88,
+        "bottom": 72
+      },
+      "sliceCenterRectSourcePx": [
+        88,
+        72,
+        424,
+        88
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            210,
+            64
+          ],
+          "sliceScale": 0.4
+        },
+        {
+          "sizePx": [
+            86,
+            48
+          ],
+          "sliceScale": 0.3
+        }
+      ],
+      "master": "sources/core/masters/ui_button_secondary_idle_generated.png",
+      "masterSizePx": [
+        2172,
+        724
+      ],
+      "masterSha256": "03ac5cb819a29409f5dcba2973fa24af0dba32257755f7c3868546e3ec2568ed",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "sharedBodyRectPx": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "text": "Live dark-brown label; optional separate Undo icon. Preserve 16px primary font.",
+      "minHitHeightPx": 48,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_secondary_pressed",
+      "file": "assets/ui_button_secondary_pressed.png",
+      "request": "A6 secondary",
+      "sizePx": [
+        512,
+        160
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "sha256": "d8100c47bc815d1d261aaa702c9a4fffecc22134e8cfb6cb6fbb6bb93e9e9b18",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 13500,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 88,
+        "top": 72,
+        "right": 88,
+        "bottom": 72
+      },
+      "sliceCenterRectSourcePx": [
+        88,
+        72,
+        424,
+        88
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            210,
+            64
+          ],
+          "sliceScale": 0.4
+        },
+        {
+          "sizePx": [
+            86,
+            48
+          ],
+          "sliceScale": 0.3
+        }
+      ],
+      "master": "sources/core/masters/ui_button_secondary_pressed_generated.png",
+      "masterSizePx": [
+        2172,
+        724
+      ],
+      "masterSha256": "419e653711ed43f807bb9bac87a2058334c965926122001a40f7cfc0519e3927",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "sharedBodyRectPx": [
+        8,
+        8,
+        504,
+        152
+      ],
+      "text": "Live dark-brown label; optional separate Undo icon. Preserve 16px primary font.",
+      "minHitHeightPx": 48,
+      "family": "core"
+    },
+    {
+      "name": "ui_card_result",
+      "file": "assets/ui_card_result.png",
+      "request": "A15",
+      "sizePx": [
+        880,
+        400
+      ],
+      "alphaBoundsGt16": [
+        4,
+        5,
+        876,
+        395
+      ],
+      "bodyBoundsGt128": [
+        4,
+        5,
+        876,
+        395
+      ],
+      "sha256": "da44f1d5fd660a0f3713671d6058e299850163599948975d4acff33806cb6073",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 11419,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 40,
+        "right": 40,
+        "bottom": 40
+      },
+      "sliceCenterRectSourcePx": [
+        40,
+        40,
+        840,
+        360
+      ],
+      "sliceScaleRule": "min",
+      "targets": [
+        {
+          "sizePx": [
+            440,
+            200
+          ],
+          "sliceScale": 0.5
+        },
+        {
+          "sizePx": [
+            340,
+            160
+          ],
+          "sliceScale": 0.38636363636363635
+        }
+      ],
+      "sourceCropPx": [
+        88,
+        112,
+        1774,
+        735
+      ],
+      "master": "sources/core/masters/ui_card_result_generated.png",
+      "masterSizePx": [
+        1860,
+        845
+      ],
+      "masterSha256": "311d7fd04db4a3d200a494fc7a1c7886be96a5cfa3a4c3bc17de24764e71b2de",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_hud_bar",
+      "file": "assets/ui_hud_bar.png",
+      "request": "A1",
+      "sizePx": [
+        1024,
+        128
+      ],
+      "alphaBoundsGt16": [
+        4,
+        4,
+        1021,
+        124
+      ],
+      "bodyBoundsGt128": [
+        4,
+        4,
+        1020,
+        123
+      ],
+      "sha256": "8ce5541ab40665c572bd272d6fa0d958716d0a9b0fe022318c85f479d8d27041",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 6852,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 32,
+        "top": 32,
+        "right": 32,
+        "bottom": 32
+      },
+      "sliceCenterRectSourcePx": [
+        32,
+        32,
+        992,
+        96
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            1920,
+            58
+          ],
+          "sliceScale": 0.453125
+        },
+        {
+          "sizePx": [
+            667,
+            58
+          ],
+          "sliceScale": 0.453125
+        }
+      ],
+      "sourceCropPx": [
+        42,
+        275,
+        1942,
+        508
+      ],
+      "master": "sources/core/masters/ui_hud_bar_generated.png",
+      "masterSizePx": [
+        1983,
+        793
+      ],
+      "masterSha256": "da99eb77e16f1108e57ac14ab0645a811d49d90f9f209df91c71b2811d037703",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_panel_summary",
+      "file": "assets/ui_panel_summary.png",
+      "request": "A16",
+      "sizePx": [
+        840,
+        600
+      ],
+      "alphaBoundsGt16": [
+        4,
+        5,
+        835,
+        595
+      ],
+      "bodyBoundsGt128": [
+        5,
+        6,
+        835,
+        595
+      ],
+      "sha256": "5398f55e45728efeea4ba8db33ecf59f3f554e5e76764310d6e4f2c529e728bc",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 12572,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 40,
+        "right": 40,
+        "bottom": 40
+      },
+      "sliceCenterRectSourcePx": [
+        40,
+        40,
+        800,
+        560
+      ],
+      "sliceScaleRule": "min",
+      "targets": [
+        {
+          "sizePx": [
+            560,
+            400
+          ],
+          "sliceScale": 0.6666666666666666
+        },
+        {
+          "sizePx": [
+            420,
+            300
+          ],
+          "sliceScale": 0.5
+        }
+      ],
+      "sourceCropPx": [
+        62,
+        92,
+        1424,
+        969
+      ],
+      "master": "sources/core/masters/ui_panel_summary_generated.png",
+      "masterSizePx": [
+        1484,
+        1060
+      ],
+      "masterSha256": "b4b141412dcf484e87225b52497b36160675505ee067e4445ca7489e4f815e61",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_rail_panel",
+      "file": "assets/ui_rail_panel.png",
+      "request": "A5",
+      "sizePx": [
+        448,
+        768
+      ],
+      "alphaBoundsGt16": [
+        4,
+        4,
+        444,
+        764
+      ],
+      "bodyBoundsGt128": [
+        4,
+        4,
+        444,
+        763
+      ],
+      "sha256": "5f261518b2c76bcf70f018c2720a77e7cc2034c27cd917bf045014475ec33689",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 9307,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 32,
+        "top": 32,
+        "right": 32,
+        "bottom": 32
+      },
+      "sliceCenterRectSourcePx": [
+        32,
+        32,
+        416,
+        736
+      ],
+      "sliceScaleRule": "width",
+      "targets": [
+        {
+          "sizePx": [
+            480,
+            870
+          ],
+          "sliceScale": 1.0714285714285714
+        },
+        {
+          "sizePx": [
+            180,
+            253
+          ],
+          "sliceScale": 0.4017857142857143
+        }
+      ],
+      "sourceCropPx": [
+        99,
+        98,
+        925,
+        1439
+      ],
+      "master": "sources/core/masters/ui_rail_panel_generated.png",
+      "masterSizePx": [
+        1024,
+        1536
+      ],
+      "masterSha256": "513c21ce38d5d5fa7c2a16401ee6b06a26ae77520b34820669a6af6cbd025963",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_ticket_clip_rail",
+      "file": "assets/ui_ticket_clip_rail.png",
+      "request": "A5 accessory",
+      "sizePx": [
+        768,
+        96
+      ],
+      "alphaBoundsGt16": [
+        2,
+        3,
+        766,
+        93
+      ],
+      "bodyBoundsGt128": [
+        3,
+        3,
+        765,
+        92
+      ],
+      "sha256": "6f2030c69683b096cfb76067f39895749465ece2d41d93e0af773ea12b38b768",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 8500,
+      "scaleType": "Fit",
+      "targets": [
+        {
+          "sizePx": [
+            420,
+            53
+          ]
+        },
+        {
+          "sizePx": [
+            168,
+            21
+          ]
+        }
+      ],
+      "sourceCropPx": [
+        49,
+        241,
+        2115,
+        452
+      ],
+      "master": "sources/core/masters/ui_ticket_clip_rail_generated.png",
+      "masterSizePx": [
+        2164,
+        727
+      ],
+      "masterSha256": "4278da95cc966929a4978fe18248f5474dd9bb45ec2d17f529fa8c15e97311e8",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": false,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_primary_idle",
+      "file": "assets/ui_button_primary_idle.png",
+      "request": "A6 primary",
+      "sizePx": [
+        896,
+        240
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "sha256": "9360d2b92266a20cb012aad2b0dfb113c7db27eb1a48d63391076df8acd6942f",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 26470,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333
+        },
+        {
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2
+        }
+      ],
+      "sharedBodyRectPx": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "preparation": "Premultiplied-alpha body registration; alpha<=16 cleared; all pixels outside registered body rectangle cleared, including below row232.",
+      "text": "Live ivory #FFF8E8 with warm-brown #643027 outline; disabled dark brown. No automatic image tint.",
+      "phoneContentInsetsPx": [
+        14,
+        10,
+        14,
+        10
+      ],
+      "minHitHeightPx": 48,
+      "master": "sources/core/masters/ui_button_primary_idle_generated.png",
+      "masterSizePx": [
+        1774,
+        887
+      ],
+      "masterSha256": "33aef6a854300cd1da80496cf73e37b21cba7bf71735bec7276d8fb079d4c35d",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": true,
+      "family": "core"
+    },
+    {
+      "name": "ui_button_primary_disabled",
+      "file": "assets/ui_button_primary_disabled.png",
+      "request": "A6 primary",
+      "sizePx": [
+        896,
+        240
+      ],
+      "alphaBoundsGt16": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "bodyBoundsGt128": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "sha256": "018ef2fe310cb677f3b9906d8e4ee5a1219a85af1d610ddf2807c5779540728d",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 26484,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 128,
+        "top": 112,
+        "right": 128,
+        "bottom": 112
+      },
+      "sliceCenterRectSourcePx": [
+        128,
+        112,
+        768,
+        128
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            420,
+            110
+          ],
+          "sliceScale": 0.4583333333333333
+        },
+        {
+          "sizePx": [
+            168,
+            48
+          ],
+          "sliceScale": 0.2
+        }
+      ],
+      "sharedBodyRectPx": [
+        8,
+        8,
+        888,
+        232
+      ],
+      "preparation": "Premultiplied-alpha body registration; alpha<=16 cleared; all pixels outside registered body rectangle cleared, including below row232.",
+      "text": "Live ivory #FFF8E8 with warm-brown #643027 outline; disabled dark brown. No automatic image tint.",
+      "phoneContentInsetsPx": [
+        14,
+        10,
+        14,
+        10
+      ],
+      "minHitHeightPx": 48,
+      "master": "sources/core/masters/ui_button_primary_disabled_generated.png",
+      "masterSizePx": [
+        1774,
+        887
+      ],
+      "masterSha256": "7ed9108c11f0d9d39b029e8ff483cc719155becd7d52fe5b632070ecd0696a9f",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": true,
+      "family": "core"
+    },
+    {
+      "name": "ui_hud_pill",
+      "file": "assets/ui_hud_pill.png",
+      "request": "A2",
+      "sizePx": [
+        640,
+        152
+      ],
+      "alphaBoundsGt16": [
+        6,
+        5,
+        635,
+        147
+      ],
+      "bodyBoundsGt128": [
+        6,
+        6,
+        634,
+        146
+      ],
+      "sha256": "5423904e9acdca3c4611f4ced33581cbabaa6a3e3070f975eeaef7d7d16d3bc1",
+      "sourcePixelRects": "[left,top,right,bottom],exclusive right/bottom",
+      "transparentPixels": 10915,
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": {
+        "left": 88,
+        "top": 70,
+        "right": 88,
+        "bottom": 70
+      },
+      "sliceCenterRectSourcePx": [
+        88,
+        70,
+        552,
+        82
+      ],
+      "sliceScaleRule": "height",
+      "targets": [
+        {
+          "sizePx": [
+            240,
+            44
+          ],
+          "sliceScale": 0.2894736842105263
+        },
+        {
+          "sizePx": [
+            120,
+            36
+          ],
+          "sliceScale": 0.23684210526315788
+        }
+      ],
+      "master": "sources/core/masters/ui_hud_pill_generated.png",
+      "masterSizePx": [
+        1774,
+        887
+      ],
+      "masterSha256": "a5288f6509091907266ff2b8601d5ce91b0d9b781ae013fa8b34258349e66a03",
+      "origin": "ChatGPT native image generation",
+      "reusedApprovedArt": true,
+      "preparation": "Exact reuse of delivered, Studio-checked HUD pill.",
+      "family": "core"
+    },
+    {
+      "name": "ui_nav_bar",
+      "requestId": "A9",
+      "file": "assets/ui_nav_bar.png",
+      "master": "sources/navigation/masters/ui_nav_bar_source.png",
+      "size": [
+        1024,
+        144
+      ],
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "sourceCrop": [
+        43,
+        220,
+        2129,
+        501
+      ],
+      "alphaBounds": [
+        7,
+        4,
+        1017,
+        140
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Slice",
+      "sha256": "f2c16b1d67bbd915bae5e4bf6787f24c21799abeb41a2781fd968fc53a10374f",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            1920,
+            110
+          ],
+          "sliceScale": 0.7638888888888888
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            667,
+            64
+          ],
+          "sliceScale": 0.4444444444444444
+        }
+      ],
+      "sliceMarginsSourcePx": [
+        72,
+        70,
+        72,
+        70
+      ],
+      "SliceCenter": [
+        72,
+        70,
+        952,
+        74
+      ],
+      "notes": "One continuous unsegmented backplate with no baked sockets, labels or dividers. Phone 64px row; interactive tab targets at least48px.",
+      "family": "navigation",
+      "sizePx": [
+        1024,
+        144
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        72,
+        70,
+        952,
+        74
+      ],
+      "masterSha256": "93aafa4ce25979a5c28d4574dd9b56dc7ddf325e1456403d59df67e90aed942b"
+    },
+    {
+      "name": "ui_nav_tab_selected",
+      "requestId": "A10",
+      "file": "assets/ui_nav_tab_selected.png",
+      "master": "sources/navigation/masters/ui_nav_tab_selected_source.png",
+      "size": [
+        512,
+        144
+      ],
+      "sourceSize": [
+        2022,
+        778
+      ],
+      "sourceCrop": [
+        98,
+        148,
+        1923,
+        608
+      ],
+      "alphaBounds": [
+        4,
+        8,
+        508,
+        135
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Slice",
+      "sha256": "0d40e205e7accd011eb01ce54d5cb2d4fb9a4ad3cec1b289bd876c5cdcf3136a",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            350,
+            96
+          ],
+          "sliceScale": 0.6666666666666666
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            150,
+            52
+          ],
+          "sliceScale": 0.3611111111111111
+        }
+      ],
+      "sliceMarginsSourcePx": [
+        72,
+        70,
+        72,
+        70
+      ],
+      "SliceCenter": [
+        72,
+        70,
+        440,
+        74
+      ],
+      "notes": "Slide selected pill as one image. White selected icon and live ivory label remain separate children; no baked underline.",
+      "family": "navigation",
+      "sizePx": [
+        512,
+        144
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        72,
+        70,
+        440,
+        74
+      ],
+      "masterSha256": "bf0078c8c1a294a77dc332b933c4434b790c368955d8b6d9e196f34353e4780e"
+    },
+    {
+      "name": "ui_ticket_tab_idle",
+      "requestId": "A7",
+      "file": "assets/ui_ticket_tab_idle.png",
+      "master": "sources/navigation/masters/ui_ticket_tab_idle_source.png",
+      "size": [
+        512,
+        144
+      ],
+      "sourceSize": [
+        1942,
+        809
+      ],
+      "sourceCrop": [
+        48,
+        145,
+        1898,
+        658
+      ],
+      "alphaBounds": [
+        11,
+        4,
+        501,
+        140
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Slice",
+      "sha256": "ca565639874654f70f4b5c45f6af1c4c6667490335b673360b3a1d9bb01fec08",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            415,
+            86
+          ],
+          "sliceScale": 0.5972222222222222
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            82,
+            48
+          ],
+          "sliceScale": 0.3333333333333333
+        }
+      ],
+      "sliceMarginsSourcePx": [
+        40,
+        40,
+        40,
+        40
+      ],
+      "SliceCenter": [
+        40,
+        40,
+        472,
+        104
+      ],
+      "notes": "Live content only. Same frame size in idle/selected. Phone hit area is82x48 minimum; verify contents fit without overlapping.",
+      "family": "navigation",
+      "sizePx": [
+        512,
+        144
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        40,
+        472,
+        104
+      ],
+      "masterSha256": "3f8ed4265e97e20b083f056e1b46b42220c99ae4616d5934add1b4d95a1ed719"
+    },
+    {
+      "name": "ui_ticket_divider",
+      "requestId": "A7",
+      "file": "assets/ui_ticket_divider.png",
+      "master": "sources/navigation/masters/ui_ticket_divider_source.png",
+      "size": [
+        640,
+        12
+      ],
+      "sourceSize": [
+        1672,
+        941
+      ],
+      "sourceCrop": [
+        79,
+        462,
+        1593,
+        480
+      ],
+      "alphaBounds": [
+        1,
+        2,
+        639,
+        10
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Stretch",
+      "sha256": "0856305188ae146af42963c24cfed3a3480d73ce8636a744552856533cd459d3",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            360,
+            4
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            144,
+            2
+          ]
+        }
+      ],
+      "notes": "Dashed artwork may stretch horizontally within given target widths. Do not 9-slice across dash ends.",
+      "family": "navigation",
+      "sizePx": [
+        640,
+        12
+      ],
+      "scaleType": "Stretch",
+      "masterSha256": "4f5d17635f6b37cd8b95e4fcec9c014f40978f3fe6cdd2a3f1571a61da90582d"
+    },
+    {
+      "name": "icon_nav_order_idle",
+      "requestId": "A11",
+      "file": "assets/icon_nav_order_idle.png",
+      "master": "sources/navigation/masters/icon_nav_order_idle_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        157,
+        49,
+        1100,
+        1212
+      ],
+      "alphaBounds": [
+        16,
+        5,
+        112,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "3764b44ef00126caaa1284d3be3a3e87dcbd02791592dd177748914141cf3ff5",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "4414c837cd4db337812045431fe6094dfa62ebd86d9394f6216bb0d1bc461b42"
+    },
+    {
+      "name": "icon_nav_topping_idle",
+      "requestId": "A11",
+      "file": "assets/icon_nav_topping_idle.png",
+      "master": "sources/navigation/masters/icon_nav_topping_idle_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        74,
+        70,
+        1178,
+        1181
+      ],
+      "alphaBounds": [
+        5,
+        5,
+        122,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "980503163698041d5974cb178308c5cd1c8653949194f0b881e85332a802761c",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "68e497639888df314a0240f07b03de4f21f070ca83f709bc435baff0b480fb99"
+    },
+    {
+      "name": "icon_nav_bake_idle",
+      "requestId": "A11",
+      "file": "assets/icon_nav_bake_idle.png",
+      "master": "sources/navigation/masters/icon_nav_bake_idle_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        82,
+        100,
+        1173,
+        1113
+      ],
+      "alphaBounds": [
+        5,
+        9,
+        123,
+        119
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "282fb11efbca9923eba33c017fba206b24ec32119513b0bbe603d8ada630ffdc",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "d54a0a6bb7dac5c81315c203fdc6880460333b57db5e0389f2235eee0a6068f5"
+    },
+    {
+      "name": "ui_ticket_tab_selected",
+      "requestId": "A7",
+      "file": "assets/ui_ticket_tab_selected.png",
+      "master": "sources/navigation/masters/ui_ticket_tab_selected_source.png",
+      "size": [
+        512,
+        144
+      ],
+      "sourceSize": [
+        1945,
+        809
+      ],
+      "sourceCrop": [
+        47,
+        142,
+        1901,
+        657
+      ],
+      "alphaBounds": [
+        11,
+        4,
+        501,
+        140
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Slice",
+      "sha256": "0da2b3f73640ce97d4193e788c48d7dbed838139052cf9c4dbf651435e14c303",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            415,
+            86
+          ],
+          "sliceScale": 0.5972222222222222
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            82,
+            48
+          ],
+          "sliceScale": 0.3333333333333333
+        }
+      ],
+      "sliceMarginsSourcePx": [
+        40,
+        40,
+        40,
+        40
+      ],
+      "SliceCenter": [
+        40,
+        40,
+        472,
+        104
+      ],
+      "notes": "Live content only. Same frame size in idle/selected. Phone hit area is82x48 minimum; verify contents fit without overlapping.",
+      "family": "navigation",
+      "sizePx": [
+        512,
+        144
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        40,
+        472,
+        104
+      ],
+      "masterSha256": "610bcf9c1113d814de7e22b7c734cd2ba86fe26972ecff0022109a2575c3ab02"
+    },
+    {
+      "name": "icon_nav_cut_idle",
+      "requestId": "A11",
+      "file": "assets/icon_nav_cut_idle.png",
+      "master": "sources/navigation/masters/icon_nav_cut_idle_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        57,
+        57,
+        1194,
+        1213
+      ],
+      "alphaBounds": [
+        6,
+        5,
+        122,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "dcdb53da9a4cb4510972dbc4c4d62cad73d49f5bcad2c539ea8b9915e3ca6308",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "0b66d20395d754ff531206c705035b89ef05e0beff2f5e0ca4cf9f8cf38aa1b6"
+    },
+    {
+      "name": "ui_nav_divider",
+      "requestId": "A10",
+      "file": "assets/ui_nav_divider.png",
+      "master": "sources/navigation/masters/ui_nav_divider_source.png",
+      "size": [
+        12,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        614,
+        342,
+        640,
+        911
+      ],
+      "alphaBounds": [
+        3,
+        1,
+        9,
+        127
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Stretch",
+      "sha256": "b5ff71d5d1b510ed0aa8ccd05967b2957e9d1ba97211d20c790f8ea7f4339fbf",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            3,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            2,
+            36
+          ]
+        }
+      ],
+      "notes": "Optional subtle separator. Hide between selected tab and neighbor if it crowds the selected pill.",
+      "family": "navigation",
+      "sizePx": [
+        12,
+        128
+      ],
+      "scaleType": "Stretch",
+      "masterSha256": "c42847ff557ec6431e07acdd7ecb7c04b5d48821a11893e2943cab3a9c9754c0"
+    },
+    {
+      "name": "ui_badge_alert",
+      "requestId": "A14",
+      "file": "assets/ui_badge_alert.png",
+      "master": "sources/navigation/masters/ui_badge_alert_source.png",
+      "size": [
+        96,
+        96
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        110,
+        110,
+        1144,
+        1137
+      ],
+      "alphaBounds": [
+        3,
+        3,
+        93,
+        92
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "e55a559bce01f54187ad32afb93f4368435897c2aa583357449cd64e3d16796b",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            32,
+            32
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            22,
+            22
+          ]
+        }
+      ],
+      "notes": "Single badge with centered live number. Anchor to tab top-right. Hide at zero; never show empty sockets. Keep inside safe bounds.",
+      "family": "navigation",
+      "sizePx": [
+        96,
+        96
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "e6d66fb7c11aa2a784b19c04f5c6bf263bbf7bea6407ea54a2fd506e3ab4d3ea"
+    },
+    {
+      "name": "ui_badge_info",
+      "requestId": "A14",
+      "file": "assets/ui_badge_info.png",
+      "master": "sources/navigation/masters/ui_badge_info_source.png",
+      "size": [
+        96,
+        96
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        138,
+        145,
+        1114,
+        1112
+      ],
+      "alphaBounds": [
+        3,
+        3,
+        93,
+        92
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "91c397d195ac46caaf391e3d911b253a38bb4073d143b37d4646ac8bac2f4fb0",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            32,
+            32
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            22,
+            22
+          ]
+        }
+      ],
+      "notes": "Single badge with centered live number. Anchor to tab top-right. Hide at zero; never show empty sockets. Keep inside safe bounds.",
+      "family": "navigation",
+      "sizePx": [
+        96,
+        96
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "28f022e4a9be2c1ad5995d7f6cbbfcd560637e1e236786bab67f783fe4a676ae"
+    },
+    {
+      "name": "icon_nav_order_selected",
+      "requestId": "A11",
+      "file": "assets/icon_nav_order_selected.png",
+      "master": "sources/navigation/masters/icon_nav_order_selected_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        159,
+        50,
+        1088,
+        1204
+      ],
+      "alphaBounds": [
+        16,
+        5,
+        111,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "a6ef4852a15a633e5faf33d2637c1c485c5d1356cbc977b07593e63732e4414e",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "0ee854a8171cb48e944e23f283679b2b520c068c4dfad70bfcf3a6e96874b5ef"
+    },
+    {
+      "name": "icon_nav_topping_selected",
+      "requestId": "A11",
+      "file": "assets/icon_nav_topping_selected.png",
+      "master": "sources/navigation/masters/icon_nav_topping_selected_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        80,
+        76,
+        1172,
+        1181
+      ],
+      "alphaBounds": [
+        5,
+        5,
+        122,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "0f5cc1533843242e4d0384729d30536ba24d856caaa26616dc8d9665d41d3d15",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "34483e7073f065937b2376da8abb474e0f282c819edda427055a9a2741d7d1d3"
+    },
+    {
+      "name": "icon_nav_bake_selected",
+      "requestId": "A11",
+      "file": "assets/icon_nav_bake_selected.png",
+      "master": "sources/navigation/masters/icon_nav_bake_selected_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        82,
+        110,
+        1173,
+        1113
+      ],
+      "alphaBounds": [
+        5,
+        10,
+        123,
+        118
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "737e2cc6a0ac47d4f00bcc59ab746425d0b8ed1db0a793d003215dee7380e944",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "2335cf25e160c414dadb41e5e4f77cd895142f43baa2d9b1679aa88ab4fba1a1"
+    },
+    {
+      "name": "icon_nav_cut_selected",
+      "requestId": "A11",
+      "file": "assets/icon_nav_cut_selected.png",
+      "master": "sources/navigation/masters/icon_nav_cut_selected_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        62,
+        57,
+        1188,
+        1209
+      ],
+      "alphaBounds": [
+        6,
+        5,
+        121,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "4d12275988eabb4a0550bcf6a3bb72209b681472bf427544654dd7ccf783e63d",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "414e9cb20bb120de83e5ca545f64996b9a33f490e9c13992601ccf403deac56f"
+    },
+    {
+      "name": "icon_bake_extra_well",
+      "file": "assets/icon_bake_extra_well.png",
+      "master": "sources/oven/masters/icon_bake_extra_well.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        72,
+        145,
+        1181,
+        1089
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        14,
+        122,
+        113
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "99fbc7d8be8ca7b4386bcf81c6ddd93d22ec6290f85c5408d0568f5c97d5f4b2",
+      "scaleType": "Fit",
+      "semantic": "requested recipe doneness, never actual oven progress",
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "ddcc947ef045f19308881e0c0face5c584c30a10e9fcda3926a646f362a8252f"
+    },
+    {
+      "name": "icon_bake_light",
+      "file": "assets/icon_bake_light.png",
+      "master": "sources/oven/masters/icon_bake_light.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        72,
+        146,
+        1182,
+        1089
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        14,
+        122,
+        113
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "154174905912b83237bba2273ffc84a39c4dbefa0cabf1a66a2c6fc2818b7533",
+      "scaleType": "Fit",
+      "semantic": "requested recipe doneness, never actual oven progress",
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "35b983bb494a343bfc952388ac46727a94bfde1c1799fd62572108b6e1e208f1"
+    },
+    {
+      "name": "icon_bake_regular",
+      "file": "assets/icon_bake_regular.png",
+      "master": "sources/oven/masters/icon_bake_regular.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        72,
+        145,
+        1182,
+        1089
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        14,
+        122,
+        113
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "e125ba4faf6e3ef9841d759aacb70b8bf04e89e762db8cef4cbf5a43db44e931",
+      "scaleType": "Fit",
+      "semantic": "requested recipe doneness, never actual oven progress",
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "a361c9e7bdc596c41700aec625270b1cf8de385f96a20434364813d21f2e4097"
+    },
+    {
+      "name": "icon_bake_well_done",
+      "file": "assets/icon_bake_well_done.png",
+      "master": "sources/oven/masters/icon_bake_well_done.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        70,
+        145,
+        1182,
+        1088
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        15,
+        122,
+        113
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "89ce39578bb3faa2d6dbf1290f23b23f52f433d1f7f3929fb4d1fdab4c8fddcd",
+      "scaleType": "Fit",
+      "semantic": "requested recipe doneness, never actual oven progress",
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "11bdf60e16444eb9d5271af29cf6ff497792d78b8b10807b1be6f250ba3360fd"
+    },
+    {
+      "name": "icon_oven_white",
+      "file": "assets/icon_oven_white.png",
+      "master": "sources/oven/masters/icon_oven_white.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        111,
+        149,
+        1142,
+        1124
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        9,
+        122,
+        119
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "97df31ba78edd4e99579e1e512e952718214078c7a8535cb85415c048d3c82da",
+      "scaleType": "Fit",
+      "minimumRecommendedDisplayPx": 24,
+      "family": "oven",
+      "masterSha256": "a2f2bc96e0dcc9b0aae1040f65aac049db7c6354e60a7b8c626ee413ee41a84f"
+    },
+    {
+      "name": "icon_slices_4",
+      "file": "assets/icon_slices_4.png",
+      "master": "sources/oven/masters/icon_slices_4.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        56,
+        59,
+        1198,
+        1185
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        9,
+        248,
+        246
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "1749c387e822efa16b1da0caa28a501d45b30e876a0152ae8af65f93ff548735",
+      "scaleType": "Fit",
+      "sliceCount": 4,
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "57734d7b0eb41a270c6728ca800eb863ef91247ed1aef793c58375cad822f23d"
+    },
+    {
+      "name": "icon_slices_6",
+      "file": "assets/icon_slices_6.png",
+      "master": "sources/oven/masters/icon_slices_6.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        29,
+        42,
+        1224,
+        1211
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        10,
+        248,
+        245
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "a81c29ccc577d0ff597ab4fd7b4a3330c719632a355778c86c9d618a2ac9cca4",
+      "scaleType": "Fit",
+      "sliceCount": 6,
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "abc551f0a57b842fbaa8e70742ae28446d13e05858ce844a0c0b6c5e5b34c3bc"
+    },
+    {
+      "name": "icon_slices_8",
+      "file": "assets/icon_slices_8.png",
+      "master": "sources/oven/masters/icon_slices_8.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        31,
+        40,
+        1220,
+        1206
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        10,
+        248,
+        245
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "0137c7f337da5d027035df7f314dad25b3c9e02276f2a50d3744655401ffb8d2",
+      "scaleType": "Fit",
+      "sliceCount": 8,
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "ecace537e5c441f17c1a774b772f05f23c94b82214f3d2d6f6012a44f8754cf7"
+    },
+    {
+      "name": "ui_oven_badge_burnt",
+      "file": "assets/ui_oven_badge_burnt.png",
+      "master": "sources/oven/masters/ui_oven_badge_burnt.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        57,
+        63,
+        1196,
+        1194
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        6,
+        122,
+        122
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "17e20508abfc57a7ff2f63c05d3955ab797d194a2771638a03e50670e594bf25",
+      "scaleType": "Fit",
+      "liveNumberAnchor": [
+        0.5,
+        0.5
+      ],
+      "liveNumberMaxBoundsPx": [
+        34,
+        34,
+        94,
+        94
+      ],
+      "semantic": "actual oven status; pair state with live status word",
+      "family": "oven",
+      "masterSha256": "8993dd4d9d802fe6bd2cdae05890cf8cd952ddfa75299138d751e00323fe9e91"
+    },
+    {
+      "name": "ui_oven_badge_cooking",
+      "file": "assets/ui_oven_badge_cooking.png",
+      "master": "sources/oven/masters/ui_oven_badge_cooking.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        56,
+        61,
+        1195,
+        1195
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        6,
+        122,
+        122
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "f8294fbab9f350cc269ad915069cbce85fb72595864cb4171897ecc20768121c",
+      "scaleType": "Fit",
+      "liveNumberAnchor": [
+        0.5,
+        0.5
+      ],
+      "liveNumberMaxBoundsPx": [
+        34,
+        34,
+        94,
+        94
+      ],
+      "semantic": "actual oven status; pair state with live status word",
+      "family": "oven",
+      "masterSha256": "9f7d42a94252bd7b289374afcc27743d5b77aa37c985205cb6e709e81449c08f"
+    },
+    {
+      "name": "ui_oven_badge_idle",
+      "file": "assets/ui_oven_badge_idle.png",
+      "master": "sources/oven/masters/ui_oven_badge_idle.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        59,
+        64,
+        1195,
+        1193
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        6,
+        122,
+        122
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "73c72e6d321987b4b3393e7fb24e82caeb8733ebd96ee3e03bbff312085ed65d",
+      "scaleType": "Fit",
+      "liveNumberAnchor": [
+        0.5,
+        0.5
+      ],
+      "liveNumberMaxBoundsPx": [
+        34,
+        34,
+        94,
+        94
+      ],
+      "semantic": "actual oven status; pair state with live status word",
+      "family": "oven",
+      "masterSha256": "2ac3c58d777585cfd962a93c52d1a6ce9e875533de6083762f6a80454703c86b"
+    },
+    {
+      "name": "ui_oven_badge_ready",
+      "file": "assets/ui_oven_badge_ready.png",
+      "master": "sources/oven/masters/ui_oven_badge_ready.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        58,
+        63,
+        1196,
+        1194
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        6,
+        122,
+        122
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "88355f66c9e631bbe08cdea68563e04aa90c73aa90976428d3bd28d017b1f276",
+      "scaleType": "Fit",
+      "liveNumberAnchor": [
+        0.5,
+        0.5
+      ],
+      "liveNumberMaxBoundsPx": [
+        34,
+        34,
+        94,
+        94
+      ],
+      "semantic": "actual oven status; pair state with live status word",
+      "family": "oven",
+      "masterSha256": "0fbe34ab8827f21c2973f365fcd09b7b793e8b2e0a8f28f41dd90f4e82489f1e"
+    },
+    {
+      "name": "ui_oven_pill",
+      "file": "assets/ui_oven_pill.png",
+      "master": "sources/oven/masters/ui_oven_pill.png",
+      "sourceSizePx": [
+        2170,
+        725
+      ],
+      "sourceCropPx": [
+        16,
+        87,
+        2147,
+        606
+      ],
+      "sizePx": [
+        800,
+        200
+      ],
+      "visibleBoundsAlpha16": [
+        4,
+        4,
+        795,
+        196
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "057dbfaedf70512eabdfed74bae21717b6d43079807d68d4cc2c145dc4427fca",
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": [
+        100,
+        94,
+        100,
+        94
+      ],
+      "sliceCenterPx": [
+        100,
+        94,
+        700,
+        106
+      ],
+      "sliceScaleRule": "target height / 200",
+      "targets": [
+        {
+          "sizePx": [
+            260,
+            48
+          ],
+          "sliceScale": 0.24
+        },
+        {
+          "sizePx": [
+            120,
+            40
+          ],
+          "sliceScale": 0.2
+        }
+      ],
+      "contentRectPx": [
+        112,
+        30,
+        688,
+        168
+      ],
+      "family": "oven",
+      "sliceCenterRectSourcePx": [
+        100,
+        94,
+        700,
+        106
+      ],
+      "masterSha256": "4760f62d5811f4adf49220793eee45c7aefcea1fdd52a7ec81cc9d653295841a"
+    },
+    {
+      "name": "ui_ring_fill_burnt",
+      "file": "assets/ui_ring_fill_burnt.png",
+      "master": "sources/oven/masters/ui_ring_fill_burnt.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        51,
+        58,
+        1198,
+        1187
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        8,
+        248,
+        248
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "50238448eb63e5aa4ad15a51bc2f50610b278b70f46a810c2aaef2f3acddc3ca",
+      "scaleType": "Fit",
+      "centerAlpha": 0,
+      "horizontalStrokeIntervals": [
+        [
+          8,
+          46
+        ],
+        [
+          210,
+          248
+        ]
+      ],
+      "progress": "Full ring; reveal through two-half masks. All state images share 256px canvas, centered 240px outer body. Do not show full ring as a fixed progress value.",
+      "family": "oven",
+      "masterSha256": "54b932e505703e74c1c18d01cd9b4c350fdf2f5ef5bc5b553e598323c06bbdfc"
+    },
+    {
+      "name": "ui_ring_fill_cooking",
+      "file": "assets/ui_ring_fill_cooking.png",
+      "master": "sources/oven/masters/ui_ring_fill_cooking.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        54,
+        60,
+        1197,
+        1186
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        8,
+        248,
+        248
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "176f8ca138987662dc38645239e9a7e65b15cd9e9e7d277a393eaa4f6a02f095",
+      "scaleType": "Fit",
+      "centerAlpha": 0,
+      "horizontalStrokeIntervals": [
+        [
+          8,
+          45
+        ],
+        [
+          210,
+          248
+        ]
+      ],
+      "progress": "Full ring; reveal through two-half masks. All state images share 256px canvas, centered 240px outer body. Do not show full ring as a fixed progress value.",
+      "family": "oven",
+      "masterSha256": "d7ff58b549a4b1b8cdd8f139b1cf40451941b985c0b473b4b8be7dd3312699e1"
+    },
+    {
+      "name": "ui_ring_fill_ready",
+      "file": "assets/ui_ring_fill_ready.png",
+      "master": "sources/oven/masters/ui_ring_fill_ready.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        51,
+        59,
+        1199,
+        1189
+      ],
+      "sizePx": [
+        256,
+        256
+      ],
+      "visibleBoundsAlpha16": [
+        8,
+        8,
+        248,
+        248
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "1cb6f25b5ee3f749e6cd73aad6e1a17fc96028e0a48249087605f9ad2f1f461f",
+      "scaleType": "Fit",
+      "centerAlpha": 0,
+      "horizontalStrokeIntervals": [
+        [
+          8,
+          46
+        ],
+        [
+          210,
+          248
+        ]
+      ],
+      "progress": "Full ring; reveal through two-half masks. All state images share 256px canvas, centered 240px outer body. Do not show full ring as a fixed progress value.",
+      "family": "oven",
+      "masterSha256": "7cce63746c08ffc9f4007b847d46a80618cefcd662935f09d390c430d0aa402b"
+    },
+    {
+      "name": "ui_timer_fill",
+      "file": "assets/ui_timer_fill.png",
+      "master": "sources/oven/masters/ui_timer_fill.png",
+      "sourceSizePx": [
+        2172,
+        724
+      ],
+      "sourceCropPx": [
+        26,
+        193,
+        2147,
+        515
+      ],
+      "sizePx": [
+        512,
+        64
+      ],
+      "visibleBoundsAlpha16": [
+        4,
+        4,
+        508,
+        60
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "02badf155103e36e541c592cb6a9c1070c86e9433a7b6989e4d59cf1435c787c",
+      "scaleType": "Stretch",
+      "progress": "Render full fill in the track inner area; reveal with clipping, never resize fill width as value changes.",
+      "family": "oven",
+      "masterSha256": "ee97ba877d67ed2b1b8cecc3e2725f02ef5ca8f9f48a47d4b16dd305461a6bfd"
+    },
+    {
+      "name": "ui_timer_track",
+      "file": "assets/ui_timer_track.png",
+      "master": "sources/oven/masters/ui_timer_track.png",
+      "sourceSizePx": [
+        2172,
+        724
+      ],
+      "sourceCropPx": [
+        17,
+        174,
+        2151,
+        574
+      ],
+      "sizePx": [
+        512,
+        64
+      ],
+      "visibleBoundsAlpha16": [
+        4,
+        4,
+        508,
+        60
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "1f2df234ca4220ef6c2e3bbae50f15ee3102384100c2b5c7d30e475db47846dd",
+      "scaleType": "Slice",
+      "sliceMarginsSourcePx": [
+        32,
+        24,
+        32,
+        24
+      ],
+      "sliceCenterPx": [
+        32,
+        24,
+        480,
+        40
+      ],
+      "sliceScaleRule": "target height / 64",
+      "contentRectPx": [
+        16,
+        14,
+        496,
+        50
+      ],
+      "family": "oven",
+      "sliceCenterRectSourcePx": [
+        32,
+        24,
+        480,
+        40
+      ],
+      "masterSha256": "93dc52b2bebc1a02331cd2f089e5ad434c0449555a7b916fc5687cceb5d6f195"
+    },
+    {
+      "name": "ui_patience_happy",
+      "path": "assets/ui_patience_happy.png",
+      "master": "sources/patience/masters/ui_patience_happy.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "f9171838daeddf30d6caad13834bc613f3bb7df0582a5198d24b87443cadd6fd",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        43,
+        45,
+        1207,
+        1209
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "displaySizeDesktop": [
+        64,
+        64
+      ],
+      "displaySizePhone": [
+        28,
+        28
+      ],
+      "scaleMode": "Fit",
+      "familyCanvas": "All four use the identical crop and 128x128 canvas; swap at the same position.",
+      "dimensions": [
+        128,
+        128
+      ],
+      "alphaBoundsThreshold8": [
+        4,
+        4,
+        125,
+        124
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "ad826502a6568f3297fb92927e9023e77ab38b6628ea1e173cb5fd4bd6193574",
+      "family": "patience",
+      "file": "assets/ui_patience_happy.png",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "f9171838daeddf30d6caad13834bc613f3bb7df0582a5198d24b87443cadd6fd"
+    },
+    {
+      "name": "ui_patience_neutral",
+      "path": "assets/ui_patience_neutral.png",
+      "master": "sources/patience/masters/ui_patience_neutral.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "5aa6191418019119e18ce2dce7155a6278c50de251c3f07b933409ed839b255c",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        43,
+        45,
+        1207,
+        1209
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "displaySizeDesktop": [
+        64,
+        64
+      ],
+      "displaySizePhone": [
+        28,
+        28
+      ],
+      "scaleMode": "Fit",
+      "familyCanvas": "All four use the identical crop and 128x128 canvas; swap at the same position.",
+      "dimensions": [
+        128,
+        128
+      ],
+      "alphaBoundsThreshold8": [
+        4,
+        4,
+        125,
+        124
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "155833bfeefc8dc5a3fc87aaa7c4a2281c80e79fe9b9b4d9fc666f8cbb6957cf",
+      "family": "patience",
+      "file": "assets/ui_patience_neutral.png",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "5aa6191418019119e18ce2dce7155a6278c50de251c3f07b933409ed839b255c"
+    },
+    {
+      "name": "ui_patience_impatient",
+      "path": "assets/ui_patience_impatient.png",
+      "master": "sources/patience/masters/ui_patience_impatient.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "4e0e1cb6ba5edc162158a9887cbc645e64f9288ca02f9cfc448e46d7484a9607",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        43,
+        45,
+        1207,
+        1209
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "displaySizeDesktop": [
+        64,
+        64
+      ],
+      "displaySizePhone": [
+        28,
+        28
+      ],
+      "scaleMode": "Fit",
+      "familyCanvas": "All four use the identical crop and 128x128 canvas; swap at the same position.",
+      "dimensions": [
+        128,
+        128
+      ],
+      "alphaBoundsThreshold8": [
+        3,
+        4,
+        125,
+        125
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "cdd610d48d577d459e257171b524de22e2cf860ae6d4bf507317d64cfb8ace97",
+      "family": "patience",
+      "file": "assets/ui_patience_impatient.png",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "4e0e1cb6ba5edc162158a9887cbc645e64f9288ca02f9cfc448e46d7484a9607"
+    },
+    {
+      "name": "ui_patience_grumpy",
+      "path": "assets/ui_patience_grumpy.png",
+      "master": "sources/patience/masters/ui_patience_grumpy.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "3efac7472a371950e631f9561a2b47418b07677cadd3e42f406c56595432c77a",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        43,
+        45,
+        1207,
+        1209
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "displaySizeDesktop": [
+        64,
+        64
+      ],
+      "displaySizePhone": [
+        28,
+        28
+      ],
+      "scaleMode": "Fit",
+      "familyCanvas": "All four use the identical crop and 128x128 canvas; swap at the same position.",
+      "dimensions": [
+        128,
+        128
+      ],
+      "alphaBoundsThreshold8": [
+        3,
+        4,
+        125,
+        125
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "cb8bced9830fd27258d12b159ef8c9a35d3a28a6a5ad2a49375b41e1e968d44c",
+      "family": "patience",
+      "file": "assets/ui_patience_grumpy.png",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "3efac7472a371950e631f9561a2b47418b07677cadd3e42f406c56595432c77a"
+    },
+    {
+      "name": "ui_patience_track",
+      "path": "assets/ui_patience_track.png",
+      "master": "sources/patience/masters/ui_patience_track.png",
+      "sourceDimensions": [
+        2172,
+        724
+      ],
+      "sourceSha256": "72e43d13626fac8de2a12ccfec4ed337c621969e379d758cfcc3a018545cbbb6",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        50,
+        261,
+        2121,
+        463
+      ],
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 28,
+        "right": 40,
+        "bottom": 28
+      },
+      "sliceCenter": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "sliceScale": "displayHeight / 64",
+      "displaySizeDesktop": [
+        200,
+        24
+      ],
+      "displaySizePhone": [
+        70,
+        10
+      ],
+      "fillContentRect": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "scaleMode": "Slice",
+      "dimensions": [
+        512,
+        64
+      ],
+      "alphaBoundsThreshold8": [
+        2,
+        7,
+        510,
+        57
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "6c8b8d2b31fb95014cef87343b2a507123ab58cc821011c8fc4f780ff98d003e",
+      "family": "patience",
+      "file": "assets/ui_patience_track.png",
+      "sizePx": [
+        512,
+        64
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "masterSha256": "72e43d13626fac8de2a12ccfec4ed337c621969e379d758cfcc3a018545cbbb6"
+    },
+    {
+      "name": "ui_patience_fill_green",
+      "path": "assets/ui_patience_fill_green.png",
+      "master": "sources/patience/masters/ui_patience_fill_green.png",
+      "sourceDimensions": [
+        2172,
+        724
+      ],
+      "sourceSha256": "544b13670a3c058945dd177c6d1b36896da23ea45b42ee9bba04ec59dd381a26",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        81,
+        297,
+        2091,
+        422
+      ],
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 28,
+        "right": 40,
+        "bottom": 28
+      },
+      "sliceCenter": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "sliceScale": "displayHeight / 64",
+      "displaySizeDesktop": [
+        200,
+        24
+      ],
+      "displaySizePhone": [
+        70,
+        10
+      ],
+      "fillContentRect": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "scaleMode": "Slice, then clip",
+      "progressRule": "Place full-size fill directly over track, identical dimensions and SliceScale. Animate an invisible clipping parent from left to right; never shrink the fill ImageLabel itself to represent progress. At 0 hide the fill. The track is opaque, so the fill must be ABOVE the track, fitted inside the recessed area; never place fill behind the opaque track.",
+      "dimensions": [
+        512,
+        64
+      ],
+      "alphaBoundsThreshold8": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "efbfce6758fa3374f61ca5586cadfeb1133106c3c5ff216e860e95c61d9b5be9",
+      "family": "patience",
+      "file": "assets/ui_patience_fill_green.png",
+      "sizePx": [
+        512,
+        64
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "masterSha256": "544b13670a3c058945dd177c6d1b36896da23ea45b42ee9bba04ec59dd381a26"
+    },
+    {
+      "name": "ui_patience_fill_amber",
+      "path": "assets/ui_patience_fill_amber.png",
+      "master": "sources/patience/masters/ui_patience_fill_amber.png",
+      "sourceDimensions": [
+        2172,
+        724
+      ],
+      "sourceSha256": "97eb2451fdecf0f5f963b8d2d7ea4a291e244b7b772443ce6c88f11dce21b4d7",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        78,
+        293,
+        2094,
+        421
+      ],
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 28,
+        "right": 40,
+        "bottom": 28
+      },
+      "sliceCenter": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "sliceScale": "displayHeight / 64",
+      "displaySizeDesktop": [
+        200,
+        24
+      ],
+      "displaySizePhone": [
+        70,
+        10
+      ],
+      "fillContentRect": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "scaleMode": "Slice, then clip",
+      "progressRule": "Place full-size fill directly over track, identical dimensions and SliceScale. Animate an invisible clipping parent from left to right; never shrink the fill ImageLabel itself to represent progress. At 0 hide the fill. The track is opaque, so the fill must be ABOVE the track, fitted inside the recessed area; never place fill behind the opaque track.",
+      "dimensions": [
+        512,
+        64
+      ],
+      "alphaBoundsThreshold8": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "e962d43aa0dc892c79475ec185a4a42bb252284f846b4322509f1bd0ae371416",
+      "family": "patience",
+      "file": "assets/ui_patience_fill_amber.png",
+      "sizePx": [
+        512,
+        64
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "masterSha256": "97eb2451fdecf0f5f963b8d2d7ea4a291e244b7b772443ce6c88f11dce21b4d7"
+    },
+    {
+      "name": "ui_patience_fill_red",
+      "path": "assets/ui_patience_fill_red.png",
+      "master": "sources/patience/masters/ui_patience_fill_red.png",
+      "sourceDimensions": [
+        2172,
+        724
+      ],
+      "sourceSha256": "083059418e5efe96d30fba3f950b8f85caaabe257d27fd586b00fa18617b0984",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        79,
+        294,
+        2093,
+        422
+      ],
+      "sliceMarginsSourcePx": {
+        "left": 40,
+        "top": 28,
+        "right": 40,
+        "bottom": 28
+      },
+      "sliceCenter": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "sliceScale": "displayHeight / 64",
+      "displaySizeDesktop": [
+        200,
+        24
+      ],
+      "displaySizePhone": [
+        70,
+        10
+      ],
+      "fillContentRect": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "scaleMode": "Slice, then clip",
+      "progressRule": "Place full-size fill directly over track, identical dimensions and SliceScale. Animate an invisible clipping parent from left to right; never shrink the fill ImageLabel itself to represent progress. At 0 hide the fill. The track is opaque, so the fill must be ABOVE the track, fitted inside the recessed area; never place fill behind the opaque track.",
+      "dimensions": [
+        512,
+        64
+      ],
+      "alphaBoundsThreshold8": [
+        14,
+        18,
+        498,
+        46
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "cba305c211a5da837ecdd5de9da294242b87258918a54f31fe8e90e5a2bc63b2",
+      "family": "patience",
+      "file": "assets/ui_patience_fill_red.png",
+      "sizePx": [
+        512,
+        64
+      ],
+      "scaleType": "Slice",
+      "sliceCenterRectSourcePx": [
+        40,
+        28,
+        472,
+        36
+      ],
+      "masterSha256": "083059418e5efe96d30fba3f950b8f85caaabe257d27fd586b00fa18617b0984"
+    },
+    {
+      "name": "fx_select_ring",
+      "path": "assets/fx_select_ring.png",
+      "master": "sources/patience/masters/fx_select_ring.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "54fa96e318dcfa88ab4128777183c7747442b6e51d8b8f064672d1c7124e6eb5",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "scaleMode": "Fit",
+      "displaySizeDesktop": [
+        110,
+        110
+      ],
+      "displaySizePhone": [
+        56,
+        56
+      ],
+      "animation": "Gentle scale/opacity pulse using this generated artwork; no generated particles or procedural outline. Respect reduced-motion preference if available.",
+      "dimensions": [
+        256,
+        256
+      ],
+      "alphaBoundsThreshold8": [
+        16,
+        17,
+        239,
+        237
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "38232c9fac2e1b11475f28b36e0287ccdfad43e1470058310edc7d938277a71b",
+      "family": "patience",
+      "file": "assets/fx_select_ring.png",
+      "sizePx": [
+        256,
+        256
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "54fa96e318dcfa88ab4128777183c7747442b6e51d8b8f064672d1c7124e6eb5"
+    },
+    {
+      "name": "ui_tutorial_hand",
+      "path": "assets/ui_tutorial_hand.png",
+      "master": "sources/patience/masters/ui_tutorial_hand.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "add4bf78bcca1d7cf9e44f08e741d11e04a13b5a37ed22faa16065ee8a00b63d",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        33,
+        30,
+        1233,
+        1230
+      ],
+      "anchorFingertipPx": [
+        113.5,
+        13
+      ],
+      "anchorFingertipNormalized": [
+        0.44336,
+        0.05078
+      ],
+      "scaleMode": "Fit",
+      "displaySizeDesktop": [
+        80,
+        80
+      ],
+      "displaySizePhone": [
+        56,
+        56
+      ],
+      "placement": "Position fingertip just outside the action target boundary. Pointer must not cover text, waiting orders, or the tap area. Rotate only when needed; rotate around the measured fingertip anchor. Pair with live instruction and target halo.",
+      "dimensions": [
+        256,
+        256
+      ],
+      "alphaBoundsThreshold8": [
+        49,
+        12,
+        207,
+        244
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "07c2ef7b4a1b36b3bad9e2c85937610f2c2eb3be81e6b4a233a3d65fb94fd01a",
+      "family": "patience",
+      "file": "assets/ui_tutorial_hand.png",
+      "sizePx": [
+        256,
+        256
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "add4bf78bcca1d7cf9e44f08e741d11e04a13b5a37ed22faa16065ee8a00b63d"
+    },
+    {
+      "name": "ui_tutorial_target_halo",
+      "path": "assets/ui_tutorial_target_halo.png",
+      "master": "sources/patience/masters/ui_tutorial_target_halo.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "c2abcdfe1be1267cbd4510aaf2bc15806364b0b9b5a2f16e72883554fe81728d",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Alpha<=8 export noise cleared; crop, premultiplied-alpha Lanczos resize, transparent padding. No artwork drawn or recolored by code.",
+      "sourceCrop": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "anchor": [
+        0.5,
+        0.5
+      ],
+      "scaleMode": "Fit",
+      "displaySizeDesktop": [
+        72,
+        72
+      ],
+      "displaySizePhone": [
+        56,
+        56
+      ],
+      "animation": "Gentle scale/opacity pulse using this generated artwork; no generated particles or procedural outline. Respect reduced-motion preference if available.",
+      "dimensions": [
+        256,
+        256
+      ],
+      "alphaBoundsThreshold8": [
+        39,
+        42,
+        216,
+        215
+      ],
+      "alphaMin": 0,
+      "alphaMax": 255,
+      "sha256": "397ac8fbf560b6f8c2cd2c39ae1bc7a901875d6a7e72625376e02a271489d796",
+      "family": "patience",
+      "file": "assets/ui_tutorial_target_halo.png",
+      "sizePx": [
+        256,
+        256
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "c2abcdfe1be1267cbd4510aaf2bc15806364b0b9b5a2f16e72883554fe81728d"
+    },
+    {
+      "name": "ui_scrim",
+      "path": "assets/ui_scrim.png",
+      "master": "sources/patience/masters/ui_scrim.png",
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "sourceSha256": "e968d3a2c66a3ce31af57d536f6ca1871eb9601ca4e902223fa701b92b01145c",
+      "originalArtwork": "OpenAI native image generation",
+      "textBaked": false,
+      "technicalPreparation": "Generated full-frame opaque deep-teal image resized only. Fade at runtime; no flat rectangle drawn by code.",
+      "sourceCrop": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "scaleMode": "Stretch",
+      "runtimeOpacity": 0.45,
+      "runtimeImageTransparency": 0.55,
+      "fullFrameOpaqueMaster": true,
+      "placement": "Full viewport under the modal and above gameplay. Interception of input belongs to an invisible UI element, not this image.",
+      "dimensions": [
+        256,
+        256
+      ],
+      "alphaBoundsThreshold8": [
+        0,
+        0,
+        256,
+        256
+      ],
+      "alphaMin": 255,
+      "alphaMax": 255,
+      "sha256": "975bd133256870a801840355a83e7bf09554e21ffea575e49de671a3d63a91fc",
+      "family": "patience",
+      "file": "assets/ui_scrim.png",
+      "sizePx": [
+        256,
+        256
+      ],
+      "scaleType": "Stretch",
+      "masterSha256": "e968d3a2c66a3ce31af57d536f6ca1871eb9601ca4e902223fa701b92b01145c"
+    },
+    {
+      "name": "icon_bake",
+      "file": "assets/icon_bake.png",
+      "master": "sources/oven/masters/icon_bake_regular.png",
+      "sourceSizePx": [
+        1254,
+        1254
+      ],
+      "sourceCropPx": [
+        72,
+        145,
+        1182,
+        1089
+      ],
+      "sizePx": [
+        128,
+        128
+      ],
+      "visibleBoundsAlpha16": [
+        6,
+        14,
+        122,
+        113
+      ],
+      "alphaCleanupRemovedPixels": 0,
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "textBaked": false,
+      "sha256": "e125ba4faf6e3ef9841d759aacb70b8bf04e89e762db8cef4cbf5a43db44e931",
+      "scaleType": "Fit",
+      "semantic": "requested recipe doneness, never actual oven progress",
+      "minimumRecommendedDisplayPx": 28,
+      "liveLabelRequired": true,
+      "family": "oven",
+      "masterSha256": "a361c9e7bdc596c41700aec625270b1cf8de385f96a20434364813d21f2e4097",
+      "aliasOf": "icon_bake_regular",
+      "requestId": "A8"
+    },
+    {
+      "name": "icon_cut",
+      "requestId": "A8",
+      "file": "assets/icon_cut.png",
+      "master": "sources/navigation/masters/icon_nav_cut_idle_source.png",
+      "size": [
+        128,
+        128
+      ],
+      "sourceSize": [
+        1254,
+        1254
+      ],
+      "sourceCrop": [
+        57,
+        57,
+        1194,
+        1213
+      ],
+      "alphaBounds": [
+        6,
+        5,
+        122,
+        123
+      ],
+      "anchorPoint": [
+        0.5,
+        0.5
+      ],
+      "renderMode": "Fit",
+      "sha256": "dcdb53da9a4cb4510972dbc4c4d62cad73d49f5bcad2c539ea8b9915e3ca6308",
+      "targets": [
+        {
+          "device": "desktop",
+          "sizePx": [
+            64,
+            64
+          ]
+        },
+        {
+          "device": "phone",
+          "sizePx": [
+            28,
+            28
+          ]
+        }
+      ],
+      "family": "navigation",
+      "sizePx": [
+        128,
+        128
+      ],
+      "scaleType": "Fit",
+      "masterSha256": "0b66d20395d754ff531206c705035b89ef05e0beff2f5e0ca4cf9f8cf38aa1b6",
+      "aliasOf": "icon_nav_cut_idle"
+    }
+  ]
+}

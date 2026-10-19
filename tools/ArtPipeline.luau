@@ -374,10 +374,40 @@ function Pipeline.run(manifest: any, only: { [string]: boolean }?): { string }
 			elseif source.kind == "sprite" then
 				local o = source.outputs[1]
 				local box = Pipeline.trimBox(src)
-				local img = Pipeline.fitSquare(Pipeline.crop(src, box), o.side, o.pad or 0)
+				local img = if o.square == false
+					then Pipeline.fitWithin(Pipeline.crop(src, box), o.side)
+					else Pipeline.fitSquare(Pipeline.crop(src, box), o.side, o.pad or 0)
 				Pipeline.bleed(img)
 				Pipeline.store(o.name, img)
 				table.insert(log, string.format("%s <- %s trimmed %dx%d", o.name, source.id, box.w, box.h))
+			elseif source.kind == "frames" then
+				-- Several drawings of one subject (e.g. a character's expressions): every frame
+				-- gets the same box, aligned on its drawing's bottom centre, so frames swap in
+				-- place without the subject jumping.
+				local boxes = Pipeline.readingOrder(Pipeline.components(src))
+				local names = source.outputs[1].names
+				if #boxes ~= #names then
+					table.insert(log, string.format("%s: expected %d frames, found %d", source.id, #names, #boxes))
+				else
+					local w, h = 0, 0
+					for _, b in boxes do
+						w, h = math.max(w, b.w), math.max(h, b.h)
+					end
+					for i, b in boxes do
+						local cx, bottom = b.x + b.w // 2, b.y + b.h
+						local box = {
+							x = math.clamp(cx - w // 2, 0, src.width - w),
+							y = math.clamp(bottom - h, 0, src.height - h),
+							w = w,
+							h = h,
+						}
+						local img = Pipeline.fitWithin(Pipeline.crop(src, box), source.outputs[1].side)
+						Pipeline.bleed(img)
+						Pipeline.store(names[i], img)
+						table.insert(log, string.format("%s <- %s frame %d,%d %dx%d", names[i], source.id, box.x, box.y, box.w, box.h))
+						task.wait()
+					end
+				end
 			elseif source.kind == "copy" then
 				-- Already a finished export (e.g. Astra's UI proofs): store the pixels unchanged.
 				local o = source.outputs[1]

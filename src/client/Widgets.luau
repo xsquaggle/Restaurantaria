@@ -12,15 +12,15 @@ local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
+local PizzaArt = require(script.Parent.PizzaArt)
 
 local C = Theme.Colour
 local Widgets = {}
 
 ------------------------------------------------------------------------------------------
 -- Action button: one fixed hitbox and label anchor across idle/pressed/disabled/highlighted.
--- Primary actions use Astra's V2 button, whose four states share one body outline, so only
--- the image changes between states. Secondary actions keep the V1 proof until V2 secondary
--- art arrives.
+-- Primary actions use Astra's coral V2 button and secondary actions her cream one; each
+-- family's states share one body outline, so only the image changes between states.
 
 export type Button = {
 	frame: Frame,
@@ -29,6 +29,7 @@ export type Button = {
 	setEnabled: (Button, boolean) -> (),
 	setHighlighted: (Button, boolean) -> (),
 	setLabel: (Button, string) -> (),
+	setIcon: (Button, string?) -> (),
 	enabled: boolean,
 	highlighted: boolean,
 }
@@ -40,17 +41,20 @@ local preloaded = false
 
 function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | "secondary")?): Button
 	local primary = kind ~= "secondary"
-	local artPrefix = if primary then "ui_button_primary_" else "ui_primary_"
+	local artPrefix = if primary then "ui_button_primary_" else "ui_button_secondary_"
+	local meta = if primary then Assets.Meta.buttonPrimary else Assets.Meta.buttonSecondary
 	if not preloaded then
 		preloaded = true
 		local names = {}
 		for _, state in BUTTON_STATES do
 			table.insert(names, "ui_button_primary_" .. state)
-			table.insert(names, "ui_primary_" .. state)
+			if state ~= "highlighted" then
+				table.insert(names, "ui_button_secondary_" .. state)
+			end
 		end
 		Art.preload(names)
 	end
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
+	local frame = Ui.new("Frame", { Name = (text:gsub("%W", "")) .. "Button", BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
 	-- Art and label share one body, so the press motion moves them together.
 	local body = Ui.new("Frame", {
 		Name = "Body",
@@ -66,14 +70,14 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = if primary then Assets.Meta.buttonPrimary.slice else Assets.Meta.primarySlice,
+		SliceCenter = meta.slice,
 		Parent = body,
 	})
 	local label = Ui.text({
 		Name = "Label",
 		Text = text,
-		FontFace = if primary then Theme.Font.display else Theme.Font.bodyBold,
-		TextColor3 = if primary then C.label else C.white,
+		FontFace = Theme.Font.display,
+		TextColor3 = if primary then C.label else C.ink,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		TextScaled = true,
@@ -83,6 +87,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		Parent = body,
 	})
 	local sizeLimit = Ui.new("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30, Parent = label })
+	-- Optional supplied icon left of the label (icon_undo, icon_oven_white). When the button
+	-- is too narrow for both, the label stands alone; the icon stands alone only where the
+	-- label would not fit either.
+	local icon = Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, AnchorPoint = Vector2.new(0, 0.5), Visible = false, ZIndex = 3, Parent = body })
+	local iconName: string? = nil
 	-- Ivory on coral needs its outline to read (Astra's README).
 	local stroke = Ui.new("UIStroke", { Color = C.labelStroke, Thickness = 1, Enabled = primary, Parent = label })
 	local hit = Ui.new("TextButton", {
@@ -99,12 +108,13 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 	local pressed = false
 	local function render()
 		local state = if not self.enabled then "disabled" elseif pressed then "pressed" elseif self.highlighted then "highlighted" else "idle"
-		Art.apply(art, artPrefix .. state)
+		-- The cream family has no highlighted state; it stays idle.
+		Art.apply(art, artPrefix .. (if not primary and state == "highlighted" then "idle" else state))
 		if primary then
 			label.TextColor3 = if state == "disabled" then C.labelDisabled else C.label
 			stroke.Enabled = state ~= "disabled"
 		else
-			label.TextColor3 = if state == "disabled" then C.ink else C.white
+			label.TextColor3 = if state == "disabled" then C.mutedInk else C.ink
 		end
 	end
 	local function layout()
@@ -115,9 +125,35 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		-- Astra's live-content insets: 32/24 px at 420x110 and 14/10 px at 168x48, i.e. a
 		-- fixed share of the height. Text keeps the 16 px floor and grows to 32 px.
 		local insetX, insetY = math.round(h * 0.29), math.round(h * 0.215)
-		art.SliceScale = math.max(h / (if primary then Assets.Meta.buttonPrimary.height else 207), 0.05)
-		label.Size = UDim2.fromOffset(math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0))
+		art.SliceScale = math.max(h / meta.height, 0.05)
+		local innerW, innerH = math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0)
 		sizeLimit.MaxTextSize = math.clamp(math.round(h * 0.29), 16, 32)
+		label.Position = UDim2.fromScale(0.5, 0.5)
+		label.Size = UDim2.fromOffset(innerW, innerH)
+		label.Visible = true
+		icon.Visible = iconName ~= nil
+		if iconName then
+			local iconSize = math.round(math.min(innerH * 1.1, h * 0.5))
+			local gap = math.round(iconSize * 0.25)
+			-- The label's width at its smallest allowed size (display font, about 0.55 em a glyph).
+			local need = #label.Text * 16 * 0.55
+			-- Too narrow for both: the words carry the meaning, so the icon gives way, unless
+			-- the words would not fit either (the small square Undo).
+			if innerW < iconSize + gap + need and innerW >= need then
+				icon.Visible = false
+			elseif innerW < iconSize + gap + need then
+				label.Visible = false
+				icon.AnchorPoint = Vector2.new(0.5, 0.5)
+				icon.Position = UDim2.fromScale(0.5, 0.5)
+			else
+				label.Size = UDim2.fromOffset(innerW - iconSize - gap, innerH)
+				label.Position = UDim2.new(0.5, (iconSize + gap) / 2, 0.5, 0)
+				local textW = math.min(label.TextBounds.X, innerW - iconSize - gap)
+				icon.AnchorPoint = Vector2.new(0, 0.5)
+				icon.Position = UDim2.new(0.5, -(textW + iconSize + gap) / 2 + 0, 0.5, 0)
+			end
+			icon.Size = UDim2.fromOffset(iconSize, iconSize)
+		end
 		stroke.Thickness = if h < 64 then 1 else 2
 	end
 
@@ -137,6 +173,13 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		end,
 		setLabel = function(_b: Button, t: string)
 			label.Text = t
+		end,
+		setIcon = function(_b: Button, name: string?)
+			iconName = name
+			if name then
+				Art.apply(icon, name)
+			end
+			layout()
 		end,
 	}
 	hit.MouseButton1Down:Connect(function()
@@ -165,15 +208,22 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		end
 	end)
 	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	label:GetPropertyChangedSignal("TextBounds"):Connect(function()
+		if iconName and label.Visible then
+			layout()
+		end
+	end)
 	layout()
 	render()
 	return self
 end
 
 ------------------------------------------------------------------------------------------
--- Oven ring: proof shell plus a live arc drawn with two clipped halves.
+-- Oven status (HUD): Astra's cream pill with the oven's badge at its left end, a progress
+-- ring round the badge and the live status word. The ring is her full-circle sprite shown
+-- through two half-clips whose gradients reveal it clockwise; nothing is drawn in code.
 
-export type Ring = { frame: Frame, set: (Ring, number, Color3, string, string) -> () }
+export type OvenStatus = { frame: Frame, set: (OvenStatus, number, string, string, string) -> () }
 
 local HALF = NumberSequence.new({
 	NumberSequenceKeypoint.new(0, 0),
@@ -181,124 +231,179 @@ local HALF = NumberSequence.new({
 	NumberSequenceKeypoint.new(0.5001, 1),
 	NumberSequenceKeypoint.new(1, 1),
 })
+local OVEN_STATES = { "idle", "cooking", "ready", "burnt" }
 
-function Widgets.ring(size: number): Ring
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size) })
-	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame }), "ui_ovenRing_idle")
-
-	-- UIStroke draws outside its frame, so size the clip halves to hold the whole stroke and
-	-- shrink the circle so the stroke's centreline sits on the shell's band.
-	local thickness = math.max(3, math.floor(size * Assets.Meta.ringBandWidth * 0.75))
-	local radius = Assets.Meta.ringBandRadius * size - thickness / 2
-	local holderSize = math.ceil(2 * (radius + thickness)) + 2
-	local arcHolder = Ui.new("Frame", {
+function Widgets.ovenStatus(width: number, height: number, compact: boolean): OvenStatus
+	local names = {}
+	for _, state in OVEN_STATES do
+		table.insert(names, "ui_oven_badge_" .. state)
+		if state ~= "idle" then
+			table.insert(names, "ui_ring_fill_" .. state)
+		end
+	end
+	Art.preload(names)
+	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(width, height) })
+	local pm = Assets.Meta.ovenPill
+	-- The pill sits a little inside the ring's height so the ring reads as mounted on its end.
+	local pillH = math.round(height * 0.8)
+	local pill = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = pm.slice,
+		SliceScale = pillH / pm.height,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, height * 0.5, 0.5, 0),
+		Size = UDim2.fromOffset(width - height * 0.5, pillH),
+		Parent = frame,
+	})
+	Art.apply(pill, "ui_oven_pill")
+	local disc = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(height, height), ZIndex = 2, Parent = frame })
+	local badge = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(holderSize, holderSize),
+		Size = UDim2.fromScale(0.74, 0.74),
 		ZIndex = 2,
-		Parent = frame,
+		Parent = disc,
 	})
+	local rings: { ImageLabel } = {}
 	local gradients: { [string]: UIGradient } = {}
-	local strokes: { UIStroke } = {}
-	local inset = holderSize / 2 - radius
 	for _, side in { "right", "left" } do
 		local clip = Ui.new("Frame", {
 			BackgroundTransparency = 1,
 			ClipsDescendants = true,
 			Size = UDim2.fromScale(0.5, 1),
 			Position = UDim2.fromScale(if side == "right" then 0.5 else 0, 0),
-			ZIndex = 2,
-			Parent = arcHolder,
+			ZIndex = 3,
+			Parent = disc,
 		})
-		local circle = Ui.new("Frame", {
+		local img = Ui.new("ImageLabel", {
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(radius * 2, radius * 2),
-			Position = UDim2.fromOffset(if side == "right" then -radius else inset, inset),
-			ZIndex = 2,
+			Size = UDim2.fromOffset(height, height),
+			Position = UDim2.fromOffset(if side == "right" then -height / 2 else 0, 0),
+			ZIndex = 3,
 			Parent = clip,
-		}, { Ui.round() })
-		local stroke = Ui.new("UIStroke", {
-			Thickness = thickness,
-			Color = C.oven,
-			Parent = circle,
 		})
-		gradients[side] = Ui.new("UIGradient", { Transparency = HALF, Parent = stroke })
-		table.insert(strokes, stroke)
+		gradients[side] = Ui.new("UIGradient", { Transparency = HALF, Parent = img })
+		table.insert(rings, img)
 	end
-
-	local slotLabel = Ui.text({
+	local number = Ui.text({
 		FontFace = Theme.Font.display,
+		TextSize = math.max(16, math.floor(height * 0.4)),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextScaled = true,
+		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.42),
-		Size = UDim2.fromScale(0.5, 0.3),
-		ZIndex = 3,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.6, 0.6),
+		ZIndex = 4,
+		Parent = disc,
+	})
+	local status = Ui.text({
+		FontFace = Theme.Font.display,
+		TextSize = if compact then 16 else math.clamp(math.floor(height * 0.4), 16, 22),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(height + 2, 0),
+		Size = UDim2.new(1, -(height + 2) - math.round(pillH * 0.2), 1, 0),
+		ZIndex = 2,
 		Parent = frame,
 	})
-	local statusLabel = Ui.text({
-		FontFace = Theme.Font.bodyBold,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextScaled = true,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.66),
-		Size = UDim2.fromScale(0.62, 0.2),
-		ZIndex = 3,
-		Parent = frame,
-	})
-	-- Phone top-row rings are ~50px; let the status shrink below the usual 12px floor there.
-	Ui.new("UITextSizeConstraint", { MinTextSize = if size < 70 then 9 else 12, MaxTextSize = 22, Parent = statusLabel })
-
-	local ring: Ring = {
+	local shown = nil
+	local o: OvenStatus = {
 		frame = frame,
-		set = function(_r: Ring, progress: number, colour: Color3, slotText: string, status: string)
+		set = function(_o: OvenStatus, progress: number, state: string, slotText: string, statusText: string)
+			if state ~= shown then
+				shown = state
+				Art.apply(badge, "ui_oven_badge_" .. state)
+				for _, img in rings do
+					if state ~= "idle" then
+						Art.apply(img, "ui_ring_fill_" .. state)
+					end
+				end
+			end
 			local angle = math.clamp(progress, 0, 1) * 360
 			gradients.right.Rotation = math.clamp(angle, 0, 180)
 			gradients.left.Rotation = math.clamp(angle, 180, 360)
-			for _, s in strokes do
-				s.Color = colour
-				s.Enabled = progress > 0
+			for _, img in rings do
+				img.Visible = state ~= "idle" and progress > 0
 			end
-			slotLabel.Text = slotText
-			statusLabel.Text = status
+			number.Text = slotText
+			status.Text = statusText
 		end,
 	}
-	ring:set(0, C.oven, "", "")
-	return ring
+	o:set(0, "idle", "", "")
+	return o
 end
 
 ------------------------------------------------------------------------------------------
--- Patience meter: four face/track proofs plus a continuous live fill.
+-- Patience meter: Astra's face for the band, then her track with the band's fill laid over
+-- it at full size and revealed through a clipping frame, so the fill art never squashes.
 
 export type Patience = { frame: Frame, set: (Patience, number, string) -> () }
 
-local BAND_COLOUR = { happy = C.basil, neutral = C.basil, impatient = C.oven, grumpy = C.tomato }
+local BAND_FILL = { happy = "green", neutral = "green", impatient = "amber", grumpy = "red" }
 
 function Widgets.patience(): Patience
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(240, 68) })
-	Ui.new("UIAspectRatioConstraint", { AspectRatio = Assets.Meta.patienceAspect, Parent = frame })
-	local art = Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
-	local fm = Assets.Meta.patienceFill
-	local fill = Ui.new("Frame", {
-		BackgroundColor3 = C.basil,
-		Position = UDim2.fromScale(fm.x, fm.y),
-		Size = UDim2.fromScale(fm.w, fm.h),
+	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(264, 64) })
+	Ui.new("UIAspectRatioConstraint", { AspectRatio = 4, Parent = frame })
+	local face = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(0.25, 1),
 		ZIndex = 2,
 		Parent = frame,
-	}, { Ui.round() })
-
-	local shownBand = nil
+	})
+	local mm = Assets.Meta.meter
+	local track = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = mm.slice,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0.25, 2, 0.5, 0),
+		Size = UDim2.new(0.75, -2, 0.42, 0),
+		Parent = frame,
+	})
+	Art.apply(track, "ui_patience_track")
+	local clip = Ui.new("Frame", { BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 2, Parent = track })
+	local fill = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = mm.slice,
+		ZIndex = 2,
+		Parent = clip,
+	})
+	local shownBand, shownFill = nil, nil
+	local fraction = 1
+	local function layout()
+		local w, h = track.AbsoluteSize.X, track.AbsoluteSize.Y
+		if h <= 0 then
+			return
+		end
+		local k = h / mm.height
+		track.SliceScale = k
+		fill.SliceScale = k
+		fill.Size = UDim2.fromOffset(w, h)
+		-- The fill's drawn body runs from fillLeft to fillRight of the 512 px canvas; the
+		-- slice margins keep their scaled size, so the right end sits that far in from w.
+		local left, right = mm.fillLeft * k, w - (mm.width - mm.fillRight) * k
+		clip.Size = UDim2.fromOffset(left + (right - left) * fraction, h)
+		clip.Visible = fraction > 0.005
+	end
+	track:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	local p: Patience = {
 		frame = frame,
-		set = function(_p: Patience, fraction: number, band: string)
+		set = function(_p: Patience, f: number, band: string)
+			fraction = math.clamp(f, 0, 1)
 			if band ~= shownBand then
 				shownBand = band
-				Art.apply(art, "ui_patience_" .. band)
+				Art.apply(face, "ui_patience_" .. band)
 			end
-			fill.Size = UDim2.fromScale(fm.w * math.clamp(fraction, 0, 1), fm.h)
-			fill.Visible = fraction > 0.01
-			fill.BackgroundColor3 = BAND_COLOUR[band]
+			local fillName = BAND_FILL[band]
+			if fillName ~= shownFill then
+				shownFill = fillName
+				Art.apply(fill, "ui_patience_fill_" .. fillName)
+			end
+			layout()
 		end,
 	}
 	p:set(1, "happy")
@@ -403,26 +508,33 @@ end
 -- Astra's three-part ticket: the caps keep their drawn proportions for the width (96 px at
 -- the 840 px master: 48 px at 420, 19 px at 168) and only the middle stretches. The parts
 -- abut with no overlap.
-function Widgets.ticketBody(parent: GuiObject, w: number, h: number)
+-- Returns a function that re-fits the three parts to a new height.
+function Widgets.ticketBody(parent: GuiObject, w: number, h: number): (number) -> ()
 	local cap = math.round(w * Assets.Meta.ticket.cap / Assets.Meta.ticket.width)
-	local function part(name: string, y: number, height: number)
-		Art.apply(Ui.new("ImageLabel", {
+	local function part(name: string, y: number, height: number): ImageLabel
+		local label = Ui.new("ImageLabel", {
 			Name = name,
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Stretch,
 			Position = UDim2.fromOffset(0, y),
 			Size = UDim2.fromOffset(w, height),
 			Parent = parent,
-		}), name)
+		})
+		Art.apply(label, name)
+		return label
 	end
 	part("ui_ticket_top", 0, cap)
-	part("ui_ticket_mid", cap, h - cap * 2)
-	part("ui_ticket_bottom", h - cap, cap)
+	local mid = part("ui_ticket_mid", cap, h - cap * 2)
+	local bottom = part("ui_ticket_bottom", h - cap, cap)
+	return function(newH: number)
+		mid.Size = UDim2.fromOffset(w, newH - cap * 2)
+		bottom.Position = UDim2.fromOffset(0, newH - cap)
+	end
 end
 
 function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 	local frame = Ui.new("Frame", { Name = "Ticket", BackgroundTransparency = 1, Size = UDim2.fromOffset(size.X, size.Y) })
-	Widgets.ticketBody(frame, size.X, size.Y)
+	local fitBody = Widgets.ticketBody(frame, size.X, size.Y)
 	-- Astra's content insets: 12/14 px on the 168 px phone ticket, 28/32 px at 420 px.
 	local padX = if compact then 12 else math.round(size.X * 28 / 420)
 	local padTop = if compact then 14 else math.round(size.X * 32 / 420)
@@ -437,13 +549,14 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 		Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.72),
 		Parent = frame,
 	})
+	local nameSize = math.max(16, math.floor(headerH * 0.34))
 	local name = Ui.text({
-		FontFace = Theme.Font.bodySemi,
-		TextSize = math.max(14, math.floor(headerH * 0.3)),
-		TextColor3 = C.mutedInk,
+		FontFace = Theme.Font.display,
+		TextSize = nameSize,
+		TextColor3 = C.ink,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(padX, padTop + headerH * 0.7),
-		Size = UDim2.fromOffset(inner.X * 0.5, math.max(14, math.floor(headerH * 0.3))),
+		Position = UDim2.fromOffset(padX, padTop + headerH * 0.68),
+		Size = UDim2.fromOffset(inner.X * 0.5, nameSize),
 		Parent = frame,
 	})
 	local meter = Widgets.patience()
@@ -535,6 +648,13 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 					})
 				end
 			end
+			-- Wide screens: the paper ends a row's height below the last requirement instead of
+			-- leaving blank paper (the rail's waiting tabs follow the ticket's bottom edge).
+			if not compact then
+				local h = math.min(size.Y, math.round(padTop + headerH + 4 + y + unit * 0.4 + padBottom))
+				frame.Size = UDim2.fromOffset(size.X, h)
+				fitBody(h)
+			end
 		end,
 		setPatience = function(_t: RailTicket, fraction: number, band: string)
 			meter:set(fraction, band)
@@ -557,16 +677,33 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?, width
 		BackgroundTransparency = 1,
 		Size = if compact then UDim2.new(0.5, -2, 0, height) else UDim2.new(1, 0, 0, height),
 	})
-	Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = button }), "ui_ticket_tab")
-	local faceSize = if compact then 24 else math.floor(height * 0.72)
+	local rm = Assets.Meta.railTab
+	local plate = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = rm.slice,
+		SliceScale = math.min(height / rm.height, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		Parent = button,
+	})
+	Art.apply(plate, "ui_ticket_tab_idle")
+	-- Pressed shows Astra's selected waiting tab; the frame size never changes.
+	button.MouseButton1Down:Connect(function()
+		Art.apply(plate, "ui_ticket_tab_selected")
+	end)
+	for _, signal in { button.MouseButton1Up, button.MouseLeave } do
+		signal:Connect(function()
+			Art.apply(plate, "ui_ticket_tab_idle")
+		end)
+	end
+	local faceSize = if compact then 28 else math.floor(height * 0.72)
 	local faceX = if compact then 4 else 6
-	-- The patience proofs carry the face in their left square; show just that part.
 	local face = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = if compact then UDim2.fromOffset(faceX, 4 + faceSize / 2) else UDim2.new(0, faceX, 0.5, 0),
 		Size = UDim2.fromOffset(faceSize, faceSize),
-		ImageRectSize = Vector2.new(216, 216),
 		Parent = button,
 	})
 	local recipe = Recipes.ById[customer.order.recipe]
@@ -657,123 +794,116 @@ function Widgets.railTab(customer: any, height: number, compact: boolean?, width
 end
 
 ------------------------------------------------------------------------------------------
--- Greybox top-down pizza. Bake changes crust and cheese separately and only lightly darkens
--- toppings, so ingredients stay recognizable (per Astra's correction).
+-- The pizza after the topping station: the same generated base and topping sprites the
+-- Topping station uses (PizzaArt), so one pizza travels through every station. The crust
+-- and cheese crossfade through the drawn bake states (raw, light, regular, well done,
+-- burnt; G6) by how long the pizza has baked. Toppings only darken lightly as a tint until
+-- their baked drawings exist (G7), so ingredients stay recognizable (per Astra's
+-- correction). Contact shadows keep their own tint.
 
-local RAW_CRUST, GOLD_CRUST, BURNT_CRUST = Color3.fromRGB(236, 214, 170), Color3.fromRGB(205, 140, 72), Color3.fromRGB(70, 42, 28)
-local RAW_CHEESE, GOLD_CHEESE, BURNT_CHEESE = Color3.fromRGB(255, 244, 206), Color3.fromRGB(246, 200, 104), Color3.fromRGB(110, 76, 44)
-local SAUCE = Color3.fromRGB(196, 62, 44)
+-- Seconds of baking at which each drawn state is fully shown; the last is the burnt look.
+local BAKE_STATES = {
+	{ art = "pizza_raw", at = 0 },
+	{ art = "pizza_bake_light", at = Config.Oven.targets.light },
+	{ art = "pizza_bake_regular", at = Config.Oven.targets.regular },
+	{ art = "pizza_bake_well", at = Config.Oven.targets.well },
+	{ art = "pizza_bake_burnt", at = Config.Oven.burntAt },
+}
 
-local function bakeColours(doneness: number): (Color3, Color3, number)
-	-- doneness: 0 raw, 1 golden (regular target), 1.6+ burnt
-	if doneness <= 1 then
-		return RAW_CRUST:Lerp(GOLD_CRUST, doneness), RAW_CHEESE:Lerp(GOLD_CHEESE, doneness), 0
+local RAW, TOPPING_GOLDEN, TOPPING_BURNT = Color3.new(1, 1, 1), Color3.fromRGB(236, 218, 198), Color3.fromRGB(116, 80, 60)
+
+local function toppingTint(seconds: number): Color3
+	local regular = Config.Oven.targets.regular
+	if seconds <= regular then
+		return RAW:Lerp(TOPPING_GOLDEN, math.max(seconds, 0) / regular)
 	end
-	local t = math.clamp((doneness - 1) / 0.6, 0, 1)
-	return GOLD_CRUST:Lerp(BURNT_CRUST, t), GOLD_CHEESE:Lerp(BURNT_CHEESE, t), t
+	return TOPPING_GOLDEN:Lerp(TOPPING_BURNT, math.clamp((seconds - regular) / (BAKE_STATES[#BAKE_STATES].at - regular), 0, 1))
+end
+
+-- The two neighbouring drawn states and how far the pizza is from the first to the second.
+local function bakeBlend(seconds: number): (number, number)
+	for i = 1, #BAKE_STATES - 1 do
+		if seconds < BAKE_STATES[i + 1].at then
+			return i, math.clamp((seconds - BAKE_STATES[i].at) / (BAKE_STATES[i + 1].at - BAKE_STATES[i].at), 0, 1)
+		end
+	end
+	return #BAKE_STATES - 1, 1
 end
 
 function Widgets.doneness(seconds: number): number
 	return seconds / Config.Oven.targets.regular
 end
 
-export type PizzaView = { frame: Frame, toppingLayer: Frame, cutLayer: Frame, set: (PizzaView, any, number) -> () }
-
-local BLISTERS = { { -0.3, -0.2 }, { 0.25, -0.35 }, { 0.1, 0.3 }, { -0.35, 0.28 }, { 0.38, 0.1 }, { -0.05, -0.45 }, { -0.1, 0.05 } }
-
-local function toppingDarken(doneness: number, burnt: number): number
-	return math.clamp((doneness - 0.8) * 0.25, 0, 0.35) + burnt * 0.3
-end
+export type PizzaView = { frame: Frame, cutLayer: Frame, set: (PizzaView, any, number, boolean?) -> () }
 
 function Widgets.pizza(): PizzaView
-	local frame = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 300) })
+	local art = PizzaArt.new()
+	local frame = art.frame
 	Ui.new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = frame })
-	local crust = Ui.new("Frame", { BackgroundColor3 = RAW_CRUST, Size = UDim2.fromScale(1, 1), Parent = frame }, {
-		Ui.round(),
-		Ui.stroke(C.ink, 3),
-	})
-	Ui.new("Frame", {
-		BackgroundColor3 = SAUCE,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.88, 0.88),
-		Parent = frame,
-	}, { Ui.round() })
-	local cheese = Ui.new("Frame", {
-		BackgroundColor3 = RAW_CHEESE,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.82, 0.82),
-		Parent = frame,
-	}, { Ui.round() })
-	local blisters = {}
-	for _, b in BLISTERS do
-		table.insert(blisters, Ui.new("Frame", {
-			BackgroundColor3 = GOLD_CRUST,
-			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5 + b[1] * 0.5, 0.5 + b[2] * 0.5),
-			Size = UDim2.fromScale(0.07, 0.05),
-			Parent = frame,
-		}, { Ui.round() }))
-	end
-	local toppingLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = frame })
-	local cutLayer = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
+	-- The drawn bake states replace PizzaArt's raw base: the lower one is fully shown and
+	-- the upper one fades in over it.
+	local base = frame:FindFirstChild("Base") :: ImageLabel
+	base.ImageTransparency = 1
+	local lower = Ui.new("ImageLabel", { Name = "BakeLower", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
+	local upper = Ui.new("ImageLabel", { Name = "BakeUpper", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = frame })
+	local shownState = 0
+	-- Inside the pizza's frame, so cut lines move with its wobble.
+	local cutLayer = Ui.new("Frame", { Name = "Cuts", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
 
-	-- Pieces and cut lines are rebuilt only when their content changes; per-frame bake
-	-- updates just recolour what already exists.
-	local contentKey = ""
-	local pieces: { { frame: Frame, base: Color3 } } = {}
-	local lastDarken = -1
-
+	local cutKey = ""
 	local view: PizzaView = {
 		frame = frame,
-		toppingLayer = toppingLayer,
 		cutLayer = cutLayer,
-		set = function(_v: PizzaView, pizza: any, doneness: number)
-			local crustC, cheeseC, burnt = bakeColours(doneness)
-			crust.BackgroundColor3 = crustC
-			cheese.BackgroundColor3 = cheeseC
-			local blisterAlpha = if doneness < 0.6 then 1 else math.clamp(1 - (doneness - 0.6) * 2, 0.15, 1)
-			for _, b in blisters do
-				b.BackgroundTransparency = blisterAlpha
-				b.BackgroundColor3 = GOLD_CRUST:Lerp(BURNT_CRUST, burnt)
+		set = function(_v: PizzaView, pizza: any, doneness: number, burnt: boolean?)
+			art:set(pizza, false)
+			local seconds = doneness * Config.Oven.targets.regular
+			if burnt then
+				seconds = math.max(seconds, BAKE_STATES[#BAKE_STATES].at)
 			end
-
+			local i, t = bakeBlend(seconds)
+			if i ~= shownState then
+				shownState = i
+				Art.apply(lower, BAKE_STATES[i].art)
+				Art.apply(upper, BAKE_STATES[i + 1].art)
+			end
+			upper.ImageTransparency = 1 - t
+			-- Each piece keeps its own drawing and turn; its baked drawing (same piece, G7 v2)
+			-- fades in over it between the light and regular bakes, and both darken toward
+			-- burnt.
+			local tint = toppingTint(seconds)
+			local baked = math.clamp((seconds - Config.Oven.targets.light * 0.5) / (Config.Oven.targets.regular - Config.Oven.targets.light * 0.5), 0, 1)
+			for _, d in frame:GetDescendants() do
+				if d:IsA("ImageLabel") and d.Name == "Sprite" then
+					local sprite = d :: ImageLabel
+					local look = sprite:GetAttribute("Look") :: string?
+					local over = sprite.Parent and sprite.Parent:FindFirstChild("Baked") :: ImageLabel?
+					if look and baked > 0 and not over then
+						over = sprite:Clone()
+						local o = over :: ImageLabel
+						o.Name = "Baked"
+						o:SetAttribute("Look", nil)
+						o.ZIndex = 3
+						o.Parent = sprite.Parent
+						Art.apply(o, look .. "_baked")
+					end
+					if over then
+						over.Rotation = sprite.Rotation
+						over.ImageTransparency = 1 - baked
+						over.ImageColor3 = if seconds > Config.Oven.targets.regular then tint else RAW
+					end
+					sprite.ImageColor3 = tint
+				end
+			end
 			local parts = { tostring(pizza.id) }
-			for _, piece in pizza.toppings do
-				table.insert(parts, string.format("%s%.3f%.3f%s", piece.ingredient, piece.x, piece.y, if piece.pending then "p" else ""))
-			end
-			table.insert(parts, "|")
 			for _, line in pizza.cuts or {} do
 				table.insert(parts, string.format("%.3f%.3f%.3f%.3f", line.x1, line.y1, line.x2, line.y2))
 			end
 			local key = table.concat(parts, ",")
-			local darken = toppingDarken(doneness, burnt)
-			if key ~= contentKey then
-				contentKey = key
-				Ui.clear(toppingLayer)
-				pieces = {}
-				for _, piece in pizza.toppings do
-					local f = Widgets.drawPiece(toppingLayer, piece, 0, piece.pending == true)
-					table.insert(pieces, { frame = f, base = Recipes.Ingredients[piece.ingredient].colour })
-				end
+			if key ~= cutKey then
+				cutKey = key
 				Ui.clear(cutLayer)
 				for _, line in pizza.cuts or {} do
-					Widgets.drawCut(cutLayer, line, C.paper)
-				end
-				lastDarken = -1
-			end
-			if math.abs(darken - lastDarken) > 0.005 then
-				lastDarken = darken
-				local tint = Color3.new(0.15, 0.08, 0.05)
-				for _, p in pieces do
-					local colour = p.base:Lerp(tint, darken)
-					p.frame.BackgroundColor3 = colour
-					local stroke = p.frame:FindFirstChildOfClass("UIStroke")
-					if stroke and stroke.Color ~= C.ink then
-						stroke.Color = colour
-					end
+					Widgets.drawCut(cutLayer, line)
 				end
 			end
 		end,
@@ -781,44 +911,12 @@ function Widgets.pizza(): PizzaView
 	return view
 end
 
-function Widgets.drawPiece(layer: Frame, piece: any, darken: number, pending: boolean): Frame
-	local info = Recipes.Ingredients[piece.ingredient]
-	local colour = info.colour:Lerp(Color3.new(0.15, 0.08, 0.05), darken)
-	local s = info.size
-	local f = Ui.new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + piece.x * 0.5, 0.5 + piece.y * 0.5),
-		Size = UDim2.fromScale(s, s),
-		BackgroundColor3 = colour,
-		BackgroundTransparency = if info.shape == "ring" then 1 else (if pending then 0.35 else 0),
-		ZIndex = 2,
-		Parent = layer,
-	}, { Ui.round() })
-	local stroke = Ui.stroke(if info.shape == "ring" then colour else C.ink, if info.shape == "ring" then 4 else 1.5)
-	stroke.Parent = f
-	if info.shape == "disc" then
-		Ui.new("Frame", {
-			BackgroundColor3 = colour:Lerp(Color3.new(0, 0, 0), 0.25),
-			Position = UDim2.fromScale(0.25, 0.3),
-			Size = UDim2.fromScale(0.18, 0.18),
-			ZIndex = 2,
-			Parent = f,
-		}, { Ui.round() })
-	elseif info.shape == "cap" then
-		Ui.new("Frame", {
-			BackgroundColor3 = colour:Lerp(Color3.new(0.3, 0.2, 0.1), 0.4),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0.55),
-			Size = UDim2.fromScale(0.3, 0.4),
-			ZIndex = 2,
-			Parent = f,
-		}, { Ui.corner(3) })
-	end
-	return f
-end
+-- A cut: the generated cut crevice (G9 v3: a dark slit with shadowed, lifted edges and no
+-- food drawn inside it) stretched along the chord of the infinite line through the two
+-- points, clipped to the pizza circle, so the pizza underneath stays the food. `transparency` fades it (the live preview).
+local CRUST_EDGE = 0.95
 
-function Widgets.drawCut(layer: Frame, line: any, colour: Color3)
-	-- Chord of the infinite line through the two points, clipped to the pizza circle.
+function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-4 then
@@ -831,17 +929,99 @@ function Widgets.drawCut(layer: Frame, line: any, colour: Color3)
 	if d2 >= 1 then
 		return
 	end
-	local half = math.sqrt(1 - d2)
-	Ui.new("Frame", {
+	-- The crust edge sits a little inside the pizza frame; stop the groove there.
+	local half = math.sqrt(1 - d2) * CRUST_EDGE
+	local groove = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ImageTransparency = transparency or 0,
+		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5 + cx * 0.5, 0.5 + cy * 0.5),
-		Size = UDim2.new(half, 0, 0, 4),
+		Size = UDim2.fromScale(half, 0.03),
 		Rotation = math.deg(math.atan2(dy, dx)),
-		BackgroundColor3 = colour,
-		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = layer,
-	}, { Ui.stroke(C.ink, 1) })
+	})
+	Art.apply(groove, "fx_cut_groove_c")
+end
+
+-- Reserved hint strip between the work surface and the tab bar: one line of live text and,
+-- optionally, a row of key icons with live labels. It never takes input and never sits over
+-- food, trays, ovens, tickets or controls, because the layout gives it its own band.
+-- Backing is Astra's cream result card until the A21 hint chip exists.
+export type HintStrip = { frame: Frame, set: (HintStrip, string?, { { icon: string, text: string } }?) -> () }
+
+function Widgets.hintStrip(width: number, height: number, compact: boolean): HintStrip
+	Art.preload({ "ui_card_result" })
+	local frame = Ui.new("Frame", { Name = "Hints", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, height) })
+	local card = Ui.new("ImageLabel", {
+		Name = "Card",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceScale = math.min(0.5, (height - 4) / 100),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, height - 4),
+		Visible = false,
+		Parent = frame,
+	}, {
+		Ui.new("UIPadding", { PaddingLeft = UDim.new(0, if compact then 12 else 20), PaddingRight = UDim.new(0, if compact then 12 else 20) }),
+		Ui.new("UISizeConstraint", { MaxSize = Vector2.new(width - 8, math.huge) }),
+		Ui.new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, if compact then 6 else 10),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	Art.apply(card, "ui_card_result")
+	local textSize = if compact then 16 else 18
+	local label = Ui.text({
+		FontFace = Theme.Font.display,
+		TextSize = textSize,
+		TextWrapped = false,
+		TextColor3 = C.ink,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, height - 4),
+		LayoutOrder = 0,
+		Parent = card,
+	})
+	local iconSize = if compact then 24 else 32
+	local keys: { Frame } = {}
+	local strip: HintStrip
+	strip = {
+		frame = frame,
+		set = function(_s: HintStrip, text: string?, legend: { { icon: string, text: string } }?)
+			local entries = legend or {}
+			card.Visible = (text ~= nil and text ~= "") or #entries > 0
+			label.Text = text or ""
+			label.Visible = label.Text ~= ""
+			for i, e in entries do
+				local key = keys[i]
+				if not key then
+					key = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = i, Parent = card }, {
+						Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
+						Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1 }),
+						Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = 16, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
+					})
+					keys[i] = key
+				end
+				key.Visible = true
+				if key:GetAttribute("Icon") ~= e.icon then
+					key:SetAttribute("Icon", e.icon)
+					Art.apply(key:FindFirstChild("Icon") :: ImageLabel, e.icon)
+				end
+				(key:FindFirstChild("Text") :: TextLabel).Text = e.text
+			end
+			for i = #entries + 1, #keys do
+				keys[i].Visible = false
+			end
+		end,
+	}
+	return strip
 end
 
 function Widgets.tweenIn(frame: GuiObject, offsetX: number)
@@ -849,12 +1029,6 @@ function Widgets.tweenIn(frame: GuiObject, offsetX: number)
 	local target = frame.Position
 	frame.Position = target + UDim2.fromOffset(offsetX, 0)
 	TweenService:Create(frame, TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = target }):Play()
-end
-
-function Widgets.flash(frame: GuiObject, from: number)
-	-- Fades a highlight from `from` transparency back to invisible; used to point at a tab.
-	frame.BackgroundTransparency = from
-	TweenService:Create(frame, TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end
 
 return Widgets

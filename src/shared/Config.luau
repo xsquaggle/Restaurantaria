@@ -27,7 +27,9 @@ Config.Oven = {
 	targets = { light = 18, regular = 24, well = 30 },
 	perfectWindow = 2, -- within +/- this many seconds scores 100
 	zeroAt = 12, -- this far from target scores 0
-	burntAfter = 14, -- seconds past target when the pizza is burnt
+	-- Burnt is one absolute time for every order, so the gauge's red zone means the same
+	-- thing on every ticket: past it the pizza is burnt whatever bake was asked for.
+	burntAt = 36,
 }
 
 Config.Topping = {

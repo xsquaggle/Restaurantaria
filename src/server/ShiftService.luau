@@ -118,21 +118,43 @@ local function customerById(shift: Shift, id: number): Customer?
 end
 
 -- Spawns due customers. Returns true when something changed.
+-- Each cast member is one person: a character who is waiting or has an open ticket is not
+-- in the shop twice. A due customer takes the next free character in rotation; when all
+-- are in the shop, the arrival waits until one is served, and patience starts from the
+-- moment they actually walk in.
 function ShiftService.tick(session: Session): boolean
 	local shift = session.shift
 	if shift.finished then
 		return false
 	end
 	local changed = false
-	local elapsed = now() - shift.startedAt
+	local t = now()
+	local elapsed = t - shift.startedAt
 	while shift.nextArrival <= Config.Shift.customerCount and elapsed >= Config.Shift.arrivals[shift.nextArrival] do
 		local i = shift.nextArrival
+		local present = {}
+		for _, c in shift.customers do
+			if c.status ~= "served" then
+				present[c.cast] = true
+			end
+		end
+		local cast = nil
+		for k = 0, #Recipes.Cast - 1 do
+			local candidate = ((i - 1 + k) % #Recipes.Cast) + 1
+			if not present[candidate] then
+				cast = candidate
+				break
+			end
+		end
+		if not cast then
+			break
+		end
 		local orderDef = Recipes.ShiftOrders[((i - 1) % #Recipes.ShiftOrders) + 1]
 		table.insert(shift.customers, {
 			id = shift.nextId,
-			cast = ((i - 1) % #Recipes.Cast) + 1,
+			cast = cast,
 			order = { recipe = orderDef.recipe, bake = orderDef.bake, slices = orderDef.slices },
-			arrivedAt = shift.startedAt + Config.Shift.arrivals[i],
+			arrivedAt = math.max(shift.startedAt + Config.Shift.arrivals[i], t - 1),
 			status = "waiting",
 		})
 		shift.nextId += 1

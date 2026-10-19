@@ -21,8 +21,32 @@ local Art = {}
 local editables: { [string]: EditableImage } = {}
 local sizes: { [string]: Vector2 } = {}
 local reported: { [string]: boolean } = {}
+-- Which art each label shows, so images no label shows any more can be freed when Studio's
+-- EditableImage memory budget runs out.
+-- (Strong keys: Roblox can collect an Instance's weak-table key while the Instance still lives.)
+local shown: { [Instance]: string } = {}
+-- Labels whose image was freed while they were hidden; Art.restore re-applies them when
+-- their station is shown again.
+local stale: { [Instance]: boolean } = {}
+
+-- A label counts as showing only when it is in the game and no ancestor hides it, so the
+-- art of the three hidden stations can be freed when the budget runs out.
+local function isShowing(inst: Instance): boolean
+	if not inst:IsDescendantOf(game) then
+		return false
+	end
+	local p: Instance? = inst
+	while p and not p:IsA("ScreenGui") do
+		if p:IsA("GuiObject") and not p.Visible then
+			return false
+		end
+		p = p.Parent
+	end
+	return true
+end
 
 local function devFolder(name: string): Instance?
+	name = Assets.Alias[name] or name
 	if not RunService:IsStudio() then
 		return nil
 	end
@@ -45,10 +69,37 @@ local function devImage(name: string): EditableImage?
 	local packed = EncodingService:Base64Decode(buffer.fromstring(table.concat(parts)))
 	local pixels = EncodingService:DecompressBuffer(packed, Enum.CompressionAlgorithm.Zstd)
 	local size = Vector2.new(folder:GetAttribute("Width") :: number, folder:GetAttribute("Height") :: number)
-	local ok, image = pcall(function()
-		return AssetService:CreateEditableImage({ Size = size })
-	end)
-	if not ok or not image then
+	local function create(): EditableImage?
+		local ok, image = pcall(function()
+			return AssetService:CreateEditableImage({ Size = size })
+		end)
+		return if ok then image else nil
+	end
+	local image = create()
+	if not image then
+		-- Free every image no live label still shows, then try once more.
+		local inUse = {}
+		for label, shownName in shown do
+			if not label:IsDescendantOf(game) then
+				shown[label] = nil
+			elseif isShowing(label) then
+				inUse[shownName] = true
+			end
+		end
+		for other, editable in editables do
+			if not inUse[other] then
+				editable:Destroy()
+				editables[other] = nil
+				for label, shownName in shown do
+					if shownName == other then
+						stale[label] = true
+					end
+				end
+			end
+		end
+		image = create()
+	end
+	if not image then
 		warn("[Art] no memory budget left for " .. name)
 		return nil
 	end
@@ -87,8 +138,14 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 		label.Image = id
 		return true
 	end
+	if shown[label] == name and not stale[label] and editables[name] then
+		return true
+	end
+	shown[label] = nil
+	stale[label] = nil
 	local image = devImage(name)
 	if image then
+		shown[label] = name
 		label.ImageContent = Content.fromObject(image)
 		return true
 	end
@@ -98,6 +155,33 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 		warn("[Art] missing art: " .. name)
 	end
 	return false
+end
+
+-- Re-apply the art of labels at or under `root` that are showing again after their image
+-- was freed while they were hidden. Cheap when nothing is stale, so it can run every frame.
+function Art.restore(root: Instance)
+	if next(stale) == nil then
+		return
+	end
+	local due = {}
+	for label in stale do
+		if not label:IsDescendantOf(game) or shown[label] == nil then
+			stale[label] = nil
+		elseif (label == root or label:IsDescendantOf(root)) and isShowing(label) then
+			table.insert(due, label)
+		end
+	end
+	for _, label in due do
+		Art.apply(label :: ImageLabel, shown[label])
+	end
+end
+
+-- Clear a label so the image it showed can be freed (Studio dev art only holds memory while
+-- some live label shows it).
+function Art.release(label: ImageLabel | ImageButton)
+	shown[label] = nil
+	stale[label] = nil
+	label.ImageContent = Content.none
 end
 
 -- Load art ahead of first use (e.g. every state of a button) so a state change never shows
