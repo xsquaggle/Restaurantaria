@@ -534,7 +534,7 @@ local function buildLayout()
 	})
 	-- The tabs hang under the active ticket, whose height follows its content on desktop.
 	ticket.frame:GetPropertyChangedSignal("Size"):Connect(function()
-		tabList.Position = UDim2.fromOffset(pad, pad + ticket.frame.Size.Y.Offset + gap)
+		tabList.Position = UDim2.fromOffset(pad, pad + drop + ticket.frame.Size.Y.Offset + gap)
 	end)
 	local actionArea = Ui.new("Frame", {
 		Name = "Action",
