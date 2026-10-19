@@ -205,10 +205,10 @@ Assets.Meta = {
 	trayAspect = 384 / 313,
 	-- The board is drawn this much wider than the pizza that sits on it.
 	boardOverPizza = 1 / 0.9,
-	-- Oven unit (trimmed 1727x1938): the window, gauge dial centre and radius, number
+	-- Oven unit v2 (trimmed 1608x1865; v1's layout fractions hold within about 0.5%): the window, gauge dial centre and radius, number
 	-- medallion and the empty lower panel as fractions of the oven image.
 	oven = {
-		aspect = 1727 / 1938,
+		aspect = 1608 / 1865,
 		window = { x = 0.035, y = 0.237, w = 0.922, h = 0.512 },
 		dial = { x = 0.5, y = 0.122, r = 0.117 },
 		plate = { x = 0.5, y = 0.205, w = 0.27, h = 0.05 },
