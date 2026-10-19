@@ -68,17 +68,35 @@ function Cut.new(ctx: any, container: Frame)
 
 	local current: any = nil
 
-	-- Live hint text; the cream hint chip behind it is requested (A21).
+	-- Live cut count on Astra's cream result card (stand-in backing until the A21 hint chip
+	-- arrives), so it reads over the busy backdrop. Same width as Undo, clear of the pizza.
+	local guideSize = if ctx.compact then 16 else 22
+	local guidePad = if ctx.compact then 8 else 12
+	local guideCard = Ui.new("ImageLabel", {
+		Name = "Guide",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceScale = 0.4,
+		Position = UDim2.fromOffset(pad, pad),
+		Size = UDim2.fromOffset(undoW, guideSize * 2 + guidePad * 2 + 4),
+		Visible = false,
+		ZIndex = 6,
+		Parent = frame,
+	})
+	Art.apply(guideCard, "ui_card_result")
 	local guide = Ui.text({
 		Text = "",
 		FontFace = Theme.Font.bodySemi,
-		TextSize = if ctx.compact then 16 else 22,
+		TextSize = guideSize,
+		TextColor3 = Theme.Colour.ink,
 		TextWrapped = true,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(pad, pad),
-		Size = UDim2.fromOffset(math.max(undoW, pizzaX - pizzaSize * 0.42 - pad), hintH * 2),
-		ZIndex = 6,
-		Parent = frame,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Position = UDim2.fromOffset(guidePad, guidePad),
+		Size = UDim2.new(1, -guidePad * 2, 1, -guidePad * 2),
+		ZIndex = 7,
+		Parent = guideCard,
 	})
 	local undo = Widgets.button("Undo cut", function()
 		if current then
@@ -235,11 +253,12 @@ function Cut.new(ctx: any, container: Frame)
 		if current then
 			local customer = ctx.customer(snap, current.ticketId)
 			local cuts = #current.cuts
-			guide.Text = string.format("Cut into %d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+			guide.Text = string.format("%d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+			guideCard.Visible = true
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)
 		else
-			guide.Text = ""
+			guideCard.Visible = false
 		end
 	end
 
