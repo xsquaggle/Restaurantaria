@@ -417,8 +417,9 @@ local function buildLayout()
 	})
 	local ringSize = hudH - 6
 	-- Each oven is a pill with its badge and ring at the left end and the live status word.
-	-- On phones the status keeps the 16 px floor and the pills narrow instead.
-	local ovenPillW = ringSize + (if compact then 50 else 86)
+	-- On phones the pill shows the status word alone ("Cooking", the longest) at the 16 px
+	-- floor; the seconds stay on desktop.
+	local ovenPillW = ringSize + (if compact then 66 else 86)
 	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
@@ -1104,7 +1105,7 @@ RunService.RenderStepped:Connect(function()
 		if pizza then
 			local customer = ctx.customer(snap, pizza.ticketId)
 			local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
-			slot:set(status.progress, status.state, tostring(i), status.text)
+			slot:set(status.progress, status.state, tostring(i), if ctx.compact then status.word else status.text)
 			alert = alert or status.alert
 		else
 			slot:set(0, "idle", tostring(i), "Empty")

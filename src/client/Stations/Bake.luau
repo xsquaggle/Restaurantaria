@@ -127,6 +127,9 @@ function Bake.new(ctx: any, container: Frame)
 			FontFace = Theme.Font.display,
 			TextSize = math.max(14, math.round(ovenH * OVEN.plate.h * 0.75)),
 			TextXAlignment = Enum.TextXAlignment.Center,
+			-- One line: at the 14 px floor on phones "Cooking" runs a few px past the plate
+			-- rather than wrapping out of sight.
+			TextWrapped = false,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			ZIndex = 3,
 		}))
