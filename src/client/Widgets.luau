@@ -746,7 +746,7 @@ function Widgets.pizza(): PizzaView
 				cutKey = key
 				Ui.clear(cutLayer)
 				for _, line in pizza.cuts or {} do
-					Widgets.drawCut(cutLayer, line, C.paper)
+					Widgets.drawCut(cutLayer, line)
 				end
 			end
 		end,
@@ -754,8 +754,9 @@ function Widgets.pizza(): PizzaView
 	return view
 end
 
-function Widgets.drawCut(layer: Frame, line: any, colour: Color3)
-	-- Chord of the infinite line through the two points, clipped to the pizza circle.
+-- A cut: the generated groove (G9) stretched along the chord of the infinite line through
+-- the two points, clipped to the pizza circle. `transparency` fades it (the live preview).
+function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-4 then
@@ -769,16 +770,18 @@ function Widgets.drawCut(layer: Frame, line: any, colour: Color3)
 		return
 	end
 	local half = math.sqrt(1 - d2)
-	Ui.new("Frame", {
+	local groove = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ImageTransparency = transparency or 0,
+		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5 + cx * 0.5, 0.5 + cy * 0.5),
-		Size = UDim2.new(half, 0, 0, 4),
+		Size = UDim2.fromScale(half, 0.024),
 		Rotation = math.deg(math.atan2(dy, dx)),
-		BackgroundColor3 = colour,
-		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = layer,
-	}, { Ui.stroke(C.ink, 1) })
+	})
+	Art.apply(groove, "fx_cut_groove")
 end
 
 function Widgets.tweenIn(frame: GuiObject, offsetX: number)

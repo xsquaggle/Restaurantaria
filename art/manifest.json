@@ -473,6 +473,94 @@
      "pad": 0
     }
    ]
+  },
+  {
+   "id": "chr_marta_v1",
+   "job": "4e65e68c-4fac-43e0-8840-32645750e96a",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_4e65e68c-4fac-43e0-8840-32645750e96a.png",
+   "kind": "frames",
+   "note": "G10 customer Marta: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_marta_happy",
+      "chr_marta_neutral",
+      "chr_marta_impatient",
+      "chr_marta_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "chr_bo_v1",
+   "job": "7569118f-4a09-4830-b67a-020ec7c4ac07",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_7569118f-4a09-4830-b67a-020ec7c4ac07.png",
+   "kind": "frames",
+   "note": "G10 customer Bo: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_bo_happy",
+      "chr_bo_neutral",
+      "chr_bo_impatient",
+      "chr_bo_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "chr_ines_v1",
+   "job": "8d84f58b-3322-4418-98c0-c598cd97dbaf",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025921_8d84f58b-3322-4418-98c0-c598cd97dbaf.png",
+   "kind": "frames",
+   "note": "G10 customer Ines: waist-up, four expressions in patience-band order, same pose. Reference 01-topping.",
+   "outputs": [
+    {
+     "names": [
+      "chr_ines_happy",
+      "chr_ines_neutral",
+      "chr_ines_impatient",
+      "chr_ines_grumpy"
+     ],
+     "side": 768
+    }
+   ]
+  },
+  {
+   "id": "toppings_baked_v1",
+   "job": "ca4362db-7cee-48cc-a2b1-40cf80b5ae8e",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_ca4362db-7cee-48cc-a2b1-40cf80b5ae8e.png",
+   "kind": "sheet",
+   "note": "G7 baked toppings, one drawing each (pepperoni, mushroom, basil, olive, green pepper). Not wired yet: the raw sets have three variants each and red pepper has none baked, so toppings keep the bake tint for now.",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_baked",
+      "topping_mushroom_baked",
+      "topping_basil_baked",
+      "topping_olive_baked",
+      "topping_pepper_baked"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "fx_cut_groove_v1",
+   "job": "8ece9757-5253-410e-8b88-fe8079c4df18",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025921_8ece9757-5253-410e-8b88-fe8079c4df18.png",
+   "kind": "sprite",
+   "note": "G9 cut groove, stretched along each cut chord. Trimmed 1344x40.",
+   "outputs": [
+    {
+     "name": "fx_cut_groove",
+     "side": 1024,
+     "square": false
+    }
+   ]
   }
  ]
 }

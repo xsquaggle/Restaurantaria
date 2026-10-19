@@ -14,7 +14,6 @@ local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
 
-local C = Theme.Colour
 local Cut = {}
 
 function Cut.new(ctx: any, container: Frame)
@@ -194,7 +193,7 @@ function Cut.new(ctx: any, container: Frame)
 			Ui.clear(preview)
 			local s = dragStart :: Vector2
 			if (Vector2.new(x, y) - s).Magnitude > 0.2 then
-				Widgets.drawCut(preview, { x1 = s.X, y1 = s.Y, x2 = x, y2 = y }, C.actionEdge)
+				Widgets.drawCut(preview, { x1 = s.X, y1 = s.Y, x2 = x, y2 = y }, 0.45)
 			end
 		end
 	end)
