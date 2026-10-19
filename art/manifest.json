@@ -561,15 +561,63 @@
    "job": "ca4362db-7cee-48cc-a2b1-40cf80b5ae8e",
    "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025920_ca4362db-7cee-48cc-a2b1-40cf80b5ae8e.png",
    "kind": "sheet",
-   "note": "G7 baked toppings, one drawing each (pepperoni, mushroom, basil, olive, green pepper). Not wired yet: the raw sets have three variants each and red pepper has none baked, so toppings keep the bake tint for now.",
+   "note": "Superseded by toppings_baked_v2 and toppings_pepper_red_baked_v1 (one baked drawing per raw variant). Outputs renamed so they are not stored.",
    "outputs": [
     {
      "names": [
-      "topping_pepperoni_baked",
-      "topping_mushroom_baked",
-      "topping_basil_baked",
-      "topping_olive_baked",
-      "topping_pepper_baked"
+      "topping_pepperoni_baked_v1_unused",
+      "topping_mushroom_baked_v1_unused",
+      "topping_basil_baked_v1_unused",
+      "topping_olive_baked_v1_unused",
+      "topping_pepper_baked_v1_unused"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "toppings_baked_v2",
+   "job": "960d06ea-b79b-4720-bada-37a2f0556727",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_060222_960d06ea-b79b-4720-bada-37a2f0556727.png",
+   "kind": "sheet",
+   "note": "G7 v2: baked edit of toppings_raw_v1 (job 8c1db13d), same 15 pieces in the same layout so each baked drawing maps to its raw variant; background removed (job 960d06ea).",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepperoni_1_baked",
+      "topping_pepperoni_2_baked",
+      "topping_pepperoni_3_baked",
+      "topping_mushroom_1_baked",
+      "topping_mushroom_2_baked",
+      "topping_mushroom_3_baked",
+      "topping_basil_1_baked",
+      "topping_basil_2_baked",
+      "topping_basil_3_baked",
+      "topping_olive_1_baked",
+      "topping_olive_2_baked",
+      "topping_olive_3_baked",
+      "topping_pepper_1_baked",
+      "topping_pepper_2_baked",
+      "topping_pepper_3_baked"
+     ],
+     "side": 192,
+     "pad": 6
+    }
+   ]
+  },
+  {
+   "id": "toppings_pepper_red_baked_v1",
+   "job": "e8dda604-8d61-4dfa-bc9a-a836488e8098",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_060225_e8dda604-8d61-4dfa-bc9a-a836488e8098.png",
+   "kind": "sheet",
+   "note": "Baked red bell pepper: edit of toppings_pepper_red_v1 (job 8e03484f), piece for piece; background removed (job e8dda604).",
+   "outputs": [
+    {
+     "names": [
+      "topping_pepper_red_1_baked",
+      "topping_pepper_red_2_baked",
+      "topping_pepper_red_3_baked"
      ],
      "side": 192,
      "pad": 6

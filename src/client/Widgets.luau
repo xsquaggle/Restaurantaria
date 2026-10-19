@@ -848,10 +848,31 @@ function Widgets.pizza(): PizzaView
 				Art.apply(upper, BAKE_STATES[i + 1].art)
 			end
 			upper.ImageTransparency = 1 - t
+			-- Each piece keeps its own drawing and turn; its baked drawing (same piece, G7 v2)
+			-- fades in over it between the light and regular bakes, and both darken toward
+			-- burnt.
 			local tint = toppingTint(seconds)
+			local baked = math.clamp((seconds - Config.Oven.targets.light * 0.5) / (Config.Oven.targets.regular - Config.Oven.targets.light * 0.5), 0, 1)
 			for _, d in frame:GetDescendants() do
 				if d:IsA("ImageLabel") and d.Name == "Sprite" then
-					d.ImageColor3 = tint
+					local sprite = d :: ImageLabel
+					local look = sprite:GetAttribute("Look") :: string?
+					local over = sprite.Parent and sprite.Parent:FindFirstChild("Baked") :: ImageLabel?
+					if look and baked > 0 and not over then
+						over = sprite:Clone()
+						local o = over :: ImageLabel
+						o.Name = "Baked"
+						o:SetAttribute("Look", nil)
+						o.ZIndex = 3
+						o.Parent = sprite.Parent
+						Art.apply(o, look .. "_baked")
+					end
+					if over then
+						over.Rotation = sprite.Rotation
+						over.ImageTransparency = 1 - baked
+						over.ImageColor3 = if seconds > Config.Oven.targets.regular then tint else RAW
+					end
+					sprite.ImageColor3 = tint
 				end
 			end
 			local parts = { tostring(pizza.id) }

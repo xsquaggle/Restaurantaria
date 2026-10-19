@@ -93,6 +93,7 @@ local function build(root: GuiObject, art: string, rotation: number, shadow: typ
 		Parent = root,
 	})
 	sprite:SetAttribute("Rest", 0)
+	sprite:SetAttribute("Look", art)
 	Art.apply(sprite, art)
 	return sprite, shade
 end
