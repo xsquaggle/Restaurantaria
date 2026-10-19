@@ -1046,6 +1046,44 @@ function ctx.showResult(ticketId: number)
 	end)
 end
 
+-- Studio-only developer overlay for save diagnostics (QA-012): outside the HUD layout, so the
+-- player HUD looks exactly as it does in a published session.
+local diagnostic: TextLabel? = nil
+local lastDiagnostic: string? = nil
+local function showDiagnostic(message: string?)
+	if message ~= lastDiagnostic then
+		lastDiagnostic = message
+		if message then
+			warn("[Save] " .. message)
+		end
+	end
+	if not RunService:IsStudio() then
+		return
+	end
+	if not diagnostic then
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "RestaurantariaDevDiagnostics"
+		gui.DisplayOrder = 100
+		gui.ResetOnSpawn = false
+		gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+		local label = Instance.new("TextLabel")
+		label.Name = "Save"
+		label.AnchorPoint = Vector2.new(0, 1)
+		label.Position = UDim2.new(0, 8, 1, -8)
+		label.AutomaticSize = Enum.AutomaticSize.XY
+		label.BackgroundColor3 = Color3.new(0, 0, 0)
+		label.BackgroundTransparency = 0.4
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextSize = 12
+		label.Font = Enum.Font.Code
+		label.Parent = gui
+		diagnostic = label
+	end
+	local label = diagnostic :: TextLabel
+	label.Visible = message ~= nil
+	label.Text = if message then " DEV (Studio only): " .. message .. " " else ""
+end
+
 function ctx.refresh()
 	local snap = ctx.snapshot
 	if not ui or not snap then
@@ -1058,12 +1096,14 @@ function ctx.refresh()
 		s.refresh(snap)
 	end
 	local profile = snap.profile
-	ui.banner.Visible = profile ~= nil and profile.status ~= "ok"
-	if profile and profile.message then
-		ui.banner.Text = if ctx.compact then "Not\nsaving"
-			elseif profile.status == "unavailable" then "Not saving: unpublished place"
-			else "Not saving: load failed"
+	-- Players only hear about a real load failure, in plain words. "unavailable" means the
+	-- place has no data store (unpublished, or Studio without API access): a developer
+	-- condition, shown in the Studio-only diagnostics overlay instead of the HUD.
+	ui.banner.Visible = profile ~= nil and profile.status == "failed"
+	if ui.banner.Visible then
+		ui.banner.Text = if ctx.compact then "Can't save" else "Progress can't save right now"
 	end
+	showDiagnostic(if profile and profile.status ~= "ok" then profile.message else nil)
 	refreshSummary(snap)
 end
 
