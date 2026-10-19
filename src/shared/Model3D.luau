@@ -40,7 +40,10 @@ end
 function Model3D.size(name: string): Vector3?
 	local m = imported(name)
 	if m then
-		return m.Size
+		-- The importer keeps the file's axes; a Yaw attribute (degrees) turns the model so its
+		-- front faces -Z, and the size reported here is in that turned frame.
+		local yaw = (m:GetAttribute("Yaw") or 0) :: number
+		return if math.abs(yaw) % 180 == 90 then Vector3.new(m.Size.Z, m.Size.Y, m.Size.X) else m.Size
 	end
 	local f = folder(name)
 	return f and f:GetAttribute("Size") :: Vector3
@@ -54,6 +57,7 @@ function Model3D.build(name: string): MeshPart?
 		local copy = m:Clone()
 		copy.Anchored = true
 		copy.CanCollide = false
+		copy.CFrame = CFrame.Angles(0, math.rad((m:GetAttribute("Yaw") or 0) :: number), 0)
 		return copy
 	end
 	local f = folder(name)

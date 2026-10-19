@@ -48,7 +48,7 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	if not counter then
 		return nil
 	end
-	counter.CFrame = CFrame.new(ORIGIN + Vector3.new(0, size.Y / 2, 0))
+	counter.CFrame = CFrame.new(ORIGIN + Vector3.new(0, size.Y / 2, 0)) * counter.CFrame.Rotation
 	counter.Parent = folder
 	local top = ORIGIN.Y + size.Y
 	local front = ORIGIN.Z - size.Z / 2
