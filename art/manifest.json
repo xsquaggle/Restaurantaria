@@ -211,6 +211,94 @@
      "name": "ui_tabBar_idle"
     }
    ]
+  },
+  {
+   "id": "ui_button_primary_idle",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_pressed",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_disabled",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_primary_highlighted",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_button_primary_highlighted.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_primary_highlighted"
+    }
+   ]
+  },
+  {
+   "id": "ui_hud_pill",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_hud_pill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_hud_pill"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_top",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_top.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_top"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_mid",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_mid.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_mid"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_bottom",
+   "owner": "Astra (ChatGPT), UI V2 integration proof 01",
+   "url": "repo:art/ui/v2/ui_ticket_bottom.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_bottom"
+    }
+   ]
   }
  ]
 }

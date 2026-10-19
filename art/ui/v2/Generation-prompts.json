@@ -1,0 +1,52 @@
+{
+  "generator": "ChatGPT native image generation",
+  "reference": "reference/01-topping.png",
+  "initialJobs": [
+    {
+      "key": "primary_idle",
+      "prompt": "Use case: ui-mockup. Asset production, one standalone transparent PNG. Reference image is the approved game screen. Recreate ONLY its bottom-right coral 'Send to oven' button BACKPLATE as an isolated reusable UI asset, remove ALL text and icons. Match the reference's original illustrated 2D rounded coral button, thin warm terracotta outer contour, ivory inset rim, small upper-left glossy reflection, subtle darker bottom bevel, warm top-left lighting. Smooth clean illustration, no photographic texture, no 3D scene. Idle/enabled state. Blank uninterrupted coral center ready for live white text.\nOutput a 1024x512 pixel transparent canvas. Center a wide button of width896px and height256px inside it, leaving64px side margins and128px top/bottom transparent padding. Axis aligned horizontal, perfectly symmetric outer shape, corner radiusabout68px. Front-on orthographic view. Keep middle half flat enough to stretch with 9-slice. Ivory outline and highlight must remain near perimeter; all decorative detail stays in edge regions. Do not put anything in the middle field.\nGenuine alpha everywhere outside the button, no white/black/checkerboard background, no text, no lettering, no numbers, no icon, no label, no mockup scene, no extra UI elements. OnlyONEblankcoralbutton, full silhouette visible with soft restrained contactshadow insidepadding. Resolution request exactly1024x512.",
+      "referencedImages": [
+        "reference/01-topping.png"
+      ]
+    },
+    {
+      "key": "hud_pill",
+      "prompt": "Use case: ui-mockup. One standalone transparent game UI asset. The reference image is the approved pizzeria game screen. Recreate ONLY the cream pill-shaped BACKPLATE behind 'DAY3' in its upper-left HUD, excluding all text, sun, separators or othericons. Original illustrated2D style: warm pale ivory blank interior, thin terracotta-brown outline, tiny warm loweredge bevel, subtle upper-left light, smooth clean untextured center. Calm restrained highlights, NOT metallic/glassy, no strong drop shadow. Match referencecreamandoutline.\nOutput exactly1024x512 pixel transparentPNG. One horizontalpill centered, width896 andheight224, leaving64px on each side and144px above/below. Symmetric capsuleends, smoothcontinuousoutline. Middle half a quiet nearlyflatcream color so9-slice works without changing perceivedlighting. Genuine transparentalpha outside thepill. No bakedtext, symbols, numbers, sun, coin, dividers, annotations, backgroundorcheckerboard. Do notrenderfullscreen. One standalone blankHUDpill.",
+      "referencedImages": [
+        "reference/01-topping.png"
+      ]
+    },
+    {
+      "key": "ticket_master",
+      "prompt": "Use case: ui-mockup. Produce ONE original transparent PNG game UI PAPER TICKET BACKPLATE from the attached approvedpizzeria screen. Use the tall ivory ticket in the upper-right as style reference. Remove ALL text, icons, faces, bars, dotteddividers, numbers and content. No red header. Empty warm paleivory ticket, thin continuous warm brown outerline, restrained warm highlight atupperleft, quiet flat center. Zigzag receipt-paper edge across theTOP andBOTTOM only, evenly spaced shallow triangular notches. Straight parallel left/right edges. Similar visual polish to the reference; no photo papergrain or folds. No thumbtacks, no tornrips, no bevelledplastic.\nCanvas exactly1024x1024, transparentRGBA. Center theticket from x96 to928 and y64 to960. Both side bordersmustbestraightandidenticalfrom y180 through844; thatinteriorwillbe split into a topcap, stretchablemiddle, andbottomcap. Keep the center field uniform cream throughout the vertical middle so copied rows join without seams. Limit shadows to a very narrowconsistentoutline; doNOTdrawa large exterior drop shadow. Keepnotches entirelynear topandbottom. Make the outline clean with realalpha outside.\nNo text, no numbers, no marks, no logos, no checkerboard. Only the single complete blankticket backplate, centered andfronton.",
+      "referencedImages": [
+        "reference/01-topping.png"
+      ]
+    }
+  ],
+  "stateJobs": [
+    {
+      "key": "primary_pressed",
+      "prompt": "Edit the provided standalone transparent coral game-button BACKPLATE. It must remain ONE blank button and keep EXACTLY the same canvas size, position, outer silhouette, corner geometry, border thickness, padding, and soft shadow as the input. Keep genuine transparent alpha outside. No text, symbols, icons, background, annotations or other elements. Do not resize, recenter, redraw or move the button. Preserve its illustrated2D style. Create the PRESSED state by changing only interior color and lighting: deepen the coral face to rich warm brick-red, reduce the upper-left gleam and flatten the inner bevel lighting to suggest pressure. Keep all geometry and the outer ivory rim exactly in place. Clear visible state difference without changing the shape. Center is smooth and sufficiently dark for live white text.",
+      "referencedImages": [
+        "masters/primary_idle_generated.png"
+      ]
+    },
+    {
+      "key": "primary_disabled",
+      "prompt": "Edit the provided standalone transparent coral game-button BACKPLATE. It must remain ONE blank button and keep EXACTLY the same canvas size, position, outer silhouette, corner geometry, border thickness, padding, and soft shadow as the input. Keep genuine transparent alpha outside. No text, symbols, icons, background, annotations or other elements. Do not resize, recenter, redraw or move the button. Preserve its illustrated2D style. Create the DISABLED state by changing only color and lighting: desaturate the coral into muted warm dusty rose/taupe, suppress glossy white sparkle and interior contrast, keep subtle ivory rim slightlymuted. Remain clearly related to the same button family and readable under live dark-brown text. The face must look unavailable without relying on transparency to dim text. All geometry and placement preserved exactly.",
+      "referencedImages": [
+        "masters/primary_idle_generated.png"
+      ]
+    },
+    {
+      "key": "primary_highlighted",
+      "prompt": "Edit the provided standalone transparent coral game-button BACKPLATE. It must remain ONE blank button and keep EXACTLY the same canvas size, position, outer silhouette, corner geometry, border thickness, padding, and soft shadow as the input. Keep genuine transparent alpha outside. No text, symbols, icons, background, annotations or other elements. Do not resize, recenter, redraw or move the button. Preserve its illustrated2D style. Create the HIGHLIGHTED/focused state by changing only color and lighting: brighten the existing narrow ivory inner rim to warmcream and strengthen the upper-left reflection modestly; retain a rich coral-red center to support white live text. Add a restrained warm rimglow contained within existing edgepadding, no newlargehalo. Do NOT make the wholebutton neon or paler. All geometryandplacement unchanged.",
+      "referencedImages": [
+        "masters/primary_idle_generated.png"
+      ]
+    }
+  ],
+  "userArtDirection": "Cartoony Roblox simulator styling: modern and sleek yet simple, clean, vibrant, with restrained shiny highlights and light button treatments where appropriate. User confirmed this generated family is on theme.",
+  "technicalPreparation": "User authorized technical cropping, resizing, alignment and packaging. No code-created artwork."
+}
