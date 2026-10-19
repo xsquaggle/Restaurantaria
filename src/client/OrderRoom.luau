@@ -24,8 +24,8 @@ local COUNTER = "prop3d_order_counter"
 local ORIGIN = Vector3.new(0, 400, 0)
 -- Camera height above the counter top and distance in front of its staff-side edge, in
 -- studs; the field of view and aim are solved from the screen layout.
-local EYE_RISE = 3.2
-local EYE_BACK = 11
+local EYE_RISE = 1.6
+local EYE_BACK = 22
 -- Share of the work surface's height above the counter's far top edge (the drawn
 -- counter's COUNTER_TOP).
 local LINE = 0.72
@@ -64,7 +64,7 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	lamp.Position = ORIGIN + Vector3.new(0, size.Y + 9, -4)
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 236, 205)
-	light.Brightness = 1.6
+	light.Brightness = 0.8
 	light.Range = 26
 	light.Shadows = true
 	light.Parent = lamp
@@ -78,10 +78,10 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	plane.CanCollide = false
 	plane.Transparency = 1
 	plane.CastShadow = false
-	local planeW = size.X * 2.4
+	local planeW = size.X * 4
 	local planeH = planeW * meta.height / meta.width
 	plane.Size = Vector3.new(planeW, planeH, 0.1)
-	plane.CFrame = CFrame.new(ORIGIN + Vector3.new(0, planeH * 0.36, size.Z / 2 + BACKDROP_GAP))
+	plane.CFrame = CFrame.new(ORIGIN + Vector3.new(0, planeH * 0.3, size.Z / 2 + BACKDROP_GAP))
 	plane.Parent = folder
 	local surface = Instance.new("SurfaceGui")
 	surface.Face = Enum.NormalId.Front
@@ -173,7 +173,7 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 			}
 			Lighting.Ambient = Color3.fromRGB(150, 132, 118)
 			Lighting.OutdoorAmbient = Color3.fromRGB(160, 145, 130)
-			Lighting.Brightness = 2
+			Lighting.Brightness = 1.2
 			Lighting.ExposureCompensation = 0
 			Lighting.ClockTime = 13.5
 			camera.CameraType = Enum.CameraType.Scriptable
