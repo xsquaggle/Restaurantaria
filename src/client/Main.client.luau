@@ -354,7 +354,9 @@ local function buildLayout()
 		Parent = left,
 	})
 	local ringSize = hudH - 6
-	local ovenW = 2 * (ringSize + (if compact then 62 else 64)) + 12
+	-- On phones the oven labels drop to the 16 px floor so the pills and the save warning
+	-- still fit beside the ovens.
+	local ovenW = 2 * (ringSize + (if compact then 50 else 64)) + 12
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
@@ -380,7 +382,7 @@ local function buildLayout()
 		local label = Ui.text({
 			Text = "Empty",
 			FontFace = Theme.Font.display,
-			TextSize = math.clamp(math.floor(hudH * 0.36), 12, 22),
+			TextSize = if compact then 16 else math.clamp(math.floor(hudH * 0.36), 12, 22),
 			TextWrapped = false,
 			Position = UDim2.fromOffset(ringSize + 4, 0),
 			Size = UDim2.new(1, -(ringSize + 4), 1, 0),
