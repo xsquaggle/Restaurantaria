@@ -27,13 +27,24 @@ local PIZZA_SPAN, PIZZA_FLATTEN = 0.82, 0.58
 local NEEDLE_EASE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GLOW_PULSE = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 
--- Needle angle: -90 (cold, pointing left) up to 0 (straight up, the green target zone) at
--- the order's target, then on toward +90 (brown, burnt).
-local function needleAngle(target: number, seconds: number): number
+-- Needle angle on oven art v2, whose arc runs in the doneness key: teal (Light) from -90,
+-- green (Regular) from about -45, amber (Well done) from about -15, orange from about +20 and
+-- red (burnt) from about +55. The needle reaches the requested bake's zone centre at the
+-- order's target time, then moves on through the later zones and enters red as the pizza
+-- burns.
+local ZONE_CENTRE = { light = -62, regular = -30, well = 3 }
+local RED_STARTS = 55
+local function needleAngle(bake: string, seconds: number): number
+	local target = Config.Oven.targets[bake]
+	local centre = ZONE_CENTRE[bake] or -30
 	if seconds <= target then
-		return -90 + 90 * math.clamp(seconds / target, 0, 1)
+		return -90 + (centre + 90) * math.clamp(seconds / target, 0, 1)
 	end
-	return 90 * math.clamp((seconds - target) / Config.Oven.burntAfter, 0, 1)
+	local over = (seconds - target) / Config.Oven.burntAfter
+	if over <= 1 then
+		return centre + (RED_STARTS - centre) * over
+	end
+	return math.min(RED_STARTS + 35 * (over - 1) * 2, 88)
 end
 
 local function rect(parent: GuiObject, r: any, props: { [string]: any }?): any
@@ -208,7 +219,7 @@ function Bake.new(ctx: any, container: Frame)
 				local seconds = now - pizza.bakeStart
 				local status = ctx.ovenStatus(customer.order.bake, seconds)
 				slot.reading.Text = if status.ready and not status.burnt and status.text == "Ready!" then "Ready" else status.text
-				slot.pivot.Rotation = needleAngle(Config.Oven.targets[customer.order.bake], seconds)
+				slot.pivot.Rotation = needleAngle(customer.order.bake, seconds)
 				slot.view:set(pizza, Widgets.doneness(seconds), status.burnt)
 				slot.button:setHighlighted(status.ready)
 				-- The glow warms up while baking and pulses once the pizza is ready.
