@@ -1,0 +1,52 @@
+INTEGRATION GUIDE — UI V2
+
+1. IMPORT AND RENDERING
+Use asset-manifest.json and exact runtime filenames. Every SliceCenter rectangle is [left, top, right, bottom], with exclusive right/bottom, measured in the DELIVERED PNG, not the high-resolution source. Preserve image color (white tint), transparent backgrounds and no extra border strokes. Preload state images.
+
+Defaults: BackgroundTransparency=1, BorderSizePixel=0, ImageColor3=white; disable automatic button color tint where swapping generated states. Keep visible art separate from invisible input containers and native text. Code may arrange, crop/mask, move, scale, rotate or fade approved images. It must not invent visible decorative artwork, emoji replacements or primitive customer silhouettes.
+
+Compatibility aliases: icon_bake is identical to icon_bake_regular; recipe requirements must select the appropriate explicit variant. icon_cut is identical to icon_nav_cut_idle. Reuse the same uploaded ID for each alias if convenient; they are not additional artwork.
+
+2. BUTTONS AND PAPER
+Primary: 896x240, SliceCenter [128,112,768,128], SliceScale=displayHeight/240. All four use shared body rectangle [8,8,888,232]. No alpha remains below row 232. The pressed state is modestly darker; highlighted adds a brighter inner rim. Keep labels fixed in a shared content parent; apply existing restrained press motion to art and content together without shrinking the input target below 48px.
+
+Secondary: 512x160, SliceCenter [88,72,424,88], SliceScale=displayHeight/160. Phone Undo target is at least 86x48, overriding the older 44px request. Native dark-brown labels belong on cream controls.
+
+HUD pill: preserve the existing A2 widget: 640x152, SliceCenter [88,70,552,82], SliceScale=displayHeight/152. No regeneration or duplicate rebuild is needed.
+
+Ticket: replace ALL THREE caps/middle together to preserve joins. Caps are 840x96; middle 840x746. For a target width W, cap height=round(W*96/840); only the middle takes remaining height. Place the segments with zero gaps and overlap. No folded corner or grey ring smudge is present in the new paper. Example caps:48px at 420px wide, 19px at 168px wide. Source joins were checked; recapture in Studio at both widths.
+
+Use the dark-teal rail panel to give tickets a deliberate surface. The optional mounting rail can overlap a ticket edge; it must not consume an extra phone row or hide requirements. Keep paper and clip perspective consistent with the station.
+
+3. NAVIGATION AND HUD
+Build navigation from the single ivory base plus the separate coral selected pill, station icons, live labels and count badges. Do not retain V1 sockets, heavy compartment borders, teal underline or duplicate circles. Each live count is centered in ONE badge. Hide a zero-count badge. Keep all four station labels visible; the phone navigation row is 64px with 48px minimum interactive targets.
+
+Use colored icons on ivory and the ivory selected icons on coral. Dividers are optional; the base does not require them to become readable. No new decorative code shapes are needed.
+
+HUD, navigation and rail target sizes in the manifest are layout examples. Measure the current Roblox safe area and viewport; the previous58px top row/120px left allowance were observations, not universal constants. Preserve 16px primary and 14px secondary text floors. Adjust spacing or width instead of shrinking essential labels.
+
+Keep oven status visible from every station. Oven pills, blank badges, full-ring sprites and timer layers are independent. Badge numbers/status words stay live. Progress rings use the generated full-ring sprite with masks; display timer fills at their full size and reveal with clipping rather than distorting the artwork.
+
+4. RECIPE COMMUNICATION
+Requested doneness is distinct from current oven status:
+- Light: teal icon, one heat mark.
+- Regular: green icon, two heat marks.
+- Well-done: amber icon, three heat marks.
+- Extra well-done: orange icon, four heat marks; expose only if recipes/grading support it.
+Actual burnt/error state uses red. Pair color with the matching shape/detail and a live label. Teach the mapping in a short tutorial/legend; color alone is not universally self-explanatory. Prefer28–32px recipe icons on small phones.
+
+Use icon_slices_4/6/8 beside live text such as "6 slices". The diagrams show exactly that many pieces. These numbers describe slices, not the number of cutter strokes. Preserve one live label for "Light bake"; check glyph spacing and wrapping at native phone size.
+
+5. PATIENCE AND TUTORIAL
+Swap all four faces in a fixed 128px source canvas using Fit; target 28px on phone. Track and fills: 512x64, SliceCenter [40,28,472,36], SliceScale=displayHeight/64. Full-size fill sits ABOVE the opaque track at the same position and size. Reveal it through an invisible clipping parent; hide at zero. Never shrink its image width to indicate progress.
+
+Replace the emoji pointer with ui_tutorial_hand. Fingertip in its 256px canvas is approximately(113.5,13), normalized(0.44336,0.05078). Place this anchor at the real target, keeping the hand clear of the target label and waiting tickets. Use the generated halo with transparent center; its visible bounds are smaller than its padded canvas. Pair with a short live instruction and keep the art input-transparent.
+
+The generated scrim is intentionally opaque: Stretch over the viewport behind the modal and use ImageTransparency=0.55 for 45% opacity. Input blocking belongs to a separate invisible container. On a 375px-high phone, the summary is a modal overlay; do not squeeze a 300px summary between the HUD and navigation.
+
+6. STUDIO ACCEPTANCE PASS
+One active thread owns Studio changes. First integrate the shared HUD/nav/rail/ticket/buttons, then propagate those widgets to Order, Bake and Cut. Retain useful generated gameplay art from the visual integration pass; audit its source and fit rather than regenerating it without cause.
+
+Capture native desktop and small-phone frames with viewport and image dimensions recorded. Include empty and busy stations, three orders, urgent/burnt oven, all four patience moods, tutorial target placement and summary. Check tap/drag, Undo, Send, correct ticket association, state swaps, transitions that keep accepting input, clipping, labels and 48px hit targets. A screenshot cannot certify motion, touch accuracy or device performance.
+
+Return upload IDs/import map, changed screens, remaining issues and exact blockers. If upload still fails, report the actual service error; do not assume publishing alone resolves the earlier CreateAssetAsync availability failure. Keep G5 phone counter work until shared geometry is settled. Lawson approves the resulting composition and feel after this pass.

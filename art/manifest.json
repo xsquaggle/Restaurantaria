@@ -115,8 +115,8 @@
   },
   {
    "id": "ui_patience_grumpy",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_grumpy.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_grumpy.png",
    "kind": "copy",
    "outputs": [
     {
@@ -126,8 +126,8 @@
   },
   {
    "id": "ui_patience_happy",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_happy.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_happy.png",
    "kind": "copy",
    "outputs": [
     {
@@ -137,8 +137,8 @@
   },
   {
    "id": "ui_patience_impatient",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_impatient.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_impatient.png",
    "kind": "copy",
    "outputs": [
     {
@@ -148,8 +148,8 @@
   },
   {
    "id": "ui_patience_neutral",
-   "owner": "Astra (ChatGPT), UI Proof V1",
-   "url": "repo:art/ui/runtime/ui_patience_neutral.png",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_neutral.png",
    "kind": "copy",
    "outputs": [
     {
@@ -587,6 +587,589 @@
      "name": "fx_oven_glass",
      "side": 1024,
      "square": false
+    }
+   ]
+  },
+  {
+   "id": "fx_select_ring",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/fx_select_ring.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "fx_select_ring"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_extra_well",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_extra_well.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_extra_well"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_light",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_light.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_light"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_regular",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_regular.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_regular"
+    }
+   ]
+  },
+  {
+   "id": "icon_bake_well_done",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_bake_well_done.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_bake_well_done"
+    }
+   ]
+  },
+  {
+   "id": "icon_coin",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_coin.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_coin"
+    }
+   ]
+  },
+  {
+   "id": "icon_day",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_day.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_day"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_bake_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_bake_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_bake_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_bake_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_bake_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_bake_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_cut_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_cut_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_cut_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_cut_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_cut_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_cut_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_order_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_order_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_order_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_order_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_order_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_order_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_topping_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_topping_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_topping_idle"
+    }
+   ]
+  },
+  {
+   "id": "icon_nav_topping_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_nav_topping_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_nav_topping_selected"
+    }
+   ]
+  },
+  {
+   "id": "icon_oven_white",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_oven_white.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_oven_white"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_4",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_4.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_4"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_6",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_6.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_6"
+    }
+   ]
+  },
+  {
+   "id": "icon_slices_8",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_slices_8.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_slices_8"
+    }
+   ]
+  },
+  {
+   "id": "icon_undo",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/icon_undo.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "icon_undo"
+    }
+   ]
+  },
+  {
+   "id": "ui_badge_alert",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_badge_alert.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_badge_alert"
+    }
+   ]
+  },
+  {
+   "id": "ui_badge_info",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_badge_info.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_badge_info"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_disabled",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_disabled.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_disabled"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_button_secondary_pressed",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_button_secondary_pressed.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_button_secondary_pressed"
+    }
+   ]
+  },
+  {
+   "id": "ui_card_result",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_card_result.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_card_result"
+    }
+   ]
+  },
+  {
+   "id": "ui_hud_bar",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_hud_bar.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_hud_bar"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_bar",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_bar.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_bar"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_divider",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_divider.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_divider"
+    }
+   ]
+  },
+  {
+   "id": "ui_nav_tab_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_nav_tab_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_nav_tab_selected"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_burnt",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_burnt.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_burnt"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_cooking",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_cooking.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_cooking"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_badge_ready",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_badge_ready.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_badge_ready"
+    }
+   ]
+  },
+  {
+   "id": "ui_oven_pill",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_oven_pill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_oven_pill"
+    }
+   ]
+  },
+  {
+   "id": "ui_panel_summary",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_panel_summary.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_panel_summary"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_amber",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_amber.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_amber"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_green",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_green.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_green"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_fill_red",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_fill_red.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_fill_red"
+    }
+   ]
+  },
+  {
+   "id": "ui_patience_track",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_patience_track.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_patience_track"
+    }
+   ]
+  },
+  {
+   "id": "ui_rail_panel",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_rail_panel.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_rail_panel"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_burnt",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_burnt.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_burnt"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_cooking",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_cooking.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_cooking"
+    }
+   ]
+  },
+  {
+   "id": "ui_ring_fill_ready",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ring_fill_ready.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ring_fill_ready"
+    }
+   ]
+  },
+  {
+   "id": "ui_scrim",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_scrim.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_scrim"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_clip_rail",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_clip_rail.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_clip_rail"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_divider",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_divider.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_divider"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_tab_idle",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_tab_idle.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_tab_idle"
+    }
+   ]
+  },
+  {
+   "id": "ui_ticket_tab_selected",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_ticket_tab_selected.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_ticket_tab_selected"
+    }
+   ]
+  },
+  {
+   "id": "ui_timer_fill",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_timer_fill.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_timer_fill"
+    }
+   ]
+  },
+  {
+   "id": "ui_timer_track",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_timer_track.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_timer_track"
+    }
+   ]
+  },
+  {
+   "id": "ui_tutorial_hand",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_tutorial_hand.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tutorial_hand"
+    }
+   ]
+  },
+  {
+   "id": "ui_tutorial_target_halo",
+   "owner": "Astra (ChatGPT), UI V2 complete pack 2026-10-19",
+   "url": "repo:art/ui/v2/ui_tutorial_target_halo.png",
+   "kind": "copy",
+   "outputs": [
+    {
+     "name": "ui_tutorial_target_halo"
     }
    ]
   }
