@@ -252,7 +252,7 @@ function Bake.new(ctx: any, container: Frame)
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
 				if status.ready and not status.burnt then
-					return { target = slot.button.frame, text = "Ready! Tap Take out", from = "left" }
+					return { target = slot.button.frame, text = if status.over then "Past the ticket's bake: take it out now" else "Ready! Tap Take out", from = "left" }
 				end
 				if not seen[customer.order.bake] then
 					seen[customer.order.bake] = true

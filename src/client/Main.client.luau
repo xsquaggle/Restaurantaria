@@ -914,8 +914,19 @@ local function refreshSummary(snap: any)
 	})
 	Art.apply(card, "ui_panel_summary")
 	local profile = snap.profile or {}
+	-- Reward first and largest; rank and the save line are secondary.
+	Ui.text({
+		Text = string.format("+%d tips", snap.tips),
+		FontFace = Theme.Font.display,
+		TextSize = if ctx.compact then 30 else 44,
+		TextColor3 = C.tomato,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Size = UDim2.new(1, 0, 0, if ctx.compact then 36 else 52),
+		Position = UDim2.fromOffset(0, if ctx.compact then 50 else 72),
+		ZIndex = 22,
+		Parent = card,
+	})
 	local lines = {
-		string.format("Tips this shift: %d", snap.tips),
 		string.format("Experience: +%d", snap.xp),
 		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
 		if snap.saved then "Progress saved"
@@ -938,8 +949,8 @@ local function refreshSummary(snap: any)
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.new(0, 24, 0, 72),
-		Size = UDim2.new(1, -48, 0.5, 0),
+		Position = UDim2.new(0, 24, 0, if ctx.compact then 92 else 132),
+		Size = UDim2.new(1, -48, 0, if ctx.compact then 80 else 100),
 		ZIndex = 22,
 		Parent = card,
 	})
