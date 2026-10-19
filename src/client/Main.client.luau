@@ -343,7 +343,7 @@ local function buildLayout()
 	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
 	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
 	local pillH = math.min(if compact then 36 else 44, hudH - 4)
-	local pillMinW = math.round(pillH * (if compact then 120 / 36 else 240 / 44))
+	local pillMinW = math.round(pillH * (if compact then 96 / 36 else 240 / 44))
 	local pillScale = pillH / Assets.Meta.hudPill.height
 	-- Live content stays inside the pill's drawn safe area (96 px of 640 at each end).
 	local pillInset = math.round(Assets.Meta.hudPill.inset * pillScale)
@@ -401,13 +401,13 @@ local function buildLayout()
 	local day = pill("Day", 1, "icon_day")
 	day.Text = "Day 1"
 	local coins = pill("Coins", 2, "icon_coin")
-	coins.Text = "0 coins"
+	coins.Text = if compact then "0" else "0 coins"
 	local banner = Ui.text({
 		Name = "SaveBanner",
 		Text = "",
 		Visible = false,
 		FontFace = Theme.Font.bodySemi,
-		TextSize = if compact then 16 else 14,
+		TextSize = 14,
 		TextColor3 = C.label,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -419,7 +419,7 @@ local function buildLayout()
 	-- Each oven is a pill with its badge and ring at the left end and the live status word.
 	-- On phones the pill shows the status word alone ("Cooking", the longest) at the 16 px
 	-- floor; desktop pills fit "Cooking 12s" at their 22 px cap.
-	local ovenPillW = ringSize + (if compact then 66 else 124)
+	local ovenPillW = ringSize + (if compact then 74 else 124)
 	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
@@ -858,7 +858,7 @@ local function refreshHud(snap: any)
 	local profile = snap.profile or {}
 	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
 	local total = (profile.tips or 0) + (if snap.saved then 0 else snap.tips)
-	ui.coins.Text = string.format("%d coins", total)
+	ui.coins.Text = if ctx.compact then tostring(total) else string.format("%d coins", total)
 end
 
 local function refreshBadges(snap: any)

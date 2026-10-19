@@ -304,7 +304,7 @@ function Widgets.ovenStatus(width: number, height: number, compact: boolean): Ov
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(height + 2, 0),
-		Size = UDim2.new(1, -(height + 2) - math.round(pillH * 0.3), 1, 0),
+		Size = UDim2.new(1, -(height + 2) - math.round(pillH * 0.2), 1, 0),
 		ZIndex = 2,
 		Parent = frame,
 	})
