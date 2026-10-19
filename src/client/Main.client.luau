@@ -19,6 +19,7 @@ local Remote = require(script.Parent.Remote)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local Widgets = require(script.Parent.Widgets)
+local Tutorial = require(script.Parent.Tutorial)
 local Stations = {
 	Order = require(script.Parent.Stations.Order),
 	Topping = require(script.Parent.Stations.Topping),
@@ -81,9 +82,15 @@ local ctx: any = {
 	compact = false,
 	stationSize = Vector2.zero,
 	connections = {},
+	-- Stations whose first-shift pointer is done (see Tutorial).
+	learned = {},
 }
 
 function ctx.send(action: string, args: any, done: any)
+	local lesson = Tutorial.Lesson[action]
+	if lesson then
+		ctx.learned[lesson] = true
+	end
 	Remote.send(action, args, done)
 end
 
@@ -375,7 +382,7 @@ local function buildLayout()
 		Visible = false,
 		FontFace = Theme.Font.bodySemi,
 		TextSize = 14,
-		TextColor3 = C.mutedInk,
+		TextColor3 = C.label,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
 		LayoutOrder = 3,
@@ -450,6 +457,21 @@ local function buildLayout()
 	local ticket = Widgets.railTicket(Vector2.new(railW - pad * 2, ticketH), compact)
 	ticket.frame.Position = UDim2.fromOffset(pad, pad)
 	ticket.frame.Parent = rail
+	-- Astra's mounting rail grips the active ticket's top edge; it overlaps the paper so it
+	-- takes no row of its own.
+	local clipW = railW - pad * 2 + (if compact then 4 else 10)
+	local clipH = math.round(clipW / Assets.Meta.clipRail.aspect)
+	local clipRail = Ui.new("ImageLabel", {
+		Name = "ClipRail",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(railW / 2, pad - 2),
+		Size = UDim2.fromOffset(clipW, clipH),
+		ZIndex = 3,
+		Parent = rail,
+	})
+	Art.apply(clipRail, "ui_ticket_clip_rail")
 	local railEmpty = Ui.text({
 		Text = "No open tickets",
 		FontFace = Theme.Font.display,
@@ -624,11 +646,15 @@ local function buildLayout()
 		Parent = root,
 	})
 
+	local tutorial = Tutorial.new(root, compact)
+
 	ui = {
+		tutorial = tutorial,
 		root = root,
 		day = day,
 		coins = coins,
 		ticket = ticket,
+		clipRail = clipRail,
 		railEmpty = railEmpty,
 		tabList = tabList,
 		tabH = tabH,
@@ -725,6 +751,7 @@ local function refreshRail(snap: any)
 	shown = shown or open[1]
 	ui.ticket:set(shown)
 	ui.ticket.frame.Visible = shown ~= nil
+	ui.clipRail.Visible = shown ~= nil
 	ui.railEmpty.Visible = shown == nil
 	local seen = {}
 	for _, customer in open do
@@ -1007,6 +1034,13 @@ RunService.RenderStepped:Connect(function()
 	if current then
 		current.tick(now)
 	end
+	-- The pointer runs on the first shift only, until each station's action has been done.
+	local firstShift = ((snap.profile or {}).shiftsCompleted or 0) == 0
+	local hint = nil
+	if firstShift and not snap.finished and current and current.hint and not ctx.learned[ctx.station] then
+		hint = current.hint(snap, now)
+	end
+	ui.tutorial.show(hint, now)
 	ui.stations.Order.tick(now)
 end)
 

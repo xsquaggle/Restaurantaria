@@ -224,6 +224,14 @@ function Order.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- First-shift pointer: Take order, once someone is waiting and a ticket slot is free.
+	function station.hint(snap: any): any
+		if selected and takeButton.enabled then
+			return { target = takeButton.frame, text = "Tap Take order to start a ticket", from = "left" }
+		end
+		return nil
+	end
+
 	station.frame = frame
 	return station
 end

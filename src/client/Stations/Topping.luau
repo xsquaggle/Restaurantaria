@@ -383,6 +383,29 @@ function Topping.new(ctx: any, container: Frame)
 
 	function station.tick(_now: number) end
 
+	-- First-shift pointer: the tray of the first topping the ticket still needs.
+	function station.hint(snap: any): any
+		if not current then
+			return nil
+		end
+		local customer = ctx.customer(snap, current.ticketId)
+		if not customer then
+			return nil
+		end
+		for _, req in Recipes.ById[customer.order.recipe].toppings do
+			local have = 0
+			for _, piece in current.toppings do
+				if piece.ingredient == req.ingredient then
+					have += 1
+				end
+			end
+			if have < req.count and trays[req.ingredient] then
+				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = "below" }
+			end
+		end
+		return nil
+	end
+
 	showChosen()
 	return station
 end

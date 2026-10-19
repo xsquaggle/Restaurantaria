@@ -220,6 +220,26 @@ function Bake.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- First-shift pointer: Take out on a ready oven. The bake key shows whenever a pizza is in.
+	function station.hint(_snap: any, now: number): any
+		local busy = false
+		for _, slot in slots do
+			local pizza = slot.pizza
+			if pizza then
+				busy = true
+				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
+				local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
+				if status.ready and not status.burnt then
+					return { target = slot.button.frame, text = "Ready! Take it out", from = "below", legend = true }
+				end
+			end
+		end
+		if busy then
+			return { text = "Take it out when the needle reaches the ticket's bake", legend = true, anchor = slots[1].button.frame }
+		end
+		return nil
+	end
+
 	return station
 end
 
