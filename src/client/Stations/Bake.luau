@@ -128,6 +128,16 @@ function Bake.new(ctx: any, container: Frame)
 		view.frame.Size = UDim2.fromScale(PIZZA_SPAN, 1)
 		view.frame.ZIndex = 3
 		view.frame.Parent = window
+		-- Window glass over the pizza: reflections and a little steam.
+		local glass = Ui.new("ImageLabel", {
+			BackgroundTransparency = 1,
+			ImageTransparency = 0.35,
+			ScaleType = Enum.ScaleType.Stretch,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 4,
+			Parent = window,
+		})
+		Art.apply(glass, "fx_oven_glass")
 
 		local slot: any = { pizza = nil }
 		local button = Widgets.button("Take out", function()

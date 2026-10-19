@@ -779,12 +779,12 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5 + cx * 0.5, 0.5 + cy * 0.5),
-		Size = UDim2.fromScale(half, 0.024),
+		Size = UDim2.fromScale(half, 0.034),
 		Rotation = math.deg(math.atan2(dy, dx)),
 		ZIndex = 3,
 		Parent = layer,
 	})
-	Art.apply(groove, "fx_cut_groove")
+	Art.apply(groove, "fx_cut_groove_b")
 end
 
 function Widgets.tweenIn(frame: GuiObject, offsetX: number)
