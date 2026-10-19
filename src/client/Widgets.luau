@@ -443,7 +443,7 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 		TextColor3 = C.mutedInk,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(padX, padTop + headerH * 0.7),
-		Size = UDim2.fromOffset(inner.X * 0.5, headerH * 0.3),
+		Size = UDim2.fromOffset(inner.X * 0.5, math.max(14, math.floor(headerH * 0.3))),
 		Parent = frame,
 	})
 	local meter = Widgets.patience()
