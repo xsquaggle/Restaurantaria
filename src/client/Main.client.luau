@@ -475,6 +475,7 @@ local function buildLayout()
 	local railEmpty = Ui.text({
 		Text = "No open tickets",
 		FontFace = Theme.Font.display,
+		TextColor3 = C.label,
 		TextSize = if compact then 16 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Position = UDim2.fromOffset(pad, pad),
@@ -646,7 +647,7 @@ local function buildLayout()
 		Parent = root,
 	})
 
-	local tutorial = Tutorial.new(root, compact)
+	local tutorial = Tutorial.new(root, compact, bar)
 
 	ui = {
 		tutorial = tutorial,

@@ -245,7 +245,7 @@ function Cut.new(ctx: any, container: Frame)
 	-- First-shift pointer: drag across the pizza for the first cut.
 	function station.hint(_snap: any): any
 		if current and #current.cuts == 0 then
-			return { target = view.frame, text = "Drag across the pizza to cut", from = "below" }
+			return { target = view.frame, text = "Drag across the pizza to cut", from = "left" }
 		end
 		return nil
 	end

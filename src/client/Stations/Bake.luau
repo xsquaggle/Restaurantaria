@@ -230,7 +230,7 @@ function Bake.new(ctx: any, container: Frame)
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
 				if status.ready and not status.burnt then
-					return { target = slot.button.frame, text = "Ready! Take it out", from = "below", legend = true }
+					return { target = slot.button.frame, text = "Ready! Take it out", from = "left", legend = true }
 				end
 			end
 		end

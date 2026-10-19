@@ -25,7 +25,8 @@ local ROTATION = { below = 0, above = 180, left = 90, right = -90 }
 
 export type Hint = { target: GuiObject?, text: string, from: string?, legend: boolean?, anchor: GuiObject? }
 
-function Tutorial.new(parent: GuiObject, compact: boolean)
+-- `avoid` is a control strip (the tab bar) the glove must not cover.
+function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 	Art.preload({ "ui_tutorial_hand", "ui_tutorial_target_halo", "ui_card_result" })
 	local layer = Ui.new("Frame", { Name = "Tutorial", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 30, Visible = false, Parent = parent })
 	local handSize = if compact then 56 else 80
@@ -128,8 +129,13 @@ function Tutorial.new(parent: GuiObject, compact: boolean)
 			-- Turn to the other side when the glove would leave the screen.
 			if from == "left" and p.X < handSize + 8 then
 				from = "right"
-			elseif from == "below" and p.Y + s.Y + handSize > area.Y then
-				from = "above"
+			elseif from == "below" then
+				local floor = if avoid then avoid.AbsolutePosition.Y - origin.Y else area.Y
+				local x = p.X + s.X / 2
+				local overAvoid = avoid ~= nil and x + handSize > avoid.AbsolutePosition.X - origin.X and x - handSize < avoid.AbsolutePosition.X - origin.X + avoid.AbsoluteSize.X
+				if p.Y + s.Y + handSize + 8 > (if overAvoid then floor else area.Y) then
+					from = "above"
+				end
 			end
 			local gap = 6
 			tipAt = if from == "left" then Vector2.new(p.X - gap, p.Y + s.Y / 2)
@@ -141,7 +147,8 @@ function Tutorial.new(parent: GuiObject, compact: boolean)
 			local bob = towards * (math.sin(now * 5) * 0.5 + 0.5) * (if compact then 4 else 6) - towards * 6
 			pivot.Position = UDim2.fromOffset(tipAt.X + bob.X, tipAt.Y + bob.Y)
 			pivot.Rotation = ROTATION[from]
-			halo.Position = UDim2.fromOffset(tipAt.X + towards.X * haloSize * 0.3, tipAt.Y + towards.Y * haloSize * 0.3)
+			-- The halo rings the tap point on the target's edge, clear of its label.
+			halo.Position = UDim2.fromOffset(tipAt.X - towards.X * haloSize * 0.15, tipAt.Y - towards.Y * haloSize * 0.15)
 		end
 
 		-- Instruction card: beside the glove, kept on screen.
