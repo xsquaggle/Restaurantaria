@@ -268,4 +268,104 @@ function GlbImport.import(data: buffer, opts: { name: string?, width: number? }?
 	return model, report
 end
 
+-- Packs a GLB for the game (see src/shared/Model3D.luau): one mesh, centred on X/Z with its
+-- base on Y = 0, uniformly scaled so its longest horizontal side is opts.width studs, turned
+-- by opts.yaw radians about Y so its front faces -Z. The colour map goes to DevArt as
+-- <name>_base through ArtPipeline. Returns a report.
+function GlbImport.store(name: string, data: buffer, opts: { width: number, yaw: number?, source: string? }): { string }
+	local EncodingService = game:GetService("EncodingService")
+	local Pipeline = require(game:GetService("ServerStorage"):WaitForChild("ArtPipeline") :: ModuleScript) :: any
+	local glb = GlbImport.parse(data)
+	local j = glb.json
+	local report = {}
+	local verts, tris = {}, {}
+	local minV, maxV = Vector3.one * math.huge, -Vector3.one * math.huge
+	local texIndex = nil
+	for _, m in j.meshes do
+		for _, p in m.primitives do
+			local nPos, pos = accessor(glb, p.attributes.POSITION)
+			local _, nrm = accessor(glb, p.attributes.NORMAL)
+			local _, uvr = accessor(glb, p.attributes.TEXCOORD_0)
+			local first = #verts
+			for i = 0, nPos - 1 do
+				local v = Vector3.new(pos(i, 0), pos(i, 1), pos(i, 2))
+				minV, maxV = minV:Min(v), maxV:Max(v)
+				table.insert(verts, { v, Vector3.new(nrm(i, 0), nrm(i, 1), nrm(i, 2)), uvr(i, 0), uvr(i, 1) })
+			end
+			local nIdx, idx = accessor(glb, p.indices)
+			for t = 0, nIdx - 1 do
+				table.insert(tris, idx(t, 0) + first)
+			end
+			local mat = p.material and j.materials[p.material + 1]
+			local pbr = mat and mat.pbrMetallicRoughness
+			if pbr and pbr.baseColorTexture and texIndex == nil then
+				texIndex = pbr.baseColorTexture.index
+			end
+		end
+	end
+	local extent = maxV - minV
+	local scale = opts.width / math.max(extent.X, extent.Z)
+	local centre = Vector3.new((minV.X + maxV.X) / 2, minV.Y, (minV.Z + maxV.Z) / 2)
+	local turn = CFrame.Angles(0, opts.yaw or 0, 0)
+	local nv, nt = #verts, #tris // 3
+	local b = buffer.create(8 + nv * 32 + nt * 12)
+	buffer.writeu32(b, 0, nv)
+	buffer.writeu32(b, 4, nt)
+	local lo, hi = Vector3.one * math.huge, -Vector3.one * math.huge
+	for i, v in verts do
+		local p = turn * ((v[1] - centre) * scale)
+		local n = (turn:VectorToWorldSpace(v[2])).Unit
+		lo, hi = lo:Min(p), hi:Max(p)
+		local o = 8 + (i - 1) * 32
+		buffer.writef32(b, o, p.X)
+		buffer.writef32(b, o + 4, p.Y)
+		buffer.writef32(b, o + 8, p.Z)
+		buffer.writef32(b, o + 12, n.X)
+		buffer.writef32(b, o + 16, n.Y)
+		buffer.writef32(b, o + 20, n.Z)
+		buffer.writef32(b, o + 24, v[3])
+		buffer.writef32(b, o + 28, v[4])
+	end
+	local base = 8 + nv * 32
+	for i, t in tris do
+		buffer.writeu32(b, base + (i - 1) * 4, t)
+	end
+	local packed = EncodingService:CompressBuffer(b, Enum.CompressionAlgorithm.Zstd, 9)
+	local text = buffer.tostring(EncodingService:Base64Encode(packed))
+	local root = ReplicatedStorage:FindFirstChild("DevModels")
+	if not root then
+		root = Instance.new("Folder")
+		root.Name = "DevModels"
+		root.Parent = ReplicatedStorage
+	end
+	local old = (root :: Instance):FindFirstChild(name)
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = name
+	folder:SetAttribute("Size", hi - lo)
+	folder:SetAttribute("Source", opts.source or "")
+	local part = 0
+	for i = 1, #text, 199000 do
+		part += 1
+		local m = Instance.new("ModuleScript")
+		m.Name = tostring(part)
+		m.Source = 'return "' .. text:sub(i, i + 199000 - 1) .. '"'
+		m.Parent = folder
+	end
+	folder:SetAttribute("Parts", part)
+	folder.Parent = root
+	table.insert(report, string.format("%s: %d verts, %d tris, size %s, %d chunks", name, nv, nt, tostring(hi - lo), part))
+	local colour, how = editableFromTexture(glb, texIndex)
+	if colour then
+		local size = colour.Size
+		local pixels = colour:ReadPixelsBuffer(Vector2.zero, size)
+		Pipeline.store(name .. "_base", { width = size.X, height = size.Y, pixels = pixels })
+		colour:Destroy()
+	end
+	table.insert(report, "colour map " .. how)
+	return report
+end
+
 return GlbImport

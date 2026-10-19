@@ -28,6 +28,8 @@ local shown: { [Instance]: string } = {}
 -- Labels whose image was freed while they were hidden; Art.restore re-applies them when
 -- their station is shown again.
 local stale: { [Instance]: boolean } = {}
+-- Images handed out by Art.editable (mesh textures): no label tracks them, so never free them.
+local pinned: { [string]: boolean } = {}
 
 -- A label counts as showing only when it is in the game and no ancestor hides it, so the
 -- art of the three hidden stations can be freed when the budget runs out.
@@ -87,7 +89,7 @@ local function devImage(name: string): EditableImage?
 			end
 		end
 		for other, editable in editables do
-			if not inUse[other] then
+			if not inUse[other] and not pinned[other] then
 				editable:Destroy()
 				editables[other] = nil
 				for label, shownName in shown do
@@ -106,6 +108,13 @@ local function devImage(name: string): EditableImage?
 	image:WritePixelsBuffer(Vector2.zero, size, pixels)
 	editables[name] = image
 	return image
+end
+
+-- The Studio dev-art image itself, for surfaces an ImageLabel cannot reach (a MeshPart's
+-- texture). Nil outside Studio or when the art is missing.
+function Art.editable(name: string): EditableImage?
+	pinned[name] = true
+	return devImage(name)
 end
 
 -- True when the art exists through either path.

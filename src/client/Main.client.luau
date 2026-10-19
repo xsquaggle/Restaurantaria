@@ -749,7 +749,12 @@ function ctx.switchTo(name: string, instant: boolean?)
 	ctx.station = name
 	for n, s in ui.stations do
 		s.holder.Visible = n == name
+		if s.setActive then
+			s.setActive(n == name)
+		end
 	end
+	-- A station that shows the 3D world (the hybrid Order counter) needs the backdrop gone.
+	backdrop.Enabled = not ui.stations[name].world3D
 	-- Studio dev art: images freed while this station was hidden come back now.
 	Art.restore(ui.stations[name].holder)
 	for n, f in ui.backgrounds do
