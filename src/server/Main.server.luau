@@ -224,6 +224,11 @@ if RunService:IsStudio() then
 			end
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "act" then
+			-- value = { action, args }: one real player action, as if the client sent it.
+			local ok, reason = ShiftService.apply(session, value[1], value[2])
+			push(player)
+			return if ok then "ok" else tostring(reason)
 		elseif command == "setBake" then
 			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
 			local id = session.shift.ovens[value[1]]
