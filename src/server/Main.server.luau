@@ -167,6 +167,54 @@ if RunService:IsStudio() then
 			end
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "stage" then
+			-- A busy moment for captures, through the real actions: every ticket open, the
+			-- first pizza in the oven and the next on the topping station with `value` (0-1) of
+			-- its pieces placed.
+			local shift = session.shift
+			local log = {}
+			local function act(action: string, args: any)
+				local ok, reason = ShiftService.apply(session, action, args)
+				if not ok then
+					table.insert(log, action .. ": " .. tostring(reason))
+				end
+			end
+			local function top(pizza: any, recipeId: string, share: number)
+				for _, req in Recipes.ById[recipeId].toppings do
+					for i = 1, math.round(req.count * share) do
+						local t = (i - 0.5) / req.count
+						local a = if req.region == "left" then math.rad(90 + t * 180)
+							elseif req.region == "right" then math.rad(-90 + t * 180)
+							else math.rad(22.5 + (i - 1) * 360 / req.count + (if req.ingredient == "pepper" then 30 else 0))
+						local r = if req.ingredient == "pepper" then 0.28 else 0.52
+						act("placeTopping", { pizzaId = pizza.id, ingredient = req.ingredient, x = math.cos(a) * r, y = -math.sin(a) * r })
+					end
+				end
+			end
+			shift.startedAt -= 1000
+			ShiftService.tick(session)
+			local clock = workspace:GetServerTimeNow()
+			for _, c in shift.customers do
+				if c.status == "waiting" then
+					c.arrivedAt = clock - 5
+					act("takeOrder", { customerId = c.id })
+				end
+			end
+			local open = {}
+			for _, c in shift.customers do
+				if c.status == "ordered" and c.pizzaId and shift.pizzas[c.pizzaId] then
+					table.insert(open, c)
+				end
+			end
+			if open[1] and shift.pizzas[open[1].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[1].pizzaId], open[1].order.recipe, 1)
+				act("sendToOven", { pizzaId = open[1].pizzaId })
+			end
+			if open[2] and shift.pizzas[open[2].pizzaId].stage == "topping" then
+				top(shift.pizzas[open[2].pizzaId], open[2].order.recipe, value or 0.7)
+			end
+			push(player)
+			return if #log == 0 then "ok" else table.concat(log, "\n")
 		elseif command == "setBake" then
 			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
 			local id = session.shift.ovens[value[1]]
