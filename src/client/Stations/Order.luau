@@ -179,7 +179,11 @@ function Order.new(ctx: any, container: Frame)
 		end
 		local first = p.band == ""
 		p.band = band
-		Art.apply(p.figure, string.format("chr_%s_%s", p.art, band))
+		-- With no figure art (the 2D portraits are not uploaded), the name and patience meter
+		-- would float over an empty slot, so they hide with it.
+		local shown = Art.apply(p.figure, string.format("chr_%s_%s", p.art, band))
+		p.name.Visible = shown and not p.leaving
+		p.meter.frame.Visible = shown and not p.leaving
 		if not first then
 			-- A small pop so the change of mood reads.
 			p.scale.Scale = (if p.chosen then 1.06 else 1) * 1.05

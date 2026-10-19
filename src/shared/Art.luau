@@ -30,6 +30,8 @@ local shown: { [Instance]: string } = {}
 local stale: { [Instance]: boolean } = {}
 -- Images handed out by Art.editable (mesh textures): no label tracks them, so never free them.
 local pinned: { [string]: boolean } = {}
+-- Set once EditableImage turns out to be blocked, so no later call tries again.
+local blocked = false
 
 -- A label counts as showing only when it is in the game and no ancestor hides it, so the
 -- art of the three hidden stations can be freed when the budget runs out.
@@ -61,7 +63,7 @@ local function devImage(name: string): EditableImage?
 		return editables[name]
 	end
 	local folder = devFolder(name)
-	if not folder then
+	if not folder or blocked then
 		return nil
 	end
 	local parts = {}
@@ -105,7 +107,17 @@ local function devImage(name: string): EditableImage?
 		warn("[Art] no memory budget left for " .. name)
 		return nil
 	end
-	image:WritePixelsBuffer(Vector2.zero, size, pixels)
+	-- A published place without "Allow Mesh / Image APIs" hands out the image but refuses the
+	-- write; treat that like missing art instead of breaking the caller.
+	local wrote = pcall(function()
+		image:WritePixelsBuffer(Vector2.zero, size, pixels)
+	end)
+	if not wrote then
+		image:Destroy()
+		blocked = true
+		warn("[Art] dev art unavailable here (EditableImage blocked): " .. name)
+		return nil
+	end
 	editables[name] = image
 	return image
 end
