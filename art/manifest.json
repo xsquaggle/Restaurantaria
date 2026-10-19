@@ -409,7 +409,21 @@
    "job": "4958c7fe-0229-4551-baf3-b7dea153aaa3",
    "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_025237_4958c7fe-0229-4551-baf3-b7dea153aaa3.png",
    "kind": "sprite",
-   "note": "G8 oven unit, empty interior, gauge without needle, blank plates. Reference 02-bake. Trimmed 1727x1938.",
+   "note": "G8 oven unit, empty interior, gauge without needle, blank plates. Reference 02-bake. Trimmed 1727x1938. Superseded by prop_oven_v2 (gauge recoloured to the doneness key); output renamed so it is not stored.",
+   "outputs": [
+    {
+     "name": "prop_oven_v1_superseded",
+     "side": 1024,
+     "pad": 0
+    }
+   ]
+  },
+  {
+   "id": "prop_oven_v2",
+   "job": "8ca8c146-7d6f-4b53-8926-c566f1470edd",
+   "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3KMV3zBIftM1TUytiMnYeHk4SPA/hf_20261019_053628_8ca8c146-7d6f-4b53-8926-c566f1470edd.png",
+   "kind": "sprite",
+   "note": "G8 oven unit v2: edit of prop_oven_v1 (job ec3f1162, reference 4958c7fe) with the gauge arc in the doneness key order teal, green, amber, orange, red at the burnt end; background removed (job 8ca8c146). Layout matches v1 within about 0.5% (window 0.230-0.776 of height, dome centred).",
    "outputs": [
     {
      "name": "prop_oven",
