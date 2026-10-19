@@ -271,7 +271,9 @@ local function background(name: string): Frame
 				Size = UDim2.new(1 / meta.cols, 1, 1 / meta.rows, 1),
 				Parent = holder,
 			})
-			Art.apply(tile, string.format("%s_%d", name, r * meta.cols + c + 1))
+			-- Tiles get their art only while the station shows (see switchTo): four
+			-- full-screen backgrounds at once overrun Studio's dev-art memory budget.
+			tile:SetAttribute("Art", string.format("%s_%d", name, r * meta.cols + c + 1))
 		end
 	end
 	return holder
@@ -690,6 +692,17 @@ function ctx.switchTo(name: string, instant: boolean?)
 	end
 	for n, f in ui.backgrounds do
 		f.Visible = n == name
+		if n ~= name then
+			for _, tile in f:GetChildren() do
+				Art.release(tile :: ImageLabel)
+			end
+		end
+	end
+	local shownBackground = ui.backgrounds[name]
+	if shownBackground then
+		for _, tile in shownBackground:GetChildren() do
+			Art.apply(tile :: ImageLabel, tile:GetAttribute("Art") :: string)
+		end
 	end
 	for n, f in ui.actions do
 		f.Visible = n == name

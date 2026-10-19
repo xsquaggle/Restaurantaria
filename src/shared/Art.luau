@@ -128,6 +128,13 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 	return false
 end
 
+-- Clear a label so the image it showed can be freed (Studio dev art only holds memory while
+-- some live label shows it).
+function Art.release(label: ImageLabel | ImageButton)
+	shown[label] = nil
+	label.ImageContent = Content.none
+end
+
 -- Load art ahead of first use (e.g. every state of a button) so a state change never shows
 -- an empty frame while the image arrives. Never yields.
 function Art.preload(names: { string })
