@@ -35,10 +35,11 @@ end
 -- hand already shows the drawing it will land with. Ingredients with visual variants (the
 -- red and green bell pepper) pick among those; they share everything else.
 function PizzaArt.look(pizzaId: number, ingredient: string, n: number): (string, number)
-	local h = hash(string.format("%d:%s:%d", pizzaId, ingredient, n))
+	-- A seeded Random spreads neighbouring counts apart (the raw hash moves in even steps).
+	local rng = Random.new(hash(string.format("%d:%s:%d", pizzaId, ingredient, n)))
 	local info = Recipes.Ingredients[ingredient]
-	local art = if info.variants then info.variants[h % #info.variants + 1] else string.format("topping_%s_%d", info.art, h % 3 + 1)
-	return art, (h // 7) % 360
+	local art = if info.variants then info.variants[rng:NextInteger(1, #info.variants)] else string.format("topping_%s_%d", info.art, rng:NextInteger(1, 3))
+	return art, rng:NextInteger(0, 359)
 end
 
 -- The look the next piece of this ingredient will get on this pizza.
