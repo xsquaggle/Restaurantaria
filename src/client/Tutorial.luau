@@ -163,7 +163,12 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 		legend.Position = UDim2.fromOffset(cardPad, cardPad + textH)
 		legend.Size = UDim2.fromOffset(cardW - cardPad * 2, legendH)
 		local at: Vector2
-		if pointing then
+		if compact then
+			-- Phones have no spare room beside controls: the card sits at the top of the work
+			-- surface, over the scene rather than any control.
+			local centre = if avoid then avoid.AbsolutePosition.X - origin.X + avoid.AbsoluteSize.X / 2 else area.X / 2
+			at = Vector2.new(centre - cardW / 2, 8)
+		elseif pointing then
 			at = if from == "left" then Vector2.new(tipAt.X - handSize - 8 - cardW, tipAt.Y - cardH / 2)
 				elseif from == "right" then Vector2.new(tipAt.X + handSize + 8, tipAt.Y - cardH / 2)
 				elseif from == "above" then Vector2.new(tipAt.X - cardW / 2, tipAt.Y - handSize - 8 - cardH)

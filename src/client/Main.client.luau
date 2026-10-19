@@ -392,7 +392,7 @@ local function buildLayout()
 	local ringSize = hudH - 6
 	-- Each oven is a pill with its badge and ring at the left end and the live status word.
 	-- On phones the status keeps the 16 px floor and the pills narrow instead.
-	local ovenPillW = ringSize + (if compact then 62 else 86)
+	local ovenPillW = ringSize + (if compact then 50 else 86)
 	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
