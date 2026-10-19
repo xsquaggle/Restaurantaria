@@ -418,8 +418,8 @@ local function buildLayout()
 	local ringSize = hudH - 6
 	-- Each oven is a pill with its badge and ring at the left end and the live status word.
 	-- On phones the pill shows the status word alone ("Cooking", the longest) at the 16 px
-	-- floor; the seconds stay on desktop.
-	local ovenPillW = ringSize + (if compact then 66 else 86)
+	-- floor; desktop pills fit "Cooking 12s" at their 22 px cap.
+	local ovenPillW = ringSize + (if compact then 66 else 124)
 	local ovenW = 2 * ovenPillW + 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
