@@ -742,6 +742,8 @@ function ctx.switchTo(name: string, instant: boolean?)
 	for n, s in ui.stations do
 		s.holder.Visible = n == name
 	end
+	-- Studio dev art: images freed while this station was hidden come back now.
+	Art.restore(ui.stations[name].holder)
 	for n, f in ui.backgrounds do
 		f.Visible = n == name
 		if n ~= name then

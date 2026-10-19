@@ -25,6 +25,25 @@ local reported: { [string]: boolean } = {}
 -- EditableImage memory budget runs out.
 -- (Strong keys: Roblox can collect an Instance's weak-table key while the Instance still lives.)
 local shown: { [Instance]: string } = {}
+-- Labels whose image was freed while they were hidden; Art.restore re-applies them when
+-- their station is shown again.
+local stale: { [Instance]: boolean } = {}
+
+-- A label counts as showing only when it is in the game and no ancestor hides it, so the
+-- art of the three hidden stations can be freed when the budget runs out.
+local function isShowing(inst: Instance): boolean
+	if not inst:IsDescendantOf(game) then
+		return false
+	end
+	local p: Instance? = inst
+	while p and not p:IsA("ScreenGui") do
+		if p:IsA("GuiObject") and not p.Visible then
+			return false
+		end
+		p = p.Parent
+	end
+	return true
+end
 
 local function devFolder(name: string): Instance?
 	name = Assets.Alias[name] or name
@@ -61,16 +80,21 @@ local function devImage(name: string): EditableImage?
 		-- Free every image no live label still shows, then try once more.
 		local inUse = {}
 		for label, shownName in shown do
-			if label:IsDescendantOf(game) then
-				inUse[shownName] = true
-			else
+			if not label:IsDescendantOf(game) then
 				shown[label] = nil
+			elseif isShowing(label) then
+				inUse[shownName] = true
 			end
 		end
 		for other, editable in editables do
 			if not inUse[other] then
 				editable:Destroy()
 				editables[other] = nil
+				for label, shownName in shown do
+					if shownName == other then
+						stale[label] = true
+					end
+				end
 			end
 		end
 		image = create()
@@ -114,7 +138,11 @@ function Art.apply(label: ImageLabel | ImageButton, name: string): boolean
 		label.Image = id
 		return true
 	end
+	if shown[label] == name and not stale[label] and editables[name] then
+		return true
+	end
 	shown[label] = nil
+	stale[label] = nil
 	local image = devImage(name)
 	if image then
 		shown[label] = name
@@ -131,8 +159,18 @@ end
 
 -- Clear a label so the image it showed can be freed (Studio dev art only holds memory while
 -- some live label shows it).
+-- Re-apply the art of labels under `root` whose image was freed while they were hidden.
+function Art.restore(root: Instance)
+	for label, name in shown do
+		if stale[label] and label:IsDescendantOf(root) then
+			Art.apply(label :: ImageLabel, name)
+		end
+	end
+end
+
 function Art.release(label: ImageLabel | ImageButton)
 	shown[label] = nil
+	stale[label] = nil
 	label.ImageContent = Content.none
 end
 
