@@ -224,7 +224,8 @@ function Bake.new(ctx: any, container: Frame)
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local seconds = now - pizza.bakeStart
 				local status = ctx.ovenStatus(customer.order.bake, seconds)
-				slot.reading.Text = status.text
+				-- Phone plates are about 60 px wide: the word only; the HUD pill above adds the time.
+				slot.reading.Text = if ctx.compact then status.word else status.text
 				slot.pivot.Rotation = needleAngle(seconds)
 				slot.view:set(pizza, Widgets.doneness(seconds), status.burnt)
 				slot.button:setHighlighted(status.ready)
