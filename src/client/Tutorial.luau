@@ -143,6 +143,16 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 					from = "above"
 				end
 			end
+			-- A side glove that would land on the avoided strip (the tab bar beside a rail
+			-- button on phones) comes from above instead.
+			if avoid and (from == "left" or from == "right") then
+				local ap, as = avoid.AbsolutePosition - origin, avoid.AbsoluteSize
+				local gx0 = if from == "left" then p.X - handSize - 6 else p.X + s.X + 6
+				local gy0, gy1 = p.Y + s.Y / 2 - handSize / 2, p.Y + s.Y / 2 + handSize / 2
+				if gx0 < ap.X + as.X and gx0 + handSize > ap.X and gy1 > ap.Y and gy0 < ap.Y + as.Y then
+					from = "above"
+				end
+			end
 			local gap = 6
 			tipAt = if from == "left" then Vector2.new(p.X - gap, p.Y + s.Y / 2)
 				elseif from == "right" then Vector2.new(p.X + s.X + gap, p.Y + s.Y / 2)
