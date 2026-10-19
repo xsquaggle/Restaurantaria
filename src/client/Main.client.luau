@@ -175,19 +175,24 @@ function ctx.withOptimistic(pizza: any): any
 	return copy
 end
 
+-- One status word per oven, the same on the HUD pill and the oven's plate, judged against
+-- the ticket's requested bake: Cooking with the seconds until it is ready, Ready inside the
+-- bake's perfect window, Overdone once past it, Burnt past the gauge's red line. There is no
+-- unexplained "+N s": time is only ever shown as the wait until Ready.
 function ctx.ovenStatus(bakeId: string, seconds: number): any
 	local target = Config.Oven.targets[bakeId]
 	local state = Scoring.bakeState(target, seconds)
 	local progress = math.clamp(seconds / target, 0, 1)
 	if state == "under" then
-		return { progress = progress, state = "cooking", text = string.format("%ds", math.ceil(target - seconds)), ready = false, alert = false }
+		local wait = math.max(1, math.ceil(target - Config.Oven.perfectWindow - seconds))
+		return { progress = progress, state = "cooking", word = "Cooking", text = string.format("Cooking %ds", wait), ready = false, alert = false }
 	elseif state == "perfect" then
-		return { progress = progress, state = "ready", text = "Ready!", ready = true, alert = true }
+		return { progress = progress, state = "ready", word = "Ready", text = "Ready", ready = true, alert = true }
 	elseif state == "over" then
-		return { progress = 1, state = "ready", text = string.format("+%ds", math.floor(seconds - target)), ready = true, alert = true }
+		return { progress = 1, state = "ready", word = "Overdone", text = "Overdone", ready = true, alert = true, over = true }
 	end
 	-- Red is kept for burnt (and errors) only.
-	return { progress = 1, state = "burnt", text = "Burnt", ready = true, alert = true, burnt = true }
+	return { progress = 1, state = "burnt", word = "Burnt", text = "Burnt", ready = true, alert = true, burnt = true }
 end
 
 ------------------------------------------------------------------------------------------
@@ -295,10 +300,13 @@ local function buildLayout()
 	local navH = if compact then 74 else math.clamp(math.round(size.Y * 0.11), 74, 120)
 	-- Rail widths land on Astra's ticket proofs: 168 px tickets on a phone, 420 px at 1920.
 	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
-	local stationH = size.Y - top - navH
+	-- A reserved hint strip runs between the work surface and the tab bar, so tutorial
+	-- instructions and status reasons never cover food, ovens, trays or controls.
+	local stripH = if compact then 34 else math.clamp(math.round(size.Y * 0.05), 40, 56)
+	local stationH = size.Y - top - navH - stripH
 	-- Phones run the rail down beside the tab bar (which centres under the station) so the
 	-- ticket has room for its requirement icons; wide screens keep the full-width tab row.
-	local railH = if compact then size.Y - top else stationH
+	local railH = if compact then size.Y - top else stationH + stripH
 	ctx.stationSize = Vector2.new(size.X - railW, stationH)
 
 	local root = Ui.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = gui })
@@ -429,6 +437,10 @@ local function buildLayout()
 		Size = UDim2.fromOffset(ctx.stationSize.X, stationH),
 		Parent = root,
 	})
+
+	local hintStrip = Widgets.hintStrip(ctx.stationSize.X, stripH, compact)
+	hintStrip.frame.Position = UDim2.fromOffset(0, top + stationH)
+	hintStrip.frame.Parent = root
 
 	-- Rail: active ticket, the other open tickets as tabs, then the station's main action.
 	local rail = Ui.new("Frame", {
@@ -657,6 +669,7 @@ local function buildLayout()
 
 	ui = {
 		tutorial = tutorial,
+		hintStrip = hintStrip,
 		root = root,
 		day = day,
 		coins = coins,
@@ -1061,6 +1074,11 @@ RunService.RenderStepped:Connect(function()
 		hint = current.hint(snap, now)
 	end
 	ui.tutorial.show(hint, now)
+	-- The strip carries the tutorial line while there is one, otherwise the station's status
+	-- reason (why its action is unavailable and what to do next).
+	local status = if current and current.status and not snap.finished then current.status(snap, now) else nil
+	local line = if hint and hint.text ~= "" then hint else status
+	ui.hintStrip:set(line and line.text, line and line.legend)
 	ui.stations.Order.tick(now)
 end)
 

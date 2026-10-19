@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
+local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
@@ -27,25 +28,32 @@ local PIZZA_SPAN, PIZZA_FLATTEN = 0.82, 0.58
 local NEEDLE_EASE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GLOW_PULSE = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 
--- Needle angle on oven art v2, whose arc runs in the doneness key: teal (Light) from -90,
--- green (Regular) from about -45, amber (Well done) from about -15, orange from about +20 and
--- red (burnt) from about +55. The needle reaches the requested bake's zone centre at the
--- order's target time, then moves on through the later zones and enters red as the pizza
--- burns.
-local ZONE_CENTRE = { light = -62, regular = -30, well = 3 }
-local RED_STARTS = 55
-local function needleAngle(bake: string, seconds: number): number
-	local target = Config.Oven.targets[bake]
-	local centre = ZONE_CENTRE[bake] or -30
-	if seconds <= target then
-		return -90 + (centre + 90) * math.clamp(seconds / target, 0, 1)
+-- The gauge reads absolute bake time, the same scale on every ticket. Its art (v3) has five
+-- bands: cold (neutral), Light (teal), Regular (green), Well done (amber) and Burnt (red).
+-- Band edges in seconds come from the grading: each bake's band runs halfway to its
+-- neighbours' targets, so its whole perfect window (target +/- perfectWindow) sits inside
+-- it, and red starts exactly at Config.Oven.burntAt. GAUGE.edges are the measured angles of
+-- the art's band dividers (degrees from straight up); the needle moves linearly within each
+-- band.
+local T = Config.Oven.targets
+local GAUGE = {
+	seconds = { 0, T.light - Config.Oven.perfectWindow - 1, (T.light + T.regular) / 2, (T.regular + T.well) / 2, Config.Oven.burntAt, Config.Oven.burntAt + 8 },
+	edges = OVEN.gaugeEdges,
+}
+local function needleAngle(seconds: number): number
+	local s, e = GAUGE.seconds, GAUGE.edges
+	if seconds <= 0 then
+		return e[1]
 	end
-	local over = (seconds - target) / Config.Oven.burntAfter
-	if over <= 1 then
-		return centre + (RED_STARTS - centre) * over
+	for i = 1, #s - 1 do
+		if seconds <= s[i + 1] then
+			return e[i] + (e[i + 1] - e[i]) * (seconds - s[i]) / (s[i + 1] - s[i])
+		end
 	end
-	return math.min(RED_STARTS + 35 * (over - 1) * 2, 88)
+	return e[#e]
 end
+Bake.needleAngle = needleAngle
+Bake.gaugeSeconds = GAUGE.seconds
 
 local function rect(parent: GuiObject, r: any, props: { [string]: any }?): any
 	local p = props or {}
@@ -99,7 +107,7 @@ function Bake.new(ctx: any, container: Frame)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(OVEN.dial.x, OVEN.dial.y),
 			Size = UDim2.fromOffset(dialR * 2, dialR * 2),
-			Rotation = -90,
+			Rotation = GAUGE.edges[1],
 			ZIndex = 3,
 			Parent = oven,
 		})
@@ -178,8 +186,7 @@ function Bake.new(ctx: any, container: Frame)
 		button.frame.Parent = oven
 
 		slot.view, slot.button, slot.glow, slot.pivot, slot.reading, slot.number = view, button, glow, pivot, reading, number
-		slot.angle = -90
-		slots[i] = slot
+				slots[i] = slot
 	end
 
 	local station = { frame = frame }
@@ -200,8 +207,7 @@ function Bake.new(ctx: any, container: Frame)
 			slot.button:setEnabled(pizza ~= nil and not ctx.pending[pizza.id])
 			if not pizza then
 				slot.reading.Text = "Empty"
-				slot.angle = -90
-				TweenService:Create(slot.pivot, NEEDLE_EASE, { Rotation = -90 }):Play()
+								TweenService:Create(slot.pivot, NEEDLE_EASE, { Rotation = GAUGE.edges[1] }):Play()
 				if slot.pulse then
 					slot.pulse:Cancel()
 					slot.pulse = nil
@@ -218,8 +224,8 @@ function Bake.new(ctx: any, container: Frame)
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local seconds = now - pizza.bakeStart
 				local status = ctx.ovenStatus(customer.order.bake, seconds)
-				slot.reading.Text = if status.ready and not status.burnt and status.text == "Ready!" then "Ready" else status.text
-				slot.pivot.Rotation = needleAngle(customer.order.bake, seconds)
+				slot.reading.Text = status.text
+				slot.pivot.Rotation = needleAngle(seconds)
 				slot.view:set(pizza, Widgets.doneness(seconds), status.burnt)
 				slot.button:setHighlighted(status.ready)
 				-- The glow warms up while baking and pulses once the pizza is ready.
@@ -234,26 +240,42 @@ function Bake.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- First-shift pointer. The bake key never covers a pizza: it shows inside an empty oven's
-	-- window, and only while one oven is empty. A ready oven gets the glove alone.
-	function station.hint(_snap: any, now: number): any
-		local empty = nil
+	-- First-shift pointer. A ready oven gets the glove on its Take out; otherwise the strip
+	-- teaches the gauge: take out when the needle reaches the ticket's bake. Phones key the
+	-- bakes in the ovens (or the active ticket's) plus Burnt; wide screens key all of them.
+	function station.hint(snap: any, now: number): any
+		local wanted, seen = {}, {}
 		for _, slot in slots do
 			local pizza = slot.pizza
 			if pizza then
 				local customer = ctx.customer(ctx.snapshot, pizza.ticketId)
 				local status = ctx.ovenStatus(customer.order.bake, now - pizza.bakeStart)
 				if status.ready and not status.burnt then
-					return { target = slot.button.frame, text = "", from = "left" }
+					return { target = slot.button.frame, text = "Ready! Tap Take out", from = "left" }
 				end
-			elseif not empty then
-				empty = slot
+				if not seen[customer.order.bake] then
+					seen[customer.order.bake] = true
+					table.insert(wanted, customer.order.bake)
+				end
 			end
 		end
-		if empty then
-			return { text = "Take it out when the needle reaches the ticket's bake", legend = true, cardSide = "inside", cardOver = empty.window }
+		if #wanted == 0 then
+			local id = ctx.activeTicket(snap)
+			local customer = id and ctx.customer(snap, id)
+			if customer then
+				table.insert(wanted, customer.order.bake)
+			end
 		end
-		return nil
+		local legend = {}
+		for _, id in (if ctx.compact then wanted else Recipes.DonenessOrder) do
+			local d = Recipes.Doneness[id]
+			table.insert(legend, { icon = d.icon, text = d.short })
+		end
+		table.insert(legend, { icon = "ui_oven_badge_burnt", text = "Burnt" })
+		return {
+			text = if ctx.compact then "Take out at the ticket's bake:" else "Take it out when the needle reaches the ticket's bake:",
+			legend = legend,
+		}
 	end
 
 	return station

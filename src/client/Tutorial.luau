@@ -1,8 +1,8 @@
 --!strict
 -- First-shift pointer: Astra's tutorial glove and target halo point at the next action on
--- the visible station, with a short live instruction. On Bake it also shows the bake key
--- (her doneness icons with live labels). Each station's pointer stops once that action has
--- been done. The art never takes input.
+-- the visible station. The instruction itself (and Bake's key) goes in the reserved hint
+-- strip (Widgets.hintStrip), never over the work surface. Each station's pointer stops once
+-- that action has been done. The art never takes input.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -10,11 +10,8 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
-local Recipes = require(Shared.Recipes)
-local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 
-local C = Theme.Colour
 local Tutorial = {}
 
 -- The action that teaches each station.
@@ -23,15 +20,12 @@ Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", takeOut = "Ba
 -- Glove rotation for each side it comes from (the drawing points up).
 local ROTATION = { below = 0, above = 180, left = 90, right = -90 }
 
--- On phones the card goes to the top (or, with cardSide "bottom" or "middle", the foot or
--- middle) of the work surface, centred over cardOver, so it never lands on a control.
--- cardSide "inside" fits the card within cardOver at any size (an empty oven window).
--- An empty text shows the glove and halo without a card.
-export type Hint = { target: GuiObject?, text: string, from: string?, legend: boolean?, anchor: GuiObject?, cardSide: string?, cardOver: GuiObject? }
+-- text and legend are shown by the hint strip; an empty text points without a line.
+export type Hint = { target: GuiObject?, text: string, from: string?, legend: { { icon: string, text: string } }? }
 
 -- `avoid` is a control strip (the tab bar) the glove must not cover.
 function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
-	Art.preload({ "ui_tutorial_hand", "ui_tutorial_target_halo", "ui_card_result" })
+	Art.preload({ "ui_tutorial_hand", "ui_tutorial_target_halo" })
 	local layer = Ui.new("Frame", { Name = "Tutorial", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 30, Visible = false, Parent = parent })
 	local handSize = if compact then 56 else 80
 	local haloSize = if compact then 56 else 72
@@ -54,64 +48,6 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 		Parent = pivot,
 	})
 	Art.apply(hand, "ui_tutorial_hand")
-
-	local textSize = 16
-	local cardPad = if compact then 10 else 14
-	local card = Ui.new("ImageLabel", {
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(40, 40, 840, 360),
-		SliceScale = 0.5,
-		ZIndex = 30,
-		Parent = layer,
-	})
-	Art.apply(card, "ui_card_result")
-	local label = Ui.text({
-		FontFace = Theme.Font.display,
-		TextSize = if compact then textSize else 20,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(cardPad, cardPad),
-		ZIndex = 31,
-		Parent = card,
-	})
-	-- Bake key: requested bake icon and its live name, then the burnt colour.
-	local legend = Ui.new("Frame", { BackgroundTransparency = 1, ZIndex = 31, Parent = card }, {
-		Ui.new("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, if compact then 6 else 10),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Wraps = true,
-		}),
-	})
-	local keyIcon = if compact then 28 else 36
-	local keyText = if compact then 14 else 16
-	local entries = {}
-	for _, id in Recipes.DonenessOrder do
-		local d = Recipes.Doneness[id]
-		table.insert(entries, { icon = d.icon, text = d.short })
-	end
-	table.insert(entries, { icon = "ui_oven_badge_burnt", text = "Burnt" })
-	for i, e in entries do
-		local item = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, keyIcon), LayoutOrder = i, ZIndex = 31, Parent = legend }, {
-			Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
-		})
-		Art.apply(Ui.new("ImageLabel", { BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(keyIcon, keyIcon), LayoutOrder = 1, ZIndex = 31, Parent = item }), e.icon)
-		Ui.text({
-			Text = e.text,
-			FontFace = Theme.Font.bodyBold,
-			TextSize = if compact then 14 else 16,
-			TextColor3 = C.ink,
-			TextWrapped = false,
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, keyIcon),
-			LayoutOrder = 2,
-			ZIndex = 31,
-			Parent = item,
-		})
-	end
 
 	local haloPulse = TweenService:Create(halo, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { ImageTransparency = 0.5 })
 	haloPulse:Play()
@@ -166,74 +102,6 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 			-- The halo rings the tap point on the target's edge, clear of its label.
 			halo.Position = UDim2.fromOffset(tipAt.X - towards.X * haloSize * 0.15, tipAt.Y - towards.Y * haloSize * 0.15)
 		end
-
-		-- Instruction card: beside the glove, kept on screen.
-		card.Visible = hint.text ~= ""
-		label.Text = hint.text
-		local inside = hint.cardSide == "inside" and hint.cardOver
-		local cardW = if inside then hint.cardOver.AbsoluteSize.X - 8
-			else math.min(if hint.legend then (if compact then 330 else 460) else (if compact then 230 else 320), area.X - 16)
-		-- Lines from an estimate of the display font's average glyph width (0.55 em), so a long
-		-- instruction wraps instead of clipping.
-		local size = if compact then textSize else 20
-		local lines = math.clamp(math.ceil(#hint.text * size * 0.55 / (cardW - cardPad * 2)), if compact then 2 else 1, 3)
-		local textH = size * lines + 6
-		-- Key rows: estimated item widths (icon, gap, label at 0.5 em a glyph) wrapped into
-		-- the card's inner width.
-		local legendRows = 1
-		if hint.legend then
-			local inner, x = cardW - cardPad * 2, 0
-			for i, e in entries do
-				local w = keyIcon + 3 + #e.text * keyText * 0.5 + (if i > 1 then (if compact then 6 else 10) else 0)
-				if x > 0 and x + w > inner then
-					legendRows += 1
-					x = w
-				else
-					x += w
-				end
-			end
-		end
-		local legendH = if hint.legend then keyIcon * legendRows + 6 else 0
-		local cardH = cardPad * 2 + textH + legendH
-		label.Size = UDim2.fromOffset(cardW - cardPad * 2, textH)
-		legend.Visible = hint.legend == true
-		legend.Position = UDim2.fromOffset(cardPad, cardPad + textH)
-		legend.Size = UDim2.fromOffset(cardW - cardPad * 2, legendH)
-		local at: Vector2
-		if inside then
-			local o = hint.cardOver :: GuiObject
-			local p = o.AbsolutePosition - origin
-			at = Vector2.new(p.X + 4, p.Y + o.AbsoluteSize.Y / 2 - cardH / 2)
-		elseif compact then
-			-- Phones have no spare room beside controls: the card sits at the top of the work
-			-- surface, over the scene rather than any control.
-			local over = hint.cardOver or avoid
-			local centre = if over then over.AbsolutePosition.X - origin.X + over.AbsoluteSize.X / 2 else area.X / 2
-			local floor = if avoid then avoid.AbsolutePosition.Y - origin.Y else area.Y
-			local y = if hint.cardSide == "bottom" then floor - cardH - 6
-				elseif hint.cardSide == "middle" and over then over.AbsolutePosition.Y - origin.Y + over.AbsoluteSize.Y / 2 - cardH / 2
-				else 8
-			at = Vector2.new(centre - cardW / 2, y)
-		elseif pointing then
-			at = if from == "left" then Vector2.new(tipAt.X - handSize - 8 - cardW, tipAt.Y - cardH / 2)
-				elseif from == "right" then Vector2.new(tipAt.X + handSize + 8, tipAt.Y - cardH / 2)
-				elseif from == "above" then Vector2.new(tipAt.X - cardW / 2, tipAt.Y - handSize - 8 - cardH)
-				else Vector2.new(tipAt.X - cardW / 2, tipAt.Y + handSize + 8)
-			-- No room on that side: put the card above the target instead.
-			if at.X < 8 or at.X + cardW > area.X - 8 or at.Y + cardH > area.Y - 8 then
-				local t = hint.target :: GuiObject
-				local p = t.AbsolutePosition - origin
-				at = Vector2.new(p.X + t.AbsoluteSize.X / 2 - cardW / 2, p.Y - cardH - 10)
-			end
-		else
-			local a = hint.anchor
-			local p = if a then a.AbsolutePosition - origin else Vector2.new(area.X / 2, area.Y / 2)
-			local w = if a then a.AbsoluteSize.X else 0
-			at = Vector2.new(p.X + w / 2 - cardW / 2, p.Y - cardH - 10)
-		end
-		at = Vector2.new(math.clamp(at.X, 8, area.X - cardW - 8), math.clamp(at.Y, 8, area.Y - cardH - 8))
-		card.Position = UDim2.fromOffset(at.X, at.Y)
-		card.Size = UDim2.fromOffset(cardW, cardH)
 	end
 	return self
 end

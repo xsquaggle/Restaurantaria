@@ -372,7 +372,7 @@ function Topping.new(ctx: any, container: Frame)
 		end
 		local busy = current ~= nil and ctx.pending[current.id] == true
 		send:setEnabled(current ~= nil and not busy and ctx.freeOvenSlot(snap))
-		send:setLabel(if busy then "Sending..." elseif current and not ctx.freeOvenSlot(snap) then "Ovens full" else "Send to oven")
+		send:setLabel(if busy then "Sending..." else "Send to oven")
 		undo:setEnabled(current ~= nil and not busy and #current.toppings > 0)
 		view:set(if current then ctx.withOptimistic(current) else nil, true)
 		updatePick()
@@ -383,6 +383,14 @@ function Topping.new(ctx: any, container: Frame)
 	end
 
 	function station.tick(_now: number) end
+
+	-- Why Send to oven is unavailable, on the hint strip.
+	function station.status(snap: any): any
+		if current and not ctx.freeOvenSlot(snap) then
+			return { text = "Ovens full: take a pizza out on Bake" }
+		end
+		return nil
+	end
 
 	-- First-shift pointer: the tray of the first topping the ticket still needs.
 	function station.hint(snap: any): any
@@ -401,7 +409,7 @@ function Topping.new(ctx: any, container: Frame)
 				end
 			end
 			if have < req.count and trays[req.ingredient] then
-				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below", cardSide = "bottom", cardOver = view.frame }
+				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below" }
 			end
 		end
 		return nil

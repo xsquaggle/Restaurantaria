@@ -748,7 +748,7 @@ local BAKE_STATES = {
 	{ art = "pizza_bake_light", at = Config.Oven.targets.light },
 	{ art = "pizza_bake_regular", at = Config.Oven.targets.regular },
 	{ art = "pizza_bake_well", at = Config.Oven.targets.well },
-	{ art = "pizza_bake_burnt", at = Config.Oven.targets.well + Config.Oven.burntAfter },
+	{ art = "pizza_bake_burnt", at = Config.Oven.burntAt },
 }
 
 local RAW, TOPPING_GOLDEN, TOPPING_BURNT = Color3.new(1, 1, 1), Color3.fromRGB(236, 218, 198), Color3.fromRGB(116, 80, 60)
@@ -862,6 +862,85 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		Parent = layer,
 	})
 	Art.apply(groove, "fx_cut_groove_b")
+end
+
+-- Reserved hint strip between the work surface and the tab bar: one line of live text and,
+-- optionally, a row of key icons with live labels. It never takes input and never sits over
+-- food, trays, ovens, tickets or controls, because the layout gives it its own band.
+-- Backing is Astra's cream result card until the A21 hint chip exists.
+export type HintStrip = { frame: Frame, set: (HintStrip, string?, { { icon: string, text: string } }?) -> () }
+
+function Widgets.hintStrip(width: number, height: number, compact: boolean): HintStrip
+	Art.preload({ "ui_card_result" })
+	local frame = Ui.new("Frame", { Name = "Hints", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, height) })
+	local card = Ui.new("ImageLabel", {
+		Name = "Card",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceScale = math.min(0.5, (height - 4) / 100),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, height - 4),
+		Visible = false,
+		Parent = frame,
+	}, {
+		Ui.new("UIPadding", { PaddingLeft = UDim.new(0, if compact then 12 else 20), PaddingRight = UDim.new(0, if compact then 12 else 20) }),
+		Ui.new("UISizeConstraint", { MaxSize = Vector2.new(width - 8, math.huge) }),
+		Ui.new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, if compact then 6 else 10),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	Art.apply(card, "ui_card_result")
+	local textSize = if compact then 16 else 18
+	local label = Ui.text({
+		FontFace = Theme.Font.display,
+		TextSize = textSize,
+		TextWrapped = false,
+		TextColor3 = C.ink,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, height - 4),
+		LayoutOrder = 0,
+		Parent = card,
+	})
+	local iconSize = if compact then 24 else 32
+	local keys: { Frame } = {}
+	local strip: HintStrip
+	strip = {
+		frame = frame,
+		set = function(_s: HintStrip, text: string?, legend: { { icon: string, text: string } }?)
+			local entries = legend or {}
+			card.Visible = (text ~= nil and text ~= "") or #entries > 0
+			label.Text = text or ""
+			label.Visible = label.Text ~= ""
+			for i, e in entries do
+				local key = keys[i]
+				if not key then
+					key = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = i, Parent = card }, {
+						Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
+						Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1 }),
+						Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = if compact then 14 else 16, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
+					})
+					keys[i] = key
+				end
+				key.Visible = true
+				if key:GetAttribute("Icon") ~= e.icon then
+					key:SetAttribute("Icon", e.icon)
+					Art.apply(key:FindFirstChild("Icon") :: ImageLabel, e.icon)
+				end
+				(key:FindFirstChild("Text") :: TextLabel).Text = e.text
+			end
+			for i = #entries + 1, #keys do
+				keys[i].Visible = false
+			end
+		end,
+	}
+	return strip
 end
 
 function Widgets.tweenIn(frame: GuiObject, offsetX: number)

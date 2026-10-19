@@ -106,7 +106,7 @@ end
 function Scoring.bakeState(target: number, seconds: number): string
 	local cfg = Config.Oven
 	local delta = seconds - target
-	if delta > cfg.burntAfter then
+	if seconds > cfg.burntAt then
 		return "burnt"
 	elseif math.abs(delta) <= cfg.perfectWindow then
 		return "perfect"

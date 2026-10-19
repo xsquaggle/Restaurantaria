@@ -71,18 +71,7 @@ function Order.new(ctx: any, container: Frame)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	-- Status hints sit on the counter below the customers so they never cover anyone.
-	local hint = Ui.text({
-		Text = "",
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 16 else 24,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromScale(0.5, 0.86),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromScale(0.9, 0.2),
-		ZIndex = 4,
-		Parent = frame,
-	})
+	local statusText: string? = nil
 	local selected: number? = nil
 	-- Take order is the rail's action, like Send to oven and Serve.
 	local takeButton = Widgets.button("Take order", function()
@@ -212,14 +201,10 @@ function Order.new(ctx: any, container: Frame)
 		end
 		local full = active >= Config.Shift.maxActiveTickets
 		takeButton:setEnabled(selected ~= nil and not full)
-		takeButton:setLabel(if full then "Rail full" else "Take order")
-		if waiting == 0 then
-			hint.Text = if snap.finished then "" else "No one waiting. Check your pizzas."
-		elseif full then
-			hint.Text = "Finish a pizza to free a ticket slot"
-		else
-			hint.Text = ""
-		end
+		-- The action keeps its name; why it is unavailable goes on the hint strip.
+		statusText = if waiting == 0 then "No one waiting. Check your pizzas."
+			elseif full then "Rail full: serve a pizza to free a ticket"
+			else nil
 	end
 
 	function station.tick(now: number)
@@ -231,6 +216,10 @@ function Order.new(ctx: any, container: Frame)
 			-- Idle breathing: a slow, slight rise and fall, out of step between customers.
 			p.figure.Position = UDim2.new(0.5, 0, 1, math.sin(now * 2.2 + p.phase) * figureH * 0.006)
 		end
+	end
+
+	function station.status(_snap: any): any
+		return if statusText then { text = statusText } else nil
 	end
 
 	-- First-shift pointer: Take order, once someone is waiting and a ticket slot is free.
