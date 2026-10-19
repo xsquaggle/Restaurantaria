@@ -148,7 +148,8 @@ function Topping.new(ctx: any, container: Frame)
 	-- The chosen ingredient: its next piece floats above the tray with a lifted shadow and a
 	-- slow bob, so the choice reads at a glance. Purely visual; it never takes input.
 	local lift = if side then UDim2.fromOffset(trayW * 0.06, 0) else UDim2.fromOffset(0, -trayH * 0.14)
-	local pickRaise = UDim2.fromOffset(0, -trayH * 0.16)
+	-- It sits on the tray's rim nearest the pizza so it stands clear of the pile below it.
+	local pickRaise = if side then UDim2.fromOffset(trayW * 0.5, 0) else UDim2.fromOffset(0, -trayH * 0.5)
 	local pick = PizzaArt.loosePiece(nextLook(chosen), 0, pizzaD * Recipes.Ingredients[chosen].size * 1.15, true)
 	pick.Name = "Pick"
 	pick.ZIndex = 6
