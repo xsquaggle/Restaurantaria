@@ -192,7 +192,10 @@ Assets.Meta = {
 	navBar = { slice = Rect.new(72, 70, 952, 74), height = 144 },
 	navSelected = { slice = Rect.new(72, 70, 440, 74), height = 144 },
 	railTab = { slice = Rect.new(40, 40, 472, 104), height = 144 },
-	railPanel = { slice = Rect.new(32, 32, 416, 736), width = 448 },
+	-- The panel's rounded corners run about 53 px in from each edge, past the manifest's 32 px
+	-- slice, so the corners are sliced at 64 px: with 32, the curve's tail sat in the stretched
+	-- edges and drew as steps on phones (QA-003).
+	railPanel = { slice = Rect.new(64, 64, 384, 704), width = 448 },
 	hudBar = { slice = Rect.new(32, 32, 992, 96), height = 128 },
 	ovenPill = { slice = Rect.new(100, 94, 700, 106), height = 200, inset = 112 },
 	-- Patience track and fills share one 512x64 canvas; the fill shows inside x 14-498.

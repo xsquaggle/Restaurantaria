@@ -255,7 +255,10 @@ end
 -- the props on the left stay in view.
 local function background(name: string): Frame
 	local meta = Assets.Meta.backgrounds[name]
-	local screen = backdrop.AbsoluteSize
+	-- The backdrop covers the whole viewport. Its own AbsoluteSize is stale after a resize
+	-- while it is disabled (Order shows the 3D room), which left the art short of the screen
+	-- edges over the brown fill (QA-004), so the size comes from the camera.
+	local screen = workspace.CurrentCamera.ViewportSize
 	local k = math.max(screen.X / meta.width, screen.Y / meta.height)
 	local holder = Ui.new("Frame", {
 		Name = name,
@@ -470,7 +473,7 @@ local function buildLayout()
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Assets.Meta.railPanel.slice,
-		SliceScale = math.clamp(railW / Assets.Meta.railPanel.width, 0.4, 1),
+		SliceScale = railW / Assets.Meta.railPanel.width,
 		Size = UDim2.fromScale(1, 1),
 		Parent = rail,
 	})
