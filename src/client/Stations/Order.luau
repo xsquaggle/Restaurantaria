@@ -1,7 +1,9 @@
 --!strict
 -- Order station: waiting customers stand at the counter. Tap one to select, then take the
--- order from the rail. Each customer is a generated character (G10) whose expression
--- follows their patience band; the selected one steps forward while the others wait.
+-- order from the rail; the selected one steps forward while the others wait. With the 3D
+-- counter they are native avatars (OrderCrowd) that walk in and out, each with a name tag
+-- over their head; without it they are the generated characters (G10), whose expression
+-- follows their patience band.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -17,6 +19,7 @@ local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
 local OrderRoom = require(Parent.OrderRoom)
+local OrderCrowd = require(Parent.OrderCrowd)
 
 local C = Theme.Colour
 local Order = {}
@@ -29,10 +32,12 @@ local ROOM_FOR = 4
 local COUNTER_TOP = 0.72
 local STEP = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
--- Hybrid proof: with the 3D counter, customers walk in from the left, wait at the counter
--- and walk out to the right. Work surfaces crossed per second, and steps per second.
-local WALK_SPEED = 0.45
-local STEP_RATE = 2.2
+-- Name tags over the 3D customers: the gap above the head box, and the tag's size.
+local TAG_GAP = 8
+local TAG = {
+	compact = { width = 120, pad = 6, text = 16, line = 18, meter = 84 },
+	wide = { width = 210, pad = 10, text = 26, line = 30, meter = 160 },
+}
 
 -- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hides
 -- it (Main turns the backdrop off for world3D stations) and hangs the same art in the world.
@@ -43,11 +48,7 @@ function Order.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Order", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
 	local area = ctx.stationSize :: Vector2
 	local room = if room3D then OrderRoom.new(ctx, container) else nil
-	local counterTop = COUNTER_TOP
-	if room then
-		-- The 3D counter's far top edge, where the customers are cut.
-		counterTop = room.line / area.Y
-	else
+	if not room then
 		-- The generated counter front, its top edge on COUNTER_TOP, hides the customers' waists.
 		local cm = Assets.Meta.orderCounter
 		local counterW = area.X + 24
@@ -68,27 +69,12 @@ function Order.new(ctx: any, container: Frame)
 	-- step forward without touching its neighbours.
 	local labelH = if ctx.compact then 40 else 64
 	local slotW = (area.X - 32) / ROOM_FOR
-	local figureH = math.min(area.Y * counterTop - labelH - 12, slotW * 0.9 / FIGURE_ASPECT)
+	local figureH = math.min(area.Y * COUNTER_TOP - labelH - 12, slotW * 0.9 / FIGURE_ASPECT)
 	local figureW = figureH * FIGURE_ASPECT
-	local row
+	local row: Frame? = nil
+	local crowd = nil
 	if room then
-		-- Over the 3D counter the row is cut at the counter line (the drawn counter used to
-		-- cover the waists), and customers are placed by hand so they can walk.
-		local clip = Ui.new("Frame", {
-			Name = "CounterClip",
-			BackgroundTransparency = 1,
-			ClipsDescendants = true,
-			Size = UDim2.new(1, 0, 0, area.Y * counterTop),
-			ZIndex = 2,
-			Parent = frame,
-		})
-		row = Ui.new("Frame", {
-			BackgroundTransparency = 1,
-			Position = UDim2.new(0, 16, 0, 0),
-			Size = UDim2.new(1, -32, 0, area.Y * counterTop + figureH * 0.12),
-			ZIndex = 2,
-			Parent = clip,
-		})
+		crowd = OrderCrowd.new(room)
 	else
 		row = Ui.new("Frame", {
 			BackgroundTransparency = 1,
@@ -106,7 +92,8 @@ function Order.new(ctx: any, container: Frame)
 			}),
 		})
 	end
-	local rowW = area.X - 32
+	local tag = if ctx.compact then TAG.compact else TAG.wide
+	local tagH = tag.pad * 2 + tag.line + 2 + tag.meter / 4
 	local statusText: string? = nil
 	local selected: number? = nil
 	-- Take order is the rail's action, like Send to oven and Serve.
@@ -126,7 +113,61 @@ function Order.new(ctx: any, container: Frame)
 
 	local people: { [number]: any } = {}
 
+	-- 3D: the customer is a figure in the room; the station draws their tag (Astra's cream
+	-- card holding the name and patience meter), and the tag and the body below it down to the
+	-- counter line are the button that selects them.
+	local function tagFor(customer: any)
+		local slot = Ui.new("TextButton", {
+			Name = "Customer" .. customer.id,
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(tag.width, tagH),
+			Visible = false,
+			ZIndex = 2,
+			Parent = frame,
+		})
+		local card = Ui.new("ImageLabel", {
+			Name = "Tag",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Slice,
+			SliceCenter = Rect.new(40, 40, 840, 360),
+			SliceScale = math.min(0.5, tagH / 120),
+			Size = UDim2.fromOffset(tag.width, tagH),
+			ZIndex = 2,
+			Parent = slot,
+		})
+		Art.apply(card, "ui_card_result")
+		local name = Ui.text({
+			Text = customer.label,
+			FontFace = Theme.Font.display,
+			TextSize = tag.text,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = UDim2.fromOffset(tag.pad, tag.pad),
+			Size = UDim2.new(1, -tag.pad * 2, 0, tag.line),
+			ZIndex = 3,
+			Parent = card,
+		})
+		local meter = Widgets.patience()
+		local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
+		aspect.DominantAxis = Enum.DominantAxis.Width
+		meter.frame.AnchorPoint = Vector2.new(0.5, 0)
+		meter.frame.Position = UDim2.new(0.5, 0, 0, tag.pad + tag.line + 2)
+		meter.frame.Size = UDim2.fromOffset(tag.meter, tag.meter / 4)
+		meter.frame.ZIndex = 3
+		meter.frame.Parent = card
+		slot.Activated:Connect(function()
+			selected = customer.id
+			ctx.refresh()
+		end)
+		return { slot = slot, card = card, name = name, meter = meter, customer = customer, band = "", chosen = false }
+	end
+
 	local function personFor(customer: any)
+		if room then
+			return tagFor(customer)
+		end
 		local cast = Recipes.Cast[customer.cast]
 		local slot = Ui.new("TextButton", {
 			Text = "",
@@ -147,7 +188,7 @@ function Order.new(ctx: any, container: Frame)
 		})
 		local scale = Ui.new("UIScale", { Scale = 1, Parent = figure })
 		local name = Ui.text({
-			Text = cast.name,
+			Text = customer.label,
 			FontFace = Theme.Font.display,
 			TextSize = if ctx.compact then 18 else 28,
 			TextXAlignment = Enum.TextXAlignment.Center,
@@ -169,12 +210,12 @@ function Order.new(ctx: any, container: Frame)
 			selected = customer.id
 			ctx.refresh()
 		end)
-		local person = { slot = slot, figure = figure, scale = scale, name = name, meter = meter, customer = customer, art = cast.name:lower(), band = "", phase = math.random() * math.pi * 2, chosen = false, x = nil :: number?, target = 0, leaving = false, walked = 0 }
+		local person = { slot = slot, figure = figure, scale = scale, name = name, meter = meter, customer = customer, art = cast.name:lower(), band = "", phase = math.random() * math.pi * 2, chosen = false }
 		return person
 	end
 
 	local function setBand(p: any, band: string)
-		if p.band == band then
+		if p.band == band or room then
 			return
 		end
 		local first = p.band == ""
@@ -182,8 +223,8 @@ function Order.new(ctx: any, container: Frame)
 		-- With no figure art (the 2D portraits are not uploaded), the name and patience meter
 		-- would float over an empty slot, so they hide with it.
 		local shown = Art.apply(p.figure, string.format("chr_%s_%s", p.art, band))
-		p.name.Visible = shown and not p.leaving
-		p.meter.frame.Visible = shown and not p.leaving
+		p.name.Visible = shown
+		p.meter.frame.Visible = shown
 		if not first then
 			-- A small pop so the change of mood reads.
 			p.scale.Scale = (if p.chosen then 1.06 else 1) * 1.05
@@ -195,69 +236,36 @@ function Order.new(ctx: any, container: Frame)
 	-- Customers already waiting when the station is built stand in place; later ones walk in.
 	local built = false
 
-	-- Hand layout over the 3D counter: waiting customers spread evenly in arrival order.
-	local function arrange()
-		local ids = {}
-		for id, p in people do
-			if not p.leaving then
-				table.insert(ids, id)
-			end
-		end
-		table.sort(ids)
-		local x0 = (rowW - #ids * slotW) / 2
-		for i, id in ids do
-			local p = people[id]
-			p.target = x0 + (i - 1) * slotW
-			if p.x == nil then
-				p.x = if built then -slotW else p.target
-			end
-		end
-	end
-
 	function station.refresh(snap: any)
 		local seen = {}
-		local waiting = 0
+		local waiting: { any } = {}
 		for _, customer in snap.customers do
 			if customer.status == "waiting" then
-				waiting += 1
+				table.insert(waiting, customer)
 				seen[customer.id] = true
 				if not people[customer.id] then
 					people[customer.id] = personFor(customer)
 					setBand(people[customer.id], "happy")
 				end
-				people[customer.id].customer = customer
+				local p = people[customer.id]
+				p.customer = customer
+				p.name.Text = customer.label
 			end
 		end
 		for id, p in people do
-			if not seen[id] and not p.leaving then
-				if room then
-					-- Walks out to the right; tick removes the slot once off the work surface.
-					p.leaving = true
-					p.target = rowW + slotW
-					p.slot.Interactable = false
-					p.slot.ZIndex = 1
-					p.name.Visible = false
-					p.meter.frame.Visible = false
-				else
-					p.slot:Destroy()
-					people[id] = nil
-				end
+			if not seen[id] then
+				-- In 3D the figure walks out on its own (crowd.sync below); the tag goes now.
+				p.slot:Destroy()
+				people[id] = nil
 				if selected == id then
 					selected = nil
 				end
 			end
 		end
-		if room then
-			arrange()
-		end
-		built = true
 		if selected == nil then
 			-- Default to the longest-waiting customer so one tap is enough.
 			local first = nil
-			for id, p in people do
-				if p.leaving then
-					continue
-				end
+			for id in people do
 				if first == nil or id < first then
 					first = id
 				end
@@ -265,17 +273,20 @@ function Order.new(ctx: any, container: Frame)
 			selected = first
 		end
 		for id, p in people do
-			if p.leaving then
-				continue
-			end
 			local chosen = id == selected
 			if chosen ~= p.chosen then
 				p.chosen = chosen
-				TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
-				TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
+				if not room then
+					TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
+					TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
+				end
 			end
 			p.name.TextColor3 = if chosen then C.action else C.ink
 		end
+		if crowd then
+			crowd.sync(waiting, selected, not built)
+		end
+		built = true
 		local active = 0
 		for _, customer in snap.customers do
 			if customer.status == "ordered" then
@@ -285,7 +296,7 @@ function Order.new(ctx: any, container: Frame)
 		local full = active >= Config.Shift.maxActiveTickets
 		takeButton:setEnabled(selected ~= nil and not full)
 		-- The action keeps its name; why it is unavailable goes on the hint strip.
-		statusText = if waiting == 0 then "No one waiting. Check your pizzas."
+		statusText = if #waiting == 0 then "No one waiting. Check your pizzas."
 			elseif full then "Rail full: serve a pizza to free a ticket"
 			else nil
 	end
@@ -294,33 +305,31 @@ function Order.new(ctx: any, container: Frame)
 	function station.tick(now: number)
 		local dt = if lastTick then math.min(now - lastTick, 0.1) else 0
 		lastTick = now
+		if crowd then
+			crowd.tick(dt)
+		end
 		for id, p in people do
-			if not p.leaving then
-				local f = Scoring.patienceFraction(p.customer.arrivedAt, now)
-				local band = Scoring.patienceBand(f)
-				p.meter:set(f, band)
-				setBand(p, band)
-			end
-			-- Idle breathing: a slow, slight rise and fall, out of step between customers.
-			local lift = math.sin(now * 2.2 + p.phase) * figureH * 0.006
-			if room and p.x then
-				local gap = p.target - p.x
-				local stepPx = area.X * WALK_SPEED * dt
-				if math.abs(gap) > 0.5 then
-					p.x += math.clamp(gap, -stepPx, stepPx)
-					p.walked += math.abs(math.clamp(gap, -stepPx, stepPx))
-					-- Walking: a step bounce in time with the travelled distance, so the
-					-- bounce stops the moment the customer does.
-					local stride = area.X * WALK_SPEED / STEP_RATE
-					lift = -math.abs(math.sin(p.walked / stride * math.pi)) * figureH * 0.03
-				elseif p.leaving then
-					p.slot:Destroy()
-					people[id] = nil
-					continue
+			local f = Scoring.patienceFraction(p.customer.arrivedAt, now)
+			local band = Scoring.patienceBand(f)
+			p.meter:set(f, band)
+			setBand(p, band)
+			if crowd then
+				-- The tag rides above the head (and any hat) while the customer stands at the
+				-- counter; the button runs from it down to the counter line.
+				local x0, y0, x1 = crowd.head(id)
+				local shown = x0 ~= nil and crowd.standing(id)
+				p.slot.Visible = shown
+				if shown then
+					local left = math.clamp(((x0 :: number) + (x1 :: number)) / 2 - tag.width / 2, 4, area.X - tag.width - 4)
+					local top = math.max(4, (y0 :: number) - TAG_GAP - tagH)
+					p.slot.Position = UDim2.fromOffset(math.round(left), math.round(top))
+					p.slot.Size = UDim2.fromOffset(tag.width, math.max(tagH, room.line - math.round(top)))
 				end
-				p.slot.Position = UDim2.fromOffset(p.x, 0)
+			else
+				-- Idle breathing: a slow, slight rise and fall, out of step between customers.
+				local lift = math.sin(now * 2.2 + p.phase) * figureH * 0.006
+				p.figure.Position = UDim2.new(0.5, 0, 1, lift)
 			end
-			p.figure.Position = UDim2.new(0.5, 0, 1, lift)
 		end
 	end
 
@@ -333,6 +342,9 @@ function Order.new(ctx: any, container: Frame)
 	if room then
 		-- Not ctx.connect: layout teardown drops those before it destroys the frames.
 		frame.Destroying:Connect(function()
+			if crowd then
+				crowd.destroy()
+			end
 			room.destroy()
 		end)
 	end

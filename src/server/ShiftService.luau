@@ -9,12 +9,19 @@ local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
+local CustomerLooks = require(script.Parent.CustomerLooks)
 local SaveService = require(script.Parent.SaveService)
 
 type Order = { recipe: string, bake: string, slices: number }
 type Customer = {
 	id: number,
+	-- Personality pool (Recipes.Cast), the appearance (a CustomerLooks key) and the name
+	-- shown for it; label is the name, or @username when two share one this shift.
 	cast: number,
+	look: string,
+	name: string,
+	username: string?,
+	label: string,
 	order: Order,
 	arrivedAt: number,
 	status: string, -- "waiting" | "ordered" | "served"
@@ -117,11 +124,22 @@ local function customerById(shift: Shift, id: number): Customer?
 	return nil
 end
 
+-- Two customers with the same display name in one shift both show their @username.
+local function relabel(shift: Shift)
+	local count = {}
+	for _, c in shift.customers do
+		count[c.name:lower()] = (count[c.name:lower()] or 0) + 1
+	end
+	for _, c in shift.customers do
+		c.label = if count[c.name:lower()] > 1 and c.username then "@" .. c.username else c.name
+	end
+end
+
 -- Spawns due customers. Returns true when something changed.
--- Each cast member is one person: a character who is waiting or has an open ticket is not
--- in the shop twice. A due customer takes the next free character in rotation; when all
--- are in the shop, the arrival waits until one is served, and patience starts from the
--- moment they actually walk in.
+-- Each appearance is one person: someone who is waiting or has an open ticket is not in the
+-- shop twice. A due customer is admitted only once a look is ready for them (CustomerLooks
+-- prepares them offstage); until then, or while every look is in the shop, the arrival waits,
+-- and patience starts from the moment they actually walk in.
 function ShiftService.tick(session: Session): boolean
 	local shift = session.shift
 	if shift.finished then
@@ -132,33 +150,35 @@ function ShiftService.tick(session: Session): boolean
 	local elapsed = t - shift.startedAt
 	while shift.nextArrival <= Config.Shift.customerCount and elapsed >= Config.Shift.arrivals[shift.nextArrival] do
 		local i = shift.nextArrival
-		local present = {}
+		local present, visits, names = {}, {}, {}
 		for _, c in shift.customers do
 			if c.status ~= "served" then
-				present[c.cast] = true
+				present[c.look] = true
+			end
+			visits[c.look] = (visits[c.look] or 0) + 1
+			if c.username then
+				names[c.name:lower()] = true
 			end
 		end
-		local cast = nil
-		for k = 0, #Recipes.Cast - 1 do
-			local candidate = ((i - 1 + k) % #Recipes.Cast) + 1
-			if not present[candidate] then
-				cast = candidate
-				break
-			end
-		end
-		if not cast then
+		local look = CustomerLooks.pick(session.player, present, visits, names, i)
+		if not look then
 			break
 		end
 		local orderDef = Recipes.ShiftOrders[((i - 1) % #Recipes.ShiftOrders) + 1]
 		table.insert(shift.customers, {
 			id = shift.nextId,
-			cast = cast,
+			cast = look.pool,
+			look = look.key,
+			name = look.name,
+			username = look.username,
+			label = look.name,
 			order = { recipe = orderDef.recipe, bake = orderDef.bake, slices = orderDef.slices },
 			arrivedAt = math.max(shift.startedAt + Config.Shift.arrivals[i], t - 1),
 			status = "waiting",
 		})
 		shift.nextId += 1
 		shift.nextArrival += 1
+		relabel(shift)
 		changed = true
 	end
 	return changed

@@ -1,11 +1,11 @@
 --!strict
--- Hybrid proof: the Order station's counter as a generated 3D model behind a fixed camera.
--- Customers stay the 2D waist-up art; Order.luau draws them above the counter line this
--- module reports, so the 3D counter hides their waists as the drawn counter did. The
--- existing Order background art hangs on a plane behind them.
+-- The Order station's 3D room: the imported counter behind a fixed camera, with the existing
+-- Order background art on a plane behind it. Customers are native avatars standing behind
+-- the counter (OrderCrowd.luau), so the counter hides their lower bodies for real. The room
+-- also reports the counter line for the 2D fallback and projects world points onto the
+-- station's frame for the customers' name tags.
 --
--- Studio only while models cannot be uploaded (see shared/Model3D.luau). Everything here
--- is local to this client.
+-- Everything here is local to this client.
 
 local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
@@ -115,7 +115,7 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	folder.Parent = workspace
 
 	local camera = workspace.CurrentCamera
-	local room = { line = 0 }
+	local room = { line = 0, folder = folder, origin = ORIGIN, size = size }
 
 	-- Solve the camera so the counter spans the work surface (plus bleed) and its far top
 	-- edge lands on LINE of the work surface's height.
@@ -224,6 +224,13 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	-- customers. Valid after the first solve; computed now so layout can use it.
 	camera.CameraType = Enum.CameraType.Scriptable
 	fixed = solve()
+
+	-- A world point on the station's frame: x, y in pixels from its top left, z the depth.
+	function room.project(p: Vector3): Vector3
+		local v = camera:WorldToViewportPoint(p)
+		local at = container.AbsolutePosition + GuiService:GetGuiInset()
+		return Vector3.new(v.X - at.X, v.Y - at.Y, v.Z)
+	end
 
 	function room.destroy()
 		room.setActive(false)

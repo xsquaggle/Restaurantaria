@@ -13,7 +13,6 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
-local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
 local Remote = require(script.Parent.Remote)
 local Theme = require(script.Parent.Theme)
@@ -1012,7 +1011,7 @@ function ctx.showResult(ticketId: number)
 	})
 	Art.apply(toast, "ui_card_result")
 	Ui.text({
-		Text = string.format("%s · %d%% · +%d tips", Recipes.Cast[customer.cast].name, r.overall, r.tip),
+		Text = string.format("%s · %d%% · +%d tips", customer.label, r.overall, r.tip),
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 24,
 		Position = UDim2.fromOffset(12, 8),

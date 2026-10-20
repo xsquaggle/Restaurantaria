@@ -578,7 +578,7 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 		customer = nil,
 		set = function(t: RailTicket, customer: any)
 			t.customer = customer
-			local k = if customer then string.format("%d|%s|%s|%d", customer.id, customer.order.recipe, customer.order.bake, customer.order.slices) else nil
+			local k = if customer then string.format("%d|%s|%s|%d|%s", customer.id, customer.order.recipe, customer.order.bake, customer.order.slices, customer.label) else nil
 			if k == key then
 				return
 			end
@@ -588,7 +588,7 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 				return
 			end
 			number.Text = string.format("#%02d", customer.id)
-			name.Text = Recipes.Cast[customer.cast].name
+			name.Text = customer.label
 			local lines = requirementLines(customer.order, compact)
 			-- On phones a line with a second row gets a little more height than the others.
 			local weights, total = {}, 0

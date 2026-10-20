@@ -9,6 +9,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
+local CustomerLooks = require(script.Parent.CustomerLooks)
 local SaveService = require(script.Parent.SaveService)
 local ShiftService = require(script.Parent.ShiftService)
 
@@ -33,7 +34,10 @@ actionRemote.OnServerInvoke = function(player: Player, seq: any, action: any, ar
 	return ok, reason, ShiftService.snapshot(player)
 end
 
+CustomerLooks.start()
+
 local function onPlayerAdded(player: Player)
+	task.spawn(CustomerLooks.loadFriends, player)
 	SaveService.load(player)
 	if player.Parent == nil then
 		SaveService.release(player)
@@ -50,6 +54,7 @@ end
 
 Players.PlayerRemoving:Connect(function(player)
 	ShiftService.stop(player)
+	CustomerLooks.forget(player)
 	SaveService.release(player)
 end)
 
@@ -254,6 +259,9 @@ if RunService:IsStudio() then
 			pizza.bakeStart = workspace:GetServerTimeNow() - value[2]
 			push(player)
 			return "ok"
+		elseif command == "looks" then
+			-- The built customer looks (QA-002 evidence).
+			return table.concat(CustomerLooks.describe(), "\n")
 		elseif command == "age" then
 			-- value = { customerId, seconds }: that customer arrived `seconds` ago (mood captures).
 			local customer = nil
