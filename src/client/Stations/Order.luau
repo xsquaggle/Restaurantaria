@@ -33,16 +33,19 @@ local ROOM_FOR = 4
 local COUNTER_TOP = 0.72
 local STEP = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
--- Name tags over the 3D customers: the gap above the head box, and the tag's size.
+-- Name tags over the 3D customers: the gap above the head box, and the tag's parts (QA-010):
+-- face, gap, patience track (element height; the drawn track is 49/64 of it) and the name.
+-- Phones put the name over the track in a column beside the face, so the tag stays short
+-- enough to clear the tallest hats under the HUD; wide screens put the name on top. The
+-- chosen customer's name gets the ticket pictogram (marker) as well as the action colour.
 local TAG_GAP = 8
 local TAG = {
-	compact = { width = 120, pad = 4, text = 16, line = 17, meter = 72 },
-	wide = { width = 210, pad = 10, text = 26, line = 30, meter = 160 },
+	compact = { width = 120, pad = 6, padY = 4, text = 16, line = 17, nameGap = 4, face = 28, gap = 8, track = 16, marker = 16, space = 4, column = true },
+	wide = { width = 210, pad = 10, padY = 10, text = 26, line = 30, nameGap = 6, face = 40, gap = 10, track = 22, marker = 26, space = 16, column = false },
 }
 -- The chosen customer's tag grows by this much; tags are narrowed until neighbours, one of
--- them chosen, keep at least TAG_SPACE px between them.
+-- them chosen, keep at least tag.space px between them.
 local CHOSEN = 1.06
-local TAG_SPACE = 16
 
 -- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hides
 -- it (Main turns the backdrop off for world3D stations) and hangs the same art in the world.
@@ -98,7 +101,9 @@ function Order.new(ctx: any, container: Frame)
 		})
 	end
 	local tag = if ctx.compact then TAG.compact else TAG.wide
-	local tagH = tag.pad * 2 + tag.line + 2 + tag.meter / 4
+	local tagH = if tag.column
+		then tag.padY * 2 + math.max(tag.face, tag.line + tag.nameGap + tag.track)
+		else tag.padY * 2 + tag.line + tag.nameGap + math.max(tag.face, tag.track)
 	local statusText: string? = nil
 	local selected: number? = nil
 	-- Take order is the rail's action, like Send to oven and Serve.
@@ -137,8 +142,8 @@ function Order.new(ctx: any, container: Frame)
 			Name = "Tag",
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Slice,
-			SliceCenter = Rect.new(40, 40, 840, 360),
-			SliceScale = math.min(0.5, tagH / 120),
+			SliceCenter = Assets.Meta.card.slice,
+			SliceScale = math.min(0.5, tagH / (2 * Assets.Meta.card.corner)),
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 0, tagH),
 			Size = UDim2.fromOffset(tag.width, tagH),
@@ -147,30 +152,77 @@ function Order.new(ctx: any, container: Frame)
 		})
 		Art.apply(card, "ui_card_result")
 		local scale = Ui.new("UIScale", { Scale = 1, Parent = card })
+		-- Face and track come out of the meter so the tag can place them (sizes above).
+		local meter = Widgets.patience()
+		local face, track = meter.face, meter.track
+		local lead = tag.pad + tag.face + tag.gap
+		local nameRow = Ui.new("Frame", { Name = "NameRow", BackgroundTransparency = 1, ZIndex = 3, Parent = card }, {
+			Ui.new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, if ctx.compact then 3 else 6),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		face.AnchorPoint = Vector2.new(0, 0.5)
+		face.Size = UDim2.fromOffset(tag.face, tag.face)
+		track.AnchorPoint = Vector2.new(0, 0)
+		if tag.column then
+			-- Phone: [face] [name over track], both centred on the tag's height.
+			local columnH = tag.line + tag.nameGap + tag.track
+			local columnY = tag.padY + (tagH - tag.padY * 2 - columnH) / 2
+			face.Position = UDim2.new(0, tag.pad, 0.5, 0)
+			nameRow.Position = UDim2.fromOffset(lead, columnY)
+			nameRow.Size = UDim2.new(1, -lead - tag.pad, 0, tag.line)
+			track.Position = UDim2.fromOffset(lead, columnY + tag.line + tag.nameGap)
+			track.Size = UDim2.new(1, -lead - tag.pad, 0, tag.track)
+		else
+			-- Wide: the name on top, then [face] [track].
+			local rowY = tag.padY + tag.line + tag.nameGap
+			local rowH = math.max(tag.face, tag.track)
+			nameRow.Position = UDim2.fromOffset(tag.pad, tag.padY)
+			nameRow.Size = UDim2.new(1, -tag.pad * 2, 0, tag.line)
+			face.Position = UDim2.fromOffset(tag.pad, rowY + rowH / 2)
+			track.Position = UDim2.fromOffset(lead, rowY + (rowH - tag.track) / 2)
+			track.Size = UDim2.new(1, -lead - tag.pad, 0, tag.track)
+		end
+		for _, part in { face, track } do
+			part.ZIndex = 3
+			part.Parent = card
+		end
+		meter.frame:Destroy()
+		local marker = Ui.new("ImageLabel", {
+			Name = "Marker",
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromOffset(tag.marker, tag.marker),
+			Visible = false,
+			LayoutOrder = 1,
+			ZIndex = 3,
+			Parent = nameRow,
+		})
+		Art.apply(marker, "icon_nav_order_idle")
 		local name = Ui.text({
+			Name = "Name",
 			Text = customer.label,
 			FontFace = Theme.Font.display,
 			TextSize = tag.text,
 			TextXAlignment = Enum.TextXAlignment.Center,
+			TextWrapped = false,
 			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.fromOffset(tag.pad, tag.pad),
-			Size = UDim2.new(1, -tag.pad * 2, 0, tag.line),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, tag.line),
+			LayoutOrder = 2,
 			ZIndex = 3,
-			Parent = card,
+			Parent = nameRow,
 		})
-		local meter = Widgets.patience()
-		local aspect = meter.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
-		aspect.DominantAxis = Enum.DominantAxis.Width
-		meter.frame.AnchorPoint = Vector2.new(0.5, 0)
-		meter.frame.Position = UDim2.new(0.5, 0, 0, tag.pad + tag.line + 2)
-		meter.frame.Size = UDim2.fromOffset(tag.meter, tag.meter / 4)
-		meter.frame.ZIndex = 3
-		meter.frame.Parent = card
+		local nameLimit = Ui.new("UISizeConstraint", { Parent = name })
 		slot.Activated:Connect(function()
 			selected = customer.id
 			ctx.refresh()
 		end)
-		return { slot = slot, card = card, scale = scale, name = name, meter = meter, customer = customer, band = "", chosen = false }
+		return { slot = slot, card = card, scale = scale, name = name, nameRow = nameRow, nameLimit = nameLimit, marker = marker, meter = meter, customer = customer, band = "", chosen = false, limit = -1 }
 	end
 
 	local function personFor(customer: any)
@@ -291,6 +343,9 @@ function Order.new(ctx: any, container: Frame)
 				end
 			end
 			p.name.TextColor3 = if chosen then C.action else C.ink
+			if p.marker then
+				p.marker.Visible = chosen
+			end
 		end
 		if crowd then
 			crowd.sync(waiting, not built)
@@ -317,7 +372,7 @@ function Order.new(ctx: any, container: Frame)
 		local tagW = tag.width
 		if crowd then
 			crowd.tick(dt)
-			tagW = math.min(tag.width, math.floor(crowd.spacing() / CHOSEN) - TAG_SPACE)
+			tagW = math.min(tag.width, math.floor(crowd.spacing() / CHOSEN) - tag.space)
 		end
 		for id, p in people do
 			local f = Scoring.patienceFraction(p.customer.arrivedAt, now)
@@ -336,6 +391,13 @@ function Order.new(ctx: any, container: Frame)
 					p.slot.Position = UDim2.fromOffset(math.round(left), math.round(top))
 					p.slot.Size = UDim2.fromOffset(tagW, math.max(tagH, room.line - math.round(top)))
 					p.card.Size = UDim2.fromOffset(tagW, tagH)
+					-- Long names stop short of the row's edge (and of the marker) and end in "...".
+					local rowW = tagW - (if tag.column then tag.pad * 2 + tag.face + tag.gap else tag.pad * 2)
+					local limit = rowW - (if p.chosen then tag.marker + (if ctx.compact then 3 else 6) else 0)
+					if limit ~= p.limit then
+						p.limit = limit
+						p.nameLimit.MaxSize = Vector2.new(limit, math.huge)
+					end
 				end
 			else
 				-- Idle breathing: a slow, slight rise and fall, out of step between customers.
@@ -368,7 +430,9 @@ function Order.new(ctx: any, container: Frame)
 	-- First-shift pointer: Take order, once someone is waiting and a ticket slot is free.
 	function station.hint(snap: any): any
 		if selected and takeButton.enabled then
-			return { target = takeButton.frame, text = "Tap Take order to start a ticket", from = "left" }
+			-- Phones: the rail note sits above the button and the tab bar beside it, so the glove
+			-- comes in from the upper left, onto the button's corner, clear of both.
+			return { target = takeButton.frame, text = "Tap Take order to start a ticket", from = if ctx.compact then "aboveLeft" else "left" }
 		end
 		return nil
 	end

@@ -18,7 +18,7 @@ local Tutorial = {}
 Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", takeOut = "Bake", cut = "Cut" }
 
 -- Glove rotation for each side it comes from (the drawing points up).
-local ROTATION = { below = 0, above = 180, left = 90, right = -90 }
+local ROTATION = { below = 0, above = 180, left = 90, right = -90, aboveLeft = 135 }
 
 -- text and legend are shown by the hint strip; an empty text points without a line.
 export type Hint = { target: GuiObject?, text: string, from: string?, legend: { { icon: string, text: string } }? }
@@ -93,9 +93,14 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 			tipAt = if from == "left" then Vector2.new(p.X - gap, p.Y + s.Y / 2)
 				elseif from == "right" then Vector2.new(p.X + s.X + gap, p.Y + s.Y / 2)
 				elseif from == "above" then Vector2.new(p.X + s.X / 2, p.Y - gap)
+				elseif from == "aboveLeft" then Vector2.new(p.X + gap, p.Y + gap)
 				else Vector2.new(p.X + s.X / 2, p.Y + s.Y + gap)
 			-- A small tap motion toward the target.
-			local towards = if from == "left" then Vector2.new(1, 0) elseif from == "right" then Vector2.new(-1, 0) elseif from == "above" then Vector2.new(0, 1) else Vector2.new(0, -1)
+			local towards = if from == "left" then Vector2.new(1, 0)
+				elseif from == "right" then Vector2.new(-1, 0)
+				elseif from == "above" then Vector2.new(0, 1)
+				elseif from == "aboveLeft" then Vector2.new(0.7071, 0.7071)
+				else Vector2.new(0, -1)
 			local bob = towards * (math.sin(now * 5) * 0.5 + 0.5) * (if compact then 4 else 6) - towards * 6
 			pivot.Position = UDim2.fromOffset(tipAt.X + bob.X, tipAt.Y + bob.Y)
 			pivot.Rotation = ROTATION[from]

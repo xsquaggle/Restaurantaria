@@ -30,6 +30,12 @@ local STATION_ORDER = { "Order", "Topping", "Bake", "Cut" }
 local C = Theme.Colour
 local NAV_SLIDE = TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local NAV_POP = TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+-- The empty rail's note away from Order (QA-006 copy).
+local RAIL_NOTE = {
+	Topping = "Go to Order to start a pizza",
+	Bake = "Add toppings, then send to an oven",
+	Cut = "Take a pizza from the oven to cut",
+}
 local player = Players.LocalPlayer
 
 pcall(function()
@@ -342,14 +348,13 @@ local function buildLayout()
 		Parent = if hudInTopbar then topGui else root,
 	})
 	Art.apply(strip, "ui_hud_bar")
-	-- Left group: day and coins in Astra's HUD pills (240x44, phone 120x36), then the save
-	-- warning when there is one, packed in a row so nothing overlaps whatever the width.
+	-- Left group: day and coins in Astra's HUD pills, then the save warning when there is one.
+	-- Each pill is one row (icon, 8-10 px gap, value) padded 12-16 px inside the pill and
+	-- sized from its text, so icon and value read as one object (QA-009).
 	local pillH = math.min(if compact then 36 else 44, hudH - 4)
-	local pillMinW = math.round(pillH * (if compact then 96 / 36 else 240 / 44))
 	local pillScale = pillH / Assets.Meta.hudPill.height
-	-- Live content stays inside the pill's drawn safe area (96 px of 640 at each end).
-	local pillInset = math.round(Assets.Meta.hudPill.inset * pillScale)
 	local pillText = if compact then 16 else 22
+	local pillIcon = if compact then 28 else 32
 	local left = Ui.new("Frame", { Name = "Left", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 0), Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = hud })
 	Ui.new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -358,71 +363,86 @@ local function buildLayout()
 		Padding = UDim.new(0, if compact then 8 else 12),
 		Parent = left,
 	})
-	local function pill(name: string, order: number, iconName: string): TextLabel
+	local function pill(name: string, order: number): ImageLabel
 		local holder = Ui.new("ImageLabel", {
 			Name = name,
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Slice,
 			SliceCenter = Assets.Meta.hudPill.slice,
 			SliceScale = pillScale,
-			Size = UDim2.fromOffset(pillMinW, pillH),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, pillH),
 			LayoutOrder = order,
 			Parent = left,
+		}, {
+			Ui.new("UIPadding", { PaddingLeft = UDim.new(0, if compact then 12 else 16), PaddingRight = UDim.new(0, if compact then 12 else 16) }),
+			Ui.new("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, if compact then 8 else 10),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
 		})
 		Art.apply(holder, "ui_hud_pill")
-		-- Astra's sun and coin icons lead each pill; the number stays live text.
-		local iconSize = math.round(pillH * 0.72)
+		return holder
+	end
+	local function pillIconImage(holder: ImageLabel, iconName: string): ImageLabel
 		local icon = Ui.new("ImageLabel", {
 			Name = "Icon",
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Fit,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, math.round(pillInset * 0.6), 0.5, 0),
-			Size = UDim2.fromOffset(iconSize, iconSize),
+			Size = UDim2.fromOffset(pillIcon, pillIcon),
+			LayoutOrder = 1,
 			Parent = holder,
-		})
+		}, { Ui.new("UIAspectRatioConstraint", { AspectRatio = 1 }) })
 		Art.apply(icon, iconName)
-		local lead = math.round(pillInset * 0.6) + iconSize
-		local text = Ui.text({
+		return icon
+	end
+	local function pillValue(holder: ImageLabel): TextLabel
+		return Ui.text({
 			Name = "Text",
 			FontFace = Theme.Font.display,
 			TextSize = pillText,
 			TextColor3 = C.labelStroke,
-			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(lead, 0),
-			Size = UDim2.new(1, -lead, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, pillH),
+			LayoutOrder = 2,
 			Parent = holder,
 		})
-		-- The pill grows (its middle stretches) when the text needs more room.
-		text:GetPropertyChangedSignal("TextBounds"):Connect(function()
-			holder.Size = UDim2.fromOffset(math.max(pillMinW, lead + text.TextBounds.X + pillInset * 1.4), pillH)
-		end)
-		return text
 	end
-	local day = pill("Day", 1, "icon_day")
+	-- Astra's sun and coin icons lead each pill; the values stay live text.
+	local dayPill = pill("Day", 1)
+	pillIconImage(dayPill, "icon_day")
+	local day = pillValue(dayPill)
 	day.Text = "Day 1"
-	local coins = pill("Coins", 2, "icon_coin")
+	local coinPill = pill("Coins", 2)
+	pillIconImage(coinPill, "icon_coin")
+	local coins = pillValue(coinPill)
 	coins.Text = if compact then "0" else "0 coins"
-	local banner = Ui.text({
-		Name = "SaveBanner",
-		Text = "",
-		Visible = false,
-		FontFace = Theme.Font.bodySemi,
-		TextSize = 14,
-		TextColor3 = C.label,
+	-- A real save failure, in plain words, in the same pill with the alert badge (QA-012).
+	local banner = pill("SaveBanner", 3)
+	banner.Visible = false
+	local alert = pillIconImage(banner, "ui_badge_alert")
+	Ui.text({
+		Name = "Mark",
+		Text = "!",
+		FontFace = Theme.Font.display,
+		TextColor3 = C.white,
+		TextSize = math.floor(pillIcon * 0.64),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		AutomaticSize = Enum.AutomaticSize.X,
-		LayoutOrder = 3,
-		Size = UDim2.new(0, 0, 1, 0),
-		Parent = left,
+		Size = UDim2.fromScale(1, 1),
+		Parent = alert,
 	})
+	local bannerText = pillValue(banner)
 	local ringSize = hudH - 6
 	-- Each oven is a pill with its badge and ring at the left end and the live status word.
 	-- On phones the pill shows the status word alone ("Cooking", the longest) at the 16 px
 	-- floor; desktop pills fit "Cooking 12s" at their 22 px cap.
 	local ovenPillW = ringSize + (if compact then 82 else 124)
-	local ovenW = 2 * ovenPillW + 8
+	local ovenGap = 8
 	local ovenPanel = Ui.new("TextButton", {
 		Name = "Ovens",
 		Text = "",
@@ -430,17 +450,42 @@ local function buildLayout()
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -4, 0, 0),
-		Size = UDim2.new(0, ovenW, 1, 0),
+		Size = UDim2.new(0, 2 * ovenPillW + ovenGap, 1, 0),
 		Parent = hud,
 	})
 	local ovenRings = {}
 	for i = 1, Config.Oven.slots do
 		local oven = Widgets.ovenStatus(ovenPillW, ringSize, compact)
 		oven.frame.AnchorPoint = Vector2.new(0, 0.5)
-		oven.frame.Position = UDim2.new(0, (i - 1) * (ovenPillW + 8), 0.5, 0)
+		oven.frame.Position = UDim2.new(0, (i - 1) * (ovenPillW + ovenGap), 0.5, 0)
 		oven.frame.Parent = ovenPanel
 		ovenRings[i] = oven
 	end
+	-- When the left group needs the room (a long day or coin value, or the save warning on a
+	-- phone), the oven pills fold to their rings: badge, number and ring fill still show each
+	-- oven, and Bake shows the words. If even that is short, the save warning keeps its badge
+	-- and drops its words, so nothing in the row overlaps.
+	local hudW = if hudInTopbar then inset.Width else size.X
+	local function fitHud()
+		-- The row's width with every part showing (the warning's words counted even while they
+		-- are hidden), so folding never feeds back into its own measurement.
+		local hidden = if banner.Visible and not bannerText.Visible then bannerText.TextBounds.X + (if compact then 8 else 10) else 0
+		local free = hudW - 8 - (left.AbsoluteSize.X + hidden) - 8 - 4
+		local fold = free < 2 * ovenPillW + ovenGap
+		local w = if fold then ringSize else ovenPillW
+		for i, oven in ovenRings do
+			oven:setFolded(fold)
+			oven.frame.Position = UDim2.new(0, (i - 1) * (w + ovenGap), 0.5, 0)
+		end
+		ovenPanel.Size = UDim2.new(0, 2 * w + ovenGap, 1, 0)
+		local words = not banner.Visible or free >= 2 * w + ovenGap
+		if bannerText.Visible ~= words then
+			bannerText.Visible = words
+		end
+	end
+	left:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitHud)
+	bannerText:GetPropertyChangedSignal("TextBounds"):Connect(fitHud)
+	task.defer(fitHud)
 	ovenPanel.Activated:Connect(function()
 		ctx.switchTo("Bake")
 	end)
@@ -513,16 +558,13 @@ local function buildLayout()
 		Parent = rail,
 	})
 	Art.apply(clipRail, "ui_ticket_clip_rail")
-	local railEmpty = Ui.text({
-		Text = "No open tickets",
-		FontFace = Theme.Font.display,
-		TextColor3 = C.label,
-		TextSize = if compact then 16 else 22,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(pad, pad),
-		Size = UDim2.fromOffset(railW - pad * 2, ticketH),
-		Parent = rail,
-	})
+	-- With no open ticket, a short cream note says what to do next, right above the action
+	-- (QA-006): 88% of the rail's inner width, 14 px over the footer, which stays put.
+	local railNote = Widgets.railNote(math.round((railW - pad * 2) * 0.88), compact, if compact then 104 else 160)
+	railNote.frame.AnchorPoint = Vector2.new(0.5, 1)
+	railNote.frame.Position = UDim2.fromOffset(railW / 2, railH - pad - actionH - 14)
+	railNote.frame.Visible = false
+	railNote.frame.Parent = rail
 	local tabList = Ui.new("Frame", {
 		Name = "Tabs",
 		BackgroundTransparency = 1,
@@ -720,7 +762,7 @@ local function buildLayout()
 		coins = coins,
 		ticket = ticket,
 		clipRail = clipRail,
-		railEmpty = railEmpty,
+		railNote = railNote,
 		tabList = tabList,
 		tabH = tabH,
 		tabW = if compact then (railW - pad * 2 - gap) / 2 else railW - pad * 2,
@@ -733,6 +775,7 @@ local function buildLayout()
 		navSelected = navSelected,
 		navBarH = barH,
 		banner = banner,
+		bannerText = bannerText,
 		toastHolder = toastHolder,
 		summary = summary,
 		summaryShift = nil,
@@ -835,7 +878,27 @@ local function refreshRail(snap: any)
 	ui.ticket:set(shown)
 	ui.ticket.frame.Visible = shown ~= nil
 	ui.clipRail.Visible = shown ~= nil
-	ui.railEmpty.Visible = shown == nil
+	-- The empty rail's note: on Order, take an order (or nobody is waiting); elsewhere, what
+	-- comes first. Exactly one instruction shows, so the hint strip stays empty meanwhile.
+	ctx.railEmpty = shown == nil
+	ui.railNote.frame.Visible = ctx.railEmpty
+	if ctx.railEmpty then
+		local waiting = 0
+		for _, customer in snap.customers do
+			if customer.status == "waiting" then
+				waiting += 1
+			end
+		end
+		if ctx.station == "Order" then
+			if waiting > 0 then
+				ui.railNote:set("Take an order", "Tap the button below.")
+			else
+				ui.railNote:set("No one waiting", "Check your pizzas")
+			end
+		else
+			ui.railNote:set(nil, RAIL_NOTE[ctx.station] or "")
+		end
+	end
 	local seen = {}
 	for _, customer in open do
 		if customer ~= shown then
@@ -1006,7 +1069,7 @@ function ctx.showResult(ticketId: number)
 	local toast = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(40, 40, 840, 360),
+		SliceCenter = Assets.Meta.card.slice,
 		SliceScale = if compact then 0.5 else 0.7,
 		Size = UDim2.new(1, 0, 0, (if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20)),
 		ZIndex = 9,
@@ -1103,7 +1166,7 @@ function ctx.refresh()
 	-- condition, shown in the Studio-only diagnostics overlay instead of the HUD.
 	ui.banner.Visible = profile ~= nil and profile.status == "failed"
 	if ui.banner.Visible then
-		ui.banner.Text = if ctx.compact then "Can't save" else "Progress can't save right now"
+		ui.bannerText.Text = if ctx.compact then "Can't save" else "Progress can't save right now"
 	end
 	showDiagnostic(if profile and profile.status ~= "ok" then profile.message else nil)
 	refreshSummary(snap)
@@ -1188,6 +1251,9 @@ RunService.RenderStepped:Connect(function()
 	-- reason (why its action is unavailable and what to do next).
 	local status = if current and current.status and not snap.finished then current.status(snap, now) else nil
 	local line = if hint and hint.text ~= "" then hint else status
+	if ctx.railEmpty then
+		line = nil
+	end
 	ui.hintStrip:set(line and line.text, line and line.legend)
 	-- Anything shown again (the strip, the summary, a station) gets back art freed while hidden.
 	Art.restore(Players.LocalPlayer.PlayerGui)

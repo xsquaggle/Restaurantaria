@@ -223,7 +223,7 @@ end
 -- ring round the badge and the live status word. The ring is her full-circle sprite shown
 -- through two half-clips whose gradients reveal it clockwise; nothing is drawn in code.
 
-export type OvenStatus = { frame: Frame, set: (OvenStatus, number, string, string, string) -> () }
+export type OvenStatus = { frame: Frame, set: (OvenStatus, number, string, string, string) -> (), setFolded: (OvenStatus, boolean) -> () }
 
 local HALF = NumberSequence.new({
 	NumberSequenceKeypoint.new(0, 0),
@@ -330,6 +330,12 @@ function Widgets.ovenStatus(width: number, height: number, compact: boolean): Ov
 			number.Text = slotText
 			status.Text = statusText
 		end,
+		-- Folded to the ring alone (badge, number and ring fill) when the HUD row is short.
+		setFolded = function(_o: OvenStatus, on: boolean)
+			pill.Visible = not on
+			status.Visible = not on
+			frame.Size = UDim2.fromOffset(if on then height else width, height)
+		end,
 	}
 	o:set(0, "idle", "", "")
 	return o
@@ -339,7 +345,8 @@ end
 -- Patience meter: Astra's face for the band, then her track with the band's fill laid over
 -- it at full size and revealed through a clipping frame, so the fill art never squashes.
 
-export type Patience = { frame: Frame, set: (Patience, number, string) -> () }
+-- face and track are exposed so a caller can lay them out itself (the Order name tags).
+export type Patience = { frame: Frame, face: ImageLabel, track: ImageLabel, set: (Patience, number, string) -> () }
 
 local BAND_FILL = { happy = "green", neutral = "green", impatient = "amber", grumpy = "red" }
 
@@ -392,6 +399,8 @@ function Widgets.patience(): Patience
 	track:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	local p: Patience = {
 		frame = frame,
+		face = face,
+		track = track,
 		set = function(_p: Patience, f: number, band: string)
 			fraction = math.clamp(f, 0, 1)
 			if band ~= shownBand then
@@ -661,6 +670,83 @@ function Widgets.railTicket(size: Vector2, compact: boolean): RailTicket
 		end,
 	}
 	return ticket
+end
+
+-- Empty-rail note (QA-006): Astra's three-part cream ticket as a short note holding the
+-- ticket pictogram, an optional heading and one line of live text. Its height follows the
+-- text (at least minHeight), so the copy reflows at the type floors instead of shrinking.
+
+export type RailNote = { frame: Frame, set: (RailNote, string?, string) -> () }
+
+function Widgets.railNote(width: number, compact: boolean, minHeight: number): RailNote
+	local cap = math.round(width * Assets.Meta.ticket.cap / Assets.Meta.ticket.width)
+	local frame = Ui.new("Frame", { Name = "Note", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, minHeight) })
+	local function part(name: string, props: { [string]: any })
+		props.Name = name
+		props.BackgroundTransparency = 1
+		props.ScaleType = Enum.ScaleType.Stretch
+		props.Parent = frame
+		Art.apply(Ui.new("ImageLabel", props), name)
+	end
+	part("ui_ticket_top", { Size = UDim2.new(1, 0, 0, cap) })
+	part("ui_ticket_mid", { Position = UDim2.fromOffset(0, cap), Size = UDim2.new(1, 0, 1, -cap * 2) })
+	part("ui_ticket_bottom", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, cap) })
+	local padX = if compact then 10 else math.round(width * 28 / 420)
+	local padY = math.max(10, math.round(cap * 0.75))
+	local content = Ui.new("Frame", {
+		Name = "Content",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, -padX * 2, 0, 0),
+		Parent = frame,
+	}, {
+		Ui.new("UIListLayout", {
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, if compact then 4 else 8),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	local iconSize = if compact then 32 else 56
+	local icon = Ui.new("ImageLabel", {
+		Name = "Icon",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(iconSize, iconSize),
+		LayoutOrder = 1,
+		Parent = content,
+	})
+	Art.apply(icon, "icon_nav_order_idle")
+	-- One family (Fredoka One) for both lines; heading 18 / line 16 px on phones.
+	local function line(name: string, size: number, order: number): TextLabel
+		return Ui.text({
+			Name = name,
+			FontFace = Theme.Font.display,
+			TextSize = size,
+			TextColor3 = C.ink,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 0),
+			LayoutOrder = order,
+			Parent = content,
+		})
+	end
+	local heading = line("Heading", if compact then 18 else 28, 2)
+	local body = line("Line", if compact then 16 else 22, 3)
+	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		frame.Size = UDim2.fromOffset(width, math.max(minHeight, math.ceil(content.AbsoluteSize.Y) + padY * 2))
+	end)
+	local note: RailNote
+	note = {
+		frame = frame,
+		set = function(_n: RailNote, headingText: string?, lineText: string)
+			heading.Text = headingText or ""
+			heading.Visible = headingText ~= nil
+			body.Text = lineText
+		end,
+	}
+	return note
 end
 
 -- Rail tab: a waiting ticket in one line (patience face, number, toppings with counts).
@@ -958,8 +1044,8 @@ function Widgets.hintStrip(width: number, height: number, compact: boolean): Hin
 		Name = "Card",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(40, 40, 840, 360),
-		SliceScale = math.min(0.5, (height - 4) / 100),
+		SliceCenter = Assets.Meta.card.slice,
+		SliceScale = math.min(0.5, (height - 4) / (2 * Assets.Meta.card.corner)),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AutomaticSize = Enum.AutomaticSize.X,

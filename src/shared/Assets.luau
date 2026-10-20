@@ -201,6 +201,11 @@ Assets.Meta = {
 	-- Patience track and fills share one 512x64 canvas; the fill shows inside x 14-498.
 	meter = { slice = Rect.new(40, 28, 472, 36), height = 64, width = 512, fillLeft = 14, fillRight = 498 },
 	panel = { slice = Rect.new(40, 40, 800, 560) },
+	-- Cream result card (880x400): its corner curves run 48 px in from the sides and 56 px in
+	-- from the top and bottom, so the slice margins are 64 px (with 40 the curve's tail sat in
+	-- the stretched edges and drew as a step at the lower corners, QA-010a). SliceScale must
+	-- stay at or under height / (2 * corner) so both corners fit.
+	card = { slice = Rect.new(64, 64, 816, 336), corner = 64 },
 	clipRail = { aspect = 768 / 96 },
 	-- Order counter front (trimmed 2683x681); its top edge is the first 9% of the image.
 	orderCounter = { aspect = 2683 / 681, top = 0.09 },

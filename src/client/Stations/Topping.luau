@@ -368,7 +368,8 @@ function Topping.new(ctx: any, container: Frame)
 			end
 		end
 		view.frame.Visible = current ~= nil
-		empty.Visible = current == nil
+		-- With no ticket at all the rail's note gives the instruction instead (one at a time).
+		empty.Visible = current == nil and not ctx.railEmpty
 		if not current then
 			clearHover()
 		end
