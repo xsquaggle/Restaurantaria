@@ -3,6 +3,7 @@
 -- is missing it stays empty apart from its live text; hitboxes and anchors never change.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
@@ -737,13 +738,44 @@ function Widgets.railNote(width: number, compact: boolean, minHeight: number): R
 	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		frame.Size = UDim2.fromOffset(width, math.max(minHeight, math.ceil(content.AbsoluteSize.Y) + padY * 2))
 	end)
+	-- A line that wraps is narrowed to the least width that keeps its line count, so the lines
+	-- come out even instead of leaving one word alone ("Tap the button / below.").
+	local avail = width - padX * 2
+	local function tallness(text: string, w: number): number
+		local params = Instance.new("GetTextBoundsParams")
+		params.Text = text
+		params.Font = body.FontFace
+		params.Size = body.TextSize
+		params.Width = w
+		local ok, bounds = pcall(TextService.GetTextBoundsAsync, TextService, params)
+		return if ok then bounds.Y else 0
+	end
+	local function balance(text: string)
+		local tall = tallness(text, avail)
+		local lo, hi = math.floor(avail / 2), avail
+		while hi - lo > 1 do
+			local mid = (lo + hi) // 2
+			if tallness(text, mid) > tall then
+				lo = mid
+			else
+				hi = mid
+			end
+		end
+		if body.Text == text then
+			body.Size = UDim2.fromOffset(math.min(avail, hi + 4), 0)
+		end
+	end
 	local note: RailNote
 	note = {
 		frame = frame,
 		set = function(_n: RailNote, headingText: string?, lineText: string)
 			heading.Text = headingText or ""
 			heading.Visible = headingText ~= nil
-			body.Text = lineText
+			if body.Text ~= lineText then
+				body.Size = UDim2.new(1, 0, 0, 0)
+				body.Text = lineText
+				task.spawn(balance, lineText)
+			end
 		end,
 	}
 	return note
