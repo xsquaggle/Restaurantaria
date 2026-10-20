@@ -929,7 +929,7 @@ end
 local function refreshHud(snap: any)
 	local profile = snap.profile or {}
 	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
-	local total = (profile.tips or 0) + (if snap.saved then 0 else snap.tips)
+	local total = (profile.tips or 0) + (if snap.recorded then 0 else snap.tips)
 	ui.coins.Text = if ctx.compact then tostring(total) else string.format("%d coins", total)
 end
 

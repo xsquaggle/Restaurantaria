@@ -470,6 +470,9 @@ function ShiftService.snapshot(player: Player): any
 		xp = shift.xp,
 		finished = shift.finished,
 		saved = shift.saved,
+		-- True once this shift's tips are inside profile.tips (saved, or kept in memory after
+		-- a failed load), so the HUD never counts them twice.
+		recorded = profile ~= nil and table.find(profile.data.recentShiftIds, shift.id) ~= nil,
 		saveMessage = shift.saveMessage,
 		lastSeq = session.lastSeq,
 		rejected = session.rejected,
