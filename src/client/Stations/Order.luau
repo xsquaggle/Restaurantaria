@@ -40,12 +40,12 @@ local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 -- chosen customer's name gets the ticket pictogram (marker) as well as the action colour.
 local TAG_GAP = 8
 local TAG = {
-	compact = { width = 120, pad = 6, padY = 4, text = 16, line = 17, nameGap = 4, face = 28, gap = 8, track = 16, marker = 16, space = 4, column = true },
-	wide = { width = 210, pad = 10, padY = 10, text = 26, line = 30, nameGap = 6, face = 40, gap = 10, track = 22, marker = 26, space = 16, column = false },
+	compact = { width = 118, pad = 5, padY = 4, text = 16, line = 17, nameGap = 4, face = 28, gap = 8, track = 16, marker = 16, space = 4, chosen = 1.03, column = true },
+	wide = { width = 210, pad = 10, padY = 10, text = 26, line = 30, nameGap = 6, face = 40, gap = 10, track = 22, marker = 26, space = 16, chosen = 1.06, column = false },
 }
--- The chosen customer's tag grows by this much; tags are narrowed until neighbours, one of
--- them chosen, keep at least tag.space px between them.
-local CHOSEN = 1.06
+-- The chosen customer's tag grows by tag.chosen; tags are narrowed until neighbours, one of
+-- them chosen, keep at least tag.space px between them. Phones grow it less, so the three
+-- tags keep the 72 px track at the iPhone 7's counter spacing.
 
 -- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hides
 -- it (Main turns the backdrop off for world3D stations) and hangs the same art in the world.
@@ -337,7 +337,7 @@ function Order.new(ctx: any, container: Frame)
 			local chosen = id == selected
 			if chosen ~= p.chosen then
 				p.chosen = chosen
-				TweenService:Create(p.scale, STEP, { Scale = if chosen then CHOSEN else 1 }):Play()
+				TweenService:Create(p.scale, STEP, { Scale = if chosen then (if room then tag.chosen else 1.06) else 1 }):Play()
 				if not room then
 					TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
 				end
@@ -372,7 +372,7 @@ function Order.new(ctx: any, container: Frame)
 		local tagW = tag.width
 		if crowd then
 			crowd.tick(dt)
-			tagW = math.min(tag.width, math.floor(crowd.spacing() / CHOSEN) - tag.space)
+			tagW = math.min(tag.width, math.floor(crowd.spacing() / tag.chosen) - tag.space)
 		end
 		for id, p in people do
 			local f = Scoring.patienceFraction(p.customer.arrivedAt, now)

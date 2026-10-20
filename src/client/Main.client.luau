@@ -559,10 +559,12 @@ local function buildLayout()
 	})
 	Art.apply(clipRail, "ui_ticket_clip_rail")
 	-- With no open ticket, a short cream note says what to do next, right above the action
-	-- (QA-006): 88% of the rail's inner width, 14 px over the footer, which stays put.
+	-- (QA-006): 88% of the rail's inner width, over the footer, which stays put. The frames
+	-- sit 11 / 8 px apart so the drawn paper and button art (both have transparent margins)
+	-- end up 12-16 px apart, measured at the paper's lowest tooth.
 	local railNote = Widgets.railNote(math.round((railW - pad * 2) * 0.88), compact, if compact then 104 else 160)
 	railNote.frame.AnchorPoint = Vector2.new(0.5, 1)
-	railNote.frame.Position = UDim2.fromOffset(railW / 2, railH - pad - actionH - 14)
+	railNote.frame.Position = UDim2.fromOffset(railW / 2, railH - pad - actionH - (if compact then 11 else 8))
 	railNote.frame.Visible = false
 	railNote.frame.Parent = rail
 	local tabList = Ui.new("Frame", {
