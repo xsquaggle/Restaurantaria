@@ -54,18 +54,19 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	local front = ORIGIN.Z - size.Z / 2
 	local back = ORIGIN.Z + size.Z / 2
 
-	-- Warm key light over the counter, like the stations' painted light.
+	-- Warm key light from the upper left, the direction the painted stations are lit from
+	-- (the camera looks along +Z, so screen left is +X). The sun comes from the same side.
 	local lamp = Instance.new("Part")
 	lamp.Name = "Lamp"
 	lamp.Anchored = true
 	lamp.CanCollide = false
 	lamp.Transparency = 1
 	lamp.Size = Vector3.one
-	lamp.Position = ORIGIN + Vector3.new(0, size.Y + 9, -4)
+	lamp.Position = ORIGIN + Vector3.new(size.X * 0.4, size.Y + 8, -6)
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 236, 205)
-	light.Brightness = 0.8
-	light.Range = 26
+	light.Brightness = 0.6
+	light.Range = 28
 	light.Shadows = true
 	light.Parent = lamp
 	lamp.Parent = folder
@@ -182,9 +183,11 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 			}
 			Lighting.Ambient = Color3.fromRGB(150, 132, 118)
 			Lighting.OutdoorAmbient = Color3.fromRGB(160, 145, 130)
-			Lighting.Brightness = 1.2
+			-- Brightness 1.2 pushed the wood top past full red into yellow (QA-001); 0.5 keeps
+			-- its highlight to a thin band. ClockTime 10.5 puts the sun at the upper left.
+			Lighting.Brightness = 0.5
 			Lighting.ExposureCompensation = 0
-			Lighting.ClockTime = 13.5
+			Lighting.ClockTime = 10.5
 			camera.CameraType = Enum.CameraType.Scriptable
 			fixed = solve()
 			RunService:BindToRenderStep("OrderRoomCamera", Enum.RenderPriority.Camera.Value + 1, function()
