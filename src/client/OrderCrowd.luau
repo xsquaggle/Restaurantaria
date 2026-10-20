@@ -246,6 +246,13 @@ function OrderCrowd.new(room: any)
 		end
 	end
 
+	-- Pixels between neighbouring spots on the stand line, at head height.
+	function crowd.spacing(): number
+		local a = room.project(floor(size.X * SPOTS[1], standZ) + Vector3.new(0, 5, 0))
+		local b = room.project(floor(size.X * SPOTS[2], standZ) + Vector3.new(0, 5, 0))
+		return math.abs(a.X - b.X)
+	end
+
 	-- True once the customer stands at their spot.
 	function crowd.standing(id: number): boolean
 		local f = figures[id]

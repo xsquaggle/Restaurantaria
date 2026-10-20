@@ -36,9 +36,13 @@ local POP = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 -- Name tags over the 3D customers: the gap above the head box, and the tag's size.
 local TAG_GAP = 8
 local TAG = {
-	compact = { width = 120, pad = 6, text = 16, line = 18, meter = 84 },
+	compact = { width = 120, pad = 4, text = 16, line = 17, meter = 72 },
 	wide = { width = 210, pad = 10, text = 26, line = 30, meter = 160 },
 }
+-- The chosen customer's tag grows by this much; tags are narrowed until neighbours, one of
+-- them chosen, keep at least TAG_SPACE px between them.
+local CHOSEN = 1.06
+local TAG_SPACE = 16
 
 -- Full-screen art behind the station (Assets.Meta.backgrounds). The 3D counter view hides
 -- it (Main turns the backdrop off for world3D stations) and hangs the same art in the world.
@@ -166,7 +170,7 @@ function Order.new(ctx: any, container: Frame)
 			selected = customer.id
 			ctx.refresh()
 		end)
-		return { slot = slot, scale = scale, name = name, meter = meter, customer = customer, band = "", chosen = false }
+		return { slot = slot, card = card, scale = scale, name = name, meter = meter, customer = customer, band = "", chosen = false }
 	end
 
 	local function personFor(customer: any)
@@ -281,7 +285,7 @@ function Order.new(ctx: any, container: Frame)
 			local chosen = id == selected
 			if chosen ~= p.chosen then
 				p.chosen = chosen
-				TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
+				TweenService:Create(p.scale, STEP, { Scale = if chosen then CHOSEN else 1 }):Play()
 				if not room then
 					TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
 				end
@@ -310,8 +314,10 @@ function Order.new(ctx: any, container: Frame)
 	function station.tick(now: number)
 		local dt = if lastTick then math.min(now - lastTick, 0.1) else 0
 		lastTick = now
+		local tagW = tag.width
 		if crowd then
 			crowd.tick(dt)
+			tagW = math.min(tag.width, math.floor(crowd.spacing() / CHOSEN) - TAG_SPACE)
 		end
 		for id, p in people do
 			local f = Scoring.patienceFraction(p.customer.arrivedAt, now)
@@ -325,10 +331,11 @@ function Order.new(ctx: any, container: Frame)
 				local shown = x0 ~= nil and crowd.standing(id)
 				p.slot.Visible = shown
 				if shown then
-					local left = math.clamp(((x0 :: number) + (x1 :: number)) / 2 - tag.width / 2, 4, area.X - tag.width - 4)
+					local left = math.clamp(((x0 :: number) + (x1 :: number)) / 2 - tagW / 2, 4, area.X - tagW - 4)
 					local top = math.max(4, (y0 :: number) - TAG_GAP - tagH)
 					p.slot.Position = UDim2.fromOffset(math.round(left), math.round(top))
-					p.slot.Size = UDim2.fromOffset(tag.width, math.max(tagH, room.line - math.round(top)))
+					p.slot.Size = UDim2.fromOffset(tagW, math.max(tagH, room.line - math.round(top)))
+					p.card.Size = UDim2.fromOffset(tagW, tagH)
 				end
 			else
 				-- Idle breathing: a slow, slight rise and fall, out of step between customers.
