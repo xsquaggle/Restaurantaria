@@ -271,8 +271,9 @@ end
 -- Packs a GLB for the game (see src/shared/Model3D.luau): one mesh, centred on X/Z with its
 -- base on Y = 0, uniformly scaled so its longest horizontal side is opts.width studs, turned
 -- by opts.yaw radians about Y so its front faces -Z. The colour map goes to DevArt as
--- <name>_base through ArtPipeline. Returns a report.
-function GlbImport.store(name: string, data: buffer, opts: { width: number, yaw: number?, source: string? }): { string }
+-- <name>_base through ArtPipeline. opts.mesh keeps only the file's mesh of that name (a
+-- Blender export can carry stray meshes from other scenes). Returns a report.
+function GlbImport.store(name: string, data: buffer, opts: { width: number, yaw: number?, source: string?, mesh: string? }): { string }
 	local EncodingService = game:GetService("EncodingService")
 	local Pipeline = require(game:GetService("ServerStorage"):WaitForChild("ArtPipeline") :: ModuleScript) :: any
 	local glb = GlbImport.parse(data)
@@ -282,6 +283,10 @@ function GlbImport.store(name: string, data: buffer, opts: { width: number, yaw:
 	local minV, maxV = Vector3.one * math.huge, -Vector3.one * math.huge
 	local texIndex = nil
 	for _, m in j.meshes do
+		if opts.mesh and m.name ~= opts.mesh then
+			table.insert(report, "skipped mesh " .. tostring(m.name))
+			continue
+		end
 		for _, p in m.primitives do
 			local nPos, pos = accessor(glb, p.attributes.POSITION)
 			local _, nrm = accessor(glb, p.attributes.NORMAL)

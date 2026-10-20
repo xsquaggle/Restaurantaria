@@ -1,5 +1,6 @@
 --!strict
--- The Order station's 3D room: the imported counter behind a fixed camera, with the existing
+-- The Order station's 3D room: the imported counter behind a fixed camera, inside the
+-- Blender-built lobby shell when it is switched on (OrderLobby.luau), otherwise with the existing
 -- Order background art on a plane behind it. Customers are native avatars standing behind
 -- the counter (OrderCrowd.luau), so the counter hides their lower bodies for real. The room
 -- also reports the counter line for the 2D fallback and projects world points onto the
@@ -16,6 +17,7 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Model3D = require(Shared.Model3D)
+local OrderLobby = require(script.Parent.OrderLobby)
 
 local OrderRoom = {}
 
@@ -79,7 +81,14 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	light.Parent = lamp
 	lamp.Parent = folder
 
+	-- The lobby shell, when switched on, replaces the painted background.
+	local lobby = OrderLobby.build(ORIGIN)
+	if lobby then
+		lobby.Parent = folder
+	end
+
 	-- Background plane: the existing Order background tiles, unlit so they keep their colours.
+	-- Without the shell it is shown; with it, the plane is still solved but never parented.
 	local meta = Assets.Meta.backgrounds.bg_order
 	local plane = Instance.new("Part")
 	plane.Name = "Backdrop"
@@ -91,7 +100,7 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	local planeH = planeW * meta.height / meta.width
 	plane.Size = Vector3.new(planeW, planeH, 0.1)
 	plane.CFrame = CFrame.new(ORIGIN + Vector3.new(0, planeH * 0.3, size.Z / 2 + BACKDROP_GAP))
-	plane.Parent = folder
+	plane.Parent = if lobby then nil else folder
 	local surface = Instance.new("SurfaceGui")
 	surface.Face = Enum.NormalId.Front
 	surface.LightInfluence = 0
@@ -100,7 +109,8 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 	surface.Adornee = plane
 	surface.Parent = plane
 	local tiles = {}
-	for r = 0, meta.rows - 1 do
+	local rows = if lobby then 0 else meta.rows
+	for r = 0, rows - 1 do
 		for c = 0, meta.cols - 1 do
 			local tile = Instance.new("ImageLabel")
 			tile.BackgroundTransparency = 1
