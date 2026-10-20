@@ -21,11 +21,12 @@ export type Look = { key: string, name: string, username: string?, pool: number 
 
 -- One curated fallback per enabled pool; the fallback named Marta is always P01, and so on.
 -- Short, normal and tall bodies, one with a large accessory (the sun hat). All catalog
--- items are Roblox-made. A proposal until Lawson approves the cast's looks.
+-- items are Roblox-made. top and bottom colour the body if the clothes fail to load. A
+-- proposal until Lawson approves the cast's looks.
 local FALLBACKS = {
-	{ id = "marta", pool = 1, height = 1.0, width = 0.8, skin = Color3.fromRGB(234, 184, 146), hair = "7193448258", hat = "", shirt = 398634295, pants = 398634487 },
-	{ id = "bo", pool = 2, height = 1.05, width = 0.85, skin = Color3.fromRGB(124, 92, 70), hair = "7193401217", hat = "607702162", shirt = 4047884939, pants = 382538503 },
-	{ id = "ines", pool = 3, height = 0.9, width = 0.75, skin = Color3.fromRGB(255, 220, 190), hair = "7193442167", hat = "116076110", shirt = 398635081, pants = 382537569 },
+	{ id = "marta", pool = 1, height = 1.0, width = 0.8, skin = Color3.fromRGB(234, 184, 146), hair = "7193448258", hat = "", shirt = 398634295, pants = 398634487, top = Color3.fromRGB(196, 196, 204), bottom = Color3.fromRGB(70, 72, 84) },
+	{ id = "bo", pool = 2, height = 1.05, width = 0.85, skin = Color3.fromRGB(124, 92, 70), hair = "7193401217", hat = "607702162", shirt = 4047884939, pants = 382538503, top = Color3.fromRGB(78, 120, 170), bottom = Color3.fromRGB(52, 56, 66) },
+	{ id = "ines", pool = 3, height = 0.9, width = 0.75, skin = Color3.fromRGB(255, 220, 190), hair = "7193442167", hat = "116076110", shirt = 398635081, pants = 382537569, top = Color3.fromRGB(46, 70, 170), bottom = Color3.fromRGB(60, 60, 72) },
 }
 -- Friends tried per player; a shift has six customers, so a dozen gives plenty of variety.
 local MAX_FRIENDS = 12
@@ -44,8 +45,9 @@ local function failing(what: string): boolean
 end
 
 -- Builds and stores one look. A description whose items fail to load is retried with its
--- body only (skin, proportions, no clothes or accessories), so a look is never a broken rig.
-local function store(key: string, description: HumanoidDescription)
+-- body only (skin, proportions, no clothes or accessories), so a look is never a broken rig;
+-- dress, when given, colours that body's torso and legs so it still reads as dressed.
+local function store(key: string, description: HumanoidDescription, dress: { top: Color3, bottom: Color3 }?)
 	local ok, model = pcall(function()
 		if failing("assets") then
 			error("simulated asset failure")
@@ -58,6 +60,11 @@ local function store(key: string, description: HumanoidDescription)
 		local body = Instance.new("HumanoidDescription")
 		for _, p in { "HeightScale", "WidthScale", "DepthScale", "HeadScale", "BodyTypeScale", "ProportionScale", "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor", "LeftLegColor", "RightLegColor" } do
 			(body :: any)[p] = (description :: any)[p]
+		end
+		if dress then
+			body.TorsoColor = dress.top
+			body.LeftLegColor = dress.bottom
+			body.RightLegColor = dress.bottom
 		end
 		ok, model = pcall(Players.CreateHumanoidModelFromDescription, Players, body, Enum.HumanoidRigType.R15)
 		plain = true
@@ -105,7 +112,7 @@ function CustomerLooks.start()
 			d.HatAccessory = f.hat
 			d.Shirt = f.shirt
 			d.Pants = f.pants
-			store("fallback:" .. f.id, d)
+			store("fallback:" .. f.id, d, { top = f.top, bottom = f.bottom })
 		end)
 	end
 end
