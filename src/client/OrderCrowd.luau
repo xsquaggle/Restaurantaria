@@ -33,6 +33,9 @@ local EXIT_X = -22
 -- Parts more than this far above the head are left out of the head box: some accessories
 -- carry stray invisible parts far above the avatar.
 local HEAD_REACH = 3
+-- Hair can show a little above its part's box (Marta's by 5 px at HD), so the box's top is
+-- raised by this much, in studs.
+local HEAD_PAD = 0.15
 -- A look that has not replicated by then is stood in for by any other look.
 local LOOK_WAIT = 5
 
@@ -259,18 +262,22 @@ function OrderCrowd.new(room: any)
 		local head = f.headParts[1]
 		local limit = head.Position.Y + head.Size.Y / 2 + HEAD_REACH
 		local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+		local top = -math.huge
 		for _, part in f.headParts do
 			local cf, half = part.CFrame, part.Size / 2
 			if cf.Position.Y - half.Y > limit then
 				continue
 			end
 			for _, c in { Vector3.new(-1, -1, -1), Vector3.new(1, -1, -1), Vector3.new(-1, 1, -1), Vector3.new(1, 1, -1), Vector3.new(-1, -1, 1), Vector3.new(1, -1, 1), Vector3.new(-1, 1, 1), Vector3.new(1, 1, 1) } do
-				local p = room.project(cf:PointToWorldSpace(half * c))
+				local w = cf:PointToWorldSpace(half * c)
+				local p = room.project(w)
+				top = math.max(top, w.Y)
 				x0, y0 = math.min(x0, p.X), math.min(y0, p.Y)
 				x1, y1 = math.max(x1, p.X), math.max(y1, p.Y)
 			end
 		end
-		return x0, y0, x1, y1
+		local crown = room.project(Vector3.new(head.Position.X, top + HEAD_PAD, head.Position.Z))
+		return x0, math.min(y0, crown.Y), x1, y1
 	end
 
 	function crowd.destroy()
