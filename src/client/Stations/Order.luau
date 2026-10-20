@@ -1,9 +1,10 @@
 --!strict
 -- Order station: waiting customers stand at the counter. Tap one to select, then take the
--- order from the rail; the selected one steps forward while the others wait. With the 3D
+-- order from the rail; the selected one stands out while the others wait. With the 3D
 -- counter they are native avatars (OrderCrowd) that walk in and out, each with a name tag
--- over their head; without it they are the generated characters (G10), whose expression
--- follows their patience band.
+-- over their head that grows a little when chosen; without it they are the generated
+-- characters (G10), who step forward when chosen and whose expression follows their
+-- patience band.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -127,17 +128,21 @@ function Order.new(ctx: any, container: Frame)
 			ZIndex = 2,
 			Parent = frame,
 		})
+		-- Anchored at its bottom centre, so the chosen customer's tag grows away from the head.
 		local card = Ui.new("ImageLabel", {
 			Name = "Tag",
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Slice,
 			SliceCenter = Rect.new(40, 40, 840, 360),
 			SliceScale = math.min(0.5, tagH / 120),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 0, tagH),
 			Size = UDim2.fromOffset(tag.width, tagH),
 			ZIndex = 2,
 			Parent = slot,
 		})
 		Art.apply(card, "ui_card_result")
+		local scale = Ui.new("UIScale", { Scale = 1, Parent = card })
 		local name = Ui.text({
 			Text = customer.label,
 			FontFace = Theme.Font.display,
@@ -161,7 +166,7 @@ function Order.new(ctx: any, container: Frame)
 			selected = customer.id
 			ctx.refresh()
 		end)
-		return { slot = slot, card = card, name = name, meter = meter, customer = customer, band = "", chosen = false }
+		return { slot = slot, scale = scale, name = name, meter = meter, customer = customer, band = "", chosen = false }
 	end
 
 	local function personFor(customer: any)
@@ -276,15 +281,15 @@ function Order.new(ctx: any, container: Frame)
 			local chosen = id == selected
 			if chosen ~= p.chosen then
 				p.chosen = chosen
+				TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
 				if not room then
-					TweenService:Create(p.scale, STEP, { Scale = if chosen then 1.06 else 1 }):Play()
 					TweenService:Create(p.figure, STEP, { ImageTransparency = if chosen then 0 else 0.12 }):Play()
 				end
 			end
 			p.name.TextColor3 = if chosen then C.action else C.ink
 		end
 		if crowd then
-			crowd.sync(waiting, selected, not built)
+			crowd.sync(waiting, not built)
 		end
 		built = true
 		local active = 0

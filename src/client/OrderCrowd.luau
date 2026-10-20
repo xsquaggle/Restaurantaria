@@ -4,7 +4,7 @@
 -- in from the left along a lane behind the counter, step up to a free spot, idle there and
 -- walk out to the right once their order is taken. Only the root is anchored and moved; the
 -- walk and idle animations drive the limbs, and the walk plays at the speed its planted foot
--- travels, so the feet do not slide. Labels are not drawn here: head() gives each figure's
+-- travels, so the feet keep pace with the floor. Labels are not drawn here: head() gives each figure's
 -- projected head box so the station can place its name tag.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,8 +19,9 @@ local WALK = "rbxassetid://913402848"
 local STANCE = 2.77
 -- Walking speed in hip heights per second, about 5 studs a second for an average avatar.
 local PACE = 2.4
--- Turning rate in radians per second.
+-- Turning rate in radians per second, and the largest change of heading taken while walking.
 local TURN = 9
+local FACE = 1
 -- From the measured layout (lobby-layout-sheet rev 3): counter spots as shares of the
 -- counter's width (screen left is +X), the stand line behind its back edge, the lane that
 -- walkers use behind the waiting customers, and the off-screen start and finish.
@@ -29,9 +30,6 @@ local STAND = 1.2
 local LANE = 3.9
 local ENTER_X = 18
 local EXIT_X = -22
--- The chosen customer steps this far towards the counter, at this speed.
-local STEP_IN = 0.35
-local STEP_SPEED = 1.5
 -- Parts more than this far above the head are left out of the head box: some accessories
 -- carry stray invisible parts far above the avatar.
 local HEAD_REACH = 3
@@ -51,8 +49,6 @@ type Figure = {
 	path: { Vector3 },
 	spot: number?,
 	leaving: boolean,
-	step: number,
-	chosen: boolean,
 	headParts: { BasePart },
 	headTop: number,
 }
@@ -114,8 +110,6 @@ function OrderCrowd.new(room: any)
 			path = {},
 			spot = nil,
 			leaving = false,
-			step = 0,
-			chosen = false,
 			headParts = headParts,
 			headTop = 0,
 		}
@@ -138,19 +132,15 @@ function OrderCrowd.new(room: any)
 
 	local function leave(f: Figure)
 		f.leaving = true
-		-- The step towards the counter becomes part of where they stand, so they walk off from
-		-- exactly there.
-		f.pos -= Vector3.new(0, 0, f.step)
-		f.step = 0
 		local x = f.pos.X - origin.X
 		f.path = { floor(x, laneZ), floor(EXIT_X, laneZ) }
 	end
 
 	local crowd = {}
 
-	-- waiting: the customers waiting at the counter now; chosen: the selected one's id;
-	-- instant: new figures start at their spot (customers already there when the room is built).
-	function crowd.sync(waiting: { any }, chosen: number?, instant: boolean?)
+	-- waiting: the customers waiting at the counter now; instant: new figures start at their
+	-- spot (customers already there when the room is built).
+	function crowd.sync(waiting: { any }, instant: boolean?)
 		local here = {}
 		for _, customer in waiting do
 			here[customer.id] = true
@@ -167,7 +157,6 @@ function OrderCrowd.new(room: any)
 			if not here[id] and not f.leaving then
 				leave(f)
 			end
-			f.chosen = id == chosen
 		end
 	end
 
@@ -215,24 +204,25 @@ function OrderCrowd.new(room: any)
 			if target then
 				local gap = target - f.pos
 				local dist = gap.Magnitude
-				local speed = PACE * (f.lift - f.root.Size.Y / 2)
-				if dist <= speed * dt then
-					f.pos = target
-					table.remove(f.path, 1)
-					-- A leaver frees their spot once back in the lane, so the next customer
-					-- never walks into them.
-					if f.leaving and f.spot then
-						spots[f.spot] = nil
-						f.spot = nil
+				local turn = if dist > 1e-3 then (math.atan2(-gap.X, -gap.Z) - f.yaw + math.pi) % (2 * math.pi) - math.pi else 0
+				f.yaw += math.clamp(turn, -TURN * dt, TURN * dt)
+				-- A sharp change of direction is turned on the spot first, so nobody walks
+				-- sideways or backwards.
+				if math.abs(turn) <= FACE then
+					moving = dist > 1e-3
+					local speed = PACE * (f.lift - f.root.Size.Y / 2)
+					if dist <= speed * dt then
+						f.pos = target
+						table.remove(f.path, 1)
+						-- A leaver frees their spot once back in the lane, so the next customer
+						-- never walks into them.
+						if f.leaving and f.spot then
+							spots[f.spot] = nil
+							f.spot = nil
+						end
+					else
+						f.pos += gap.Unit * speed * dt
 					end
-				else
-					f.pos += gap.Unit * speed * dt
-				end
-				if dist > 1e-3 then
-					moving = true
-					local want = math.atan2(-gap.X, -gap.Z)
-					local turn = (want - f.yaw + math.pi) % (2 * math.pi) - math.pi
-					f.yaw += math.clamp(turn, -TURN * dt, TURN * dt)
 				end
 			elseif f.leaving then
 				f.model:Destroy()
@@ -243,15 +233,12 @@ function OrderCrowd.new(room: any)
 				local turn = (0 - f.yaw + math.pi) % (2 * math.pi) - math.pi
 				f.yaw += math.clamp(turn, -TURN * dt, TURN * dt)
 			end
-			-- The chosen one steps up a little; anyone else, walkers included, steps back.
-			local want = if f.chosen and not moving and not f.leaving then STEP_IN else 0
-			f.step += math.clamp(want - f.step, -STEP_SPEED * dt, STEP_SPEED * dt)
 			if moving ~= f.walking then
 				f.walking = moving
 				f.walk:AdjustWeight(if moving then 1 else 0.001, 0.2)
 				f.idle:AdjustWeight(if moving then 0.001 else 1, 0.2)
 			end
-			local at = f.pos + Vector3.new(0, f.lift, -f.step)
+			local at = f.pos + Vector3.new(0, f.lift, 0)
 			f.root.CFrame = CFrame.new(at) * CFrame.Angles(0, f.yaw, 0)
 		end
 	end
