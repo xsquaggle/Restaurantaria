@@ -34,6 +34,14 @@ local BLEED = 1.04
 -- Gap between the counter's customer side and the background plane, in studs.
 local BACKDROP_GAP = 14
 
+-- A relayout builds the new room before the old one is torn down, so two rooms can overlap.
+-- The Lighting values saved from before any room took over, and the room that holds them now,
+-- are shared so the old room's teardown neither restores them under the new room nor
+-- removes its camera binding.
+local owner: any = nil
+local saved: { [string]: any } = {}
+local bindings = 0
+
 function OrderRoom.available(): boolean
 	return Model3D.has(COUNTER)
 end
@@ -163,7 +171,8 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 
 	local active = false
 	local fixed: CFrame? = nil
-	local saved: { [string]: any } = {}
+	bindings += 1
+	local binding = "OrderRoomCamera" .. bindings
 
 	function room.setActive(on: boolean)
 		if on == active then
@@ -174,13 +183,16 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 			for _, tile in tiles do
 				Art.apply(tile, tile:GetAttribute("Art") :: string)
 			end
-			saved = {
-				Ambient = Lighting.Ambient,
-				OutdoorAmbient = Lighting.OutdoorAmbient,
-				Brightness = Lighting.Brightness,
-				ExposureCompensation = Lighting.ExposureCompensation,
-				ClockTime = Lighting.ClockTime,
-			}
+			if owner == nil then
+				saved = {
+					Ambient = Lighting.Ambient,
+					OutdoorAmbient = Lighting.OutdoorAmbient,
+					Brightness = Lighting.Brightness,
+					ExposureCompensation = Lighting.ExposureCompensation,
+					ClockTime = Lighting.ClockTime,
+				}
+			end
+			owner = room
 			Lighting.Ambient = Color3.fromRGB(150, 132, 118)
 			Lighting.OutdoorAmbient = Color3.fromRGB(160, 145, 130)
 			-- Brightness 1.2 pushed the wood top past full red into yellow (QA-001); 0.5 keeps
@@ -190,17 +202,20 @@ function OrderRoom.new(ctx: any, container: GuiObject): any
 			Lighting.ClockTime = 10.5
 			camera.CameraType = Enum.CameraType.Scriptable
 			fixed = solve()
-			RunService:BindToRenderStep("OrderRoomCamera", Enum.RenderPriority.Camera.Value + 1, function()
+			RunService:BindToRenderStep(binding, Enum.RenderPriority.Camera.Value + 1, function()
 				camera.CameraType = Enum.CameraType.Scriptable
 				camera.CFrame = fixed :: CFrame
 			end)
 		else
-			RunService:UnbindFromRenderStep("OrderRoomCamera")
+			RunService:UnbindFromRenderStep(binding)
 			for _, tile in tiles do
 				Art.release(tile)
 			end
-			for k, v in saved do
-				(Lighting :: any)[k] = v
+			if owner == room then
+				owner = nil
+				for k, v in saved do
+					(Lighting :: any)[k] = v
+				end
 			end
 		end
 	end
