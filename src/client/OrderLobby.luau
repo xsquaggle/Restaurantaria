@@ -122,7 +122,14 @@ local templates: { [string]: MeshPart } = {}
 local function template(name: string): MeshPart?
 	local t = templates[name]
 	if t == nil then
-		t = Model3D.build(name)
+		-- The Studio dev path needs EditableMesh, which errors when the place does not allow
+		-- the mesh APIs; the room then keeps the painted backdrop instead of failing.
+		local ok, built = pcall(Model3D.build, name)
+		if not ok then
+			warn("[OrderLobby] " .. name .. ": " .. tostring(built))
+			return nil
+		end
+		t = built
 		if t then
 			templates[name] = t
 		end
