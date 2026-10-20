@@ -11,11 +11,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local OrderCrowd = {}
 
+-- Roblox's default R15 idle and walk (the ids its Animate script uses).
 local IDLE = "rbxassetid://507766388"
-local WALK = "rbxassetid://507777826"
+local WALK = "rbxassetid://913402848"
 -- How fast the walk animation's planted foot moves back, in hip heights per second at speed
--- 1 (measured on the three fallbacks: 3.9 to 4.1).
-local STANCE = 4.0
+-- 1 (measured on the three fallbacks: 2.769 to 2.773).
+local STANCE = 2.77
 -- Walking speed in hip heights per second, about 5 studs a second for an average avatar.
 local PACE = 2.4
 -- Turning rate in radians per second.
@@ -137,6 +138,10 @@ function OrderCrowd.new(room: any)
 
 	local function leave(f: Figure)
 		f.leaving = true
+		-- The step towards the counter becomes part of where they stand, so they walk off from
+		-- exactly there.
+		f.pos -= Vector3.new(0, 0, f.step)
+		f.step = 0
 		local x = f.pos.X - origin.X
 		f.path = { floor(x, laneZ), floor(EXIT_X, laneZ) }
 	end
@@ -234,12 +239,13 @@ function OrderCrowd.new(room: any)
 				figures[id] = nil
 				continue
 			else
-				-- At the counter: face the player, and the chosen one steps up a little.
+				-- At the counter: face the player.
 				local turn = (0 - f.yaw + math.pi) % (2 * math.pi) - math.pi
 				f.yaw += math.clamp(turn, -TURN * dt, TURN * dt)
-				local want = if f.chosen then STEP_IN else 0
-				f.step += math.clamp(want - f.step, -STEP_SPEED * dt, STEP_SPEED * dt)
 			end
+			-- The chosen one steps up a little; anyone else, walkers included, steps back.
+			local want = if f.chosen and not moving and not f.leaving then STEP_IN else 0
+			f.step += math.clamp(want - f.step, -STEP_SPEED * dt, STEP_SPEED * dt)
 			if moving ~= f.walking then
 				f.walking = moving
 				f.walk:AdjustWeight(if moving then 1 else 0.001, 0.2)
