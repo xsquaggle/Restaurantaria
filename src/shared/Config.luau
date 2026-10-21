@@ -60,6 +60,13 @@ Config.Rewards = {
 	xpPerRank = 100,
 }
 
+Config.Dev = {
+	-- Development and test only: orders draw on every recipe, as in the mixed proof shift,
+	-- instead of the save's unlocked recipes. Off for real play, where a new save gets cheese
+	-- orders only.
+	mixedOrders = false,
+}
+
 Config.Net = {
 	maxActionsPerSecond = 20,
 }

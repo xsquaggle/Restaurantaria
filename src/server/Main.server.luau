@@ -80,7 +80,7 @@ if RunService:IsStudio() then
 			return "no session"
 		end
 		if command == "state" then
-			local lines = { string.format("lastSeq=%d rejected=%d tips=%d finished=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.finished)) }
+			local lines = { string.format("lastSeq=%d rejected=%d tips=%d finished=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.finished), table.concat(session.shift.menu, ",")) }
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
@@ -94,6 +94,16 @@ if RunService:IsStudio() then
 				table.insert(lines, string.format("profile %s tips=%d xp=%d shifts=%d", profile.status, profile.data.tips, profile.data.xp, profile.data.shiftsCompleted))
 			end
 			return table.concat(lines, "\n")
+		elseif command == "mixedOrders" then
+			-- value = true/false: the development setting for mixed orders (Config.Dev), for this
+			-- server session. Shifts started after it use it; restartShift starts one now.
+			Config.Dev.mixedOrders = value == true
+			return "ok"
+		elseif command == "restartShift" then
+			-- Abandons the current shift (no reward, nothing saved) and starts a new one.
+			session.shift = ShiftService.newShift(player)
+			push(player)
+			return "ok"
 		elseif command == "simulateLoadFailure" then
 			SaveService.simulateLoadFailure = value == true
 			return "ok"

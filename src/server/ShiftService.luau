@@ -40,6 +40,10 @@ type Pizza = {
 }
 type Shift = {
 	id: string,
+	-- Recipes this shift's orders use and the ingredients those need (the topping trays),
+	-- fixed when the shift starts.
+	menu: { string },
+	ingredients: { string },
 	startedAt: number,
 	nextArrival: number,
 	nextId: number,
@@ -71,9 +75,22 @@ local function now(): number
 	return workspace:GetServerTimeNow()
 end
 
-local function newShift(): Shift
+-- The save's unlocked recipes, or every recipe while the development setting for mixed
+-- orders is on.
+local function menuFor(player: Player): { string }
+	if Config.Dev.mixedOrders then
+		return Recipes.all()
+	end
+	local profile = SaveService.profiles[player]
+	return table.clone(if profile then profile.data.unlockedRecipes else Recipes.Starting)
+end
+
+function ShiftService.newShift(player: Player): Shift
+	local menu = menuFor(player)
 	return {
 		id = HttpService:GenerateGUID(false),
+		menu = menu,
+		ingredients = Recipes.ingredientsFor(menu),
 		startedAt = now(),
 		nextArrival = 1,
 		nextId = 1,
@@ -92,7 +109,7 @@ function ShiftService.start(player: Player): Session
 		lastSeq = 0,
 		tokens = Config.Net.maxActionsPerSecond,
 		tokenTime = os.clock(),
-		shift = newShift(),
+		shift = ShiftService.newShift(player),
 		rejected = 0,
 		version = 0,
 	}
@@ -164,7 +181,7 @@ function ShiftService.tick(session: Session): boolean
 		if not look then
 			break
 		end
-		local orderDef = Recipes.ShiftOrders[((i - 1) % #Recipes.ShiftOrders) + 1]
+		local order = Recipes.menuOrder(shift.menu, i)
 		table.insert(shift.customers, {
 			id = shift.nextId,
 			cast = look.pool,
@@ -172,7 +189,7 @@ function ShiftService.tick(session: Session): boolean
 			name = look.name,
 			username = look.username,
 			label = look.name,
-			order = { recipe = orderDef.recipe, bake = orderDef.bake, slices = orderDef.slices },
+			order = order,
 			arrivedAt = math.max(shift.startedAt + Config.Shift.arrivals[i], t - 1),
 			status = "waiting",
 		})
@@ -240,6 +257,9 @@ function Actions.placeTopping(shift: Shift, args: any): (boolean, string?)
 	end
 	if type(args.ingredient) ~= "string" or not Recipes.Ingredients[args.ingredient] then
 		return false, "unknown ingredient"
+	end
+	if not table.find(shift.ingredients, args.ingredient) then
+		return false, "ingredient not unlocked"
 	end
 	if not isFiniteNumber(args.x, -1, 1) or not isFiniteNumber(args.y, -1, 1) then
 		return false, "position out of range"
@@ -382,7 +402,7 @@ function Actions.newShift(shift: Shift, _args: any, session: Session): (boolean,
 	if not shift.finished then
 		return false, "shift still running"
 	end
-	session.shift = newShift()
+	session.shift = ShiftService.newShift(session.player)
 	return true, nil
 end
 
@@ -462,6 +482,8 @@ function ShiftService.snapshot(player: Player): any
 	return {
 		version = session.version,
 		shiftId = shift.id,
+		menu = shift.menu,
+		ingredients = shift.ingredients,
 		startedAt = shift.startedAt,
 		customers = shift.customers,
 		pizzas = pizzas,

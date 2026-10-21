@@ -137,6 +137,12 @@ function Topping.new(ctx: any, container: Frame)
 		Art.apply(button, info.tray or "tray_" .. info.art)
 		trays[id] = { button = button, scale = Ui.new("UIScale", { Scale = 1, Parent = button }), home = home }
 	end
+	-- Trays shown: only the ingredients this shift's recipes use (none on a cheese-only start).
+	-- The others keep their place in the row, hidden, until a recipe that needs them unlocks.
+	local stocked: { [string]: boolean } = {}
+	for _, id in Recipes.IngredientOrder do
+		stocked[id] = true
+	end
 
 	local current: any = nil
 
@@ -230,7 +236,7 @@ function Topping.new(ctx: any, container: Frame)
 	send.frame.Parent = ctx.actionHost("Topping")
 
 	local function place(x: number, y: number)
-		if not current or ctx.pending[current.id] then
+		if not current or ctx.pending[current.id] or not stocked[chosen] then
 			return
 		end
 		if x * x + y * y > Config.Topping.placeRadius ^ 2 then
@@ -298,7 +304,7 @@ function Topping.new(ctx: any, container: Frame)
 			if dragging.held then
 				dragging.held.Position = overlayPoint(input.Position)
 			end
-		elseif isMouse and not dragging and current and not ctx.pending[current.id] then
+		elseif isMouse and not dragging and current and not ctx.pending[current.id] and stocked[chosen] then
 			-- Mouse only: a faint preview of the next piece under the pointer.
 			local x, y = ctx.toLocal(view.frame, input.Position)
 			if x * x + y * y <= Config.Topping.placeRadius ^ 2 then
@@ -353,6 +359,21 @@ function Topping.new(ctx: any, container: Frame)
 	local station = { frame = frame }
 
 	function station.refresh(snap: any)
+		local list = snap.ingredients or Recipes.IngredientOrder
+		local restock = false
+		for id, t in trays do
+			local on = table.find(list, id) ~= nil
+			if stocked[id] ~= on then
+				stocked[id] = on
+				t.button.Visible = on
+				restock = true
+			end
+		end
+		if restock and not stocked[chosen] and list[1] then
+			chosen = list[1]
+			showChosen()
+		end
+		pick.Visible = stocked[chosen] == true
 		current = ctx.focusPizza(snap, "topping")
 		local id = if current then current.id else nil
 		local leavingNow = sending ~= nil and sending == id

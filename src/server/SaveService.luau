@@ -6,13 +6,15 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 
-local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Shared = game:GetService("ReplicatedStorage").Shared
+local Config = require(Shared.Config)
+local Recipes = require(Shared.Recipes)
 
 local STORE_NAME = "Restaurantaria_Progress_v1"
 local RECENT_SHIFT_LIMIT = 30
 local RETRIES = 3
 
-export type Data = { tips: number, xp: number, shiftsCompleted: number, recentShiftIds: { string } }
+export type Data = { tips: number, xp: number, shiftsCompleted: number, recentShiftIds: { string }, unlockedRecipes: { string } }
 export type Profile = { status: string, data: Data, message: string? }
 
 local SaveService = {}
@@ -35,7 +37,7 @@ do
 end
 
 local function defaultData(): Data
-	return { tips = 0, xp = 0, shiftsCompleted = 0, recentShiftIds = {} }
+	return { tips = 0, xp = 0, shiftsCompleted = 0, recentShiftIds = {}, unlockedRecipes = table.clone(Recipes.Starting) }
 end
 
 local function sanitize(raw: any): Data
@@ -49,6 +51,14 @@ local function sanitize(raw: any): Data
 				if type(id) == "string" then
 					table.insert(data.recentShiftIds, id)
 				end
+			end
+		end
+		-- Saves from before unlocks existed, or with nothing known left, start from the
+		-- starting recipes.
+		if type(raw.unlockedRecipes) == "table" then
+			local known = Recipes.known(raw.unlockedRecipes)
+			if #known > 0 then
+				data.unlockedRecipes = known
 			end
 		end
 	end

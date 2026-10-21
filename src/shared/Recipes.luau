@@ -66,7 +66,9 @@ for _, recipe in Recipes.List do
 	Recipes.ById[recipe.id] = recipe
 end
 
--- The scripted order list for this scene: recipe, doneness, slice count.
+-- The scripted order list for this scene: recipe, doneness, slice count. An order keeps its
+-- doneness and slices on every save; its recipe is used only while it is unlocked
+-- (Recipes.menuOrder).
 Recipes.ShiftOrders = {
 	{ recipe = "pepperoni", bake = "regular", slices = 8 },
 	{ recipe = "garden", bake = "light", slices = 6 },
@@ -75,6 +77,61 @@ Recipes.ShiftOrders = {
 	{ recipe = "pepbasil", bake = "regular", slices = 6 },
 	{ recipe = "pepperoni", bake = "well", slices = 4 },
 }
+
+-- Recipes a new save starts with (Lawson, 2026-10-21: new players begin with cheese pizza).
+-- Each save keeps its own unlocked list (SaveService); the progression system adds to it.
+-- Orders and the topping trays follow that list, so nothing is asked for before it is
+-- unlocked.
+Recipes.Starting = { "cheese" }
+
+-- Known recipe ids from a list, in Recipes.List order and without repeats.
+function Recipes.known(ids: { any }): { string }
+	local out = {}
+	for _, recipe in Recipes.List do
+		if table.find(ids, recipe.id) then
+			table.insert(out, recipe.id)
+		end
+	end
+	return out
+end
+
+-- Every recipe id, for the development setting that mixes all recipes into the orders.
+function Recipes.all(): { string }
+	local out = {}
+	for _, recipe in Recipes.List do
+		table.insert(out, recipe.id)
+	end
+	return out
+end
+
+-- The ingredients a set of recipes uses, in tray order.
+function Recipes.ingredientsFor(recipeIds: { string }): { string }
+	local used = {}
+	for _, id in recipeIds do
+		local recipe = Recipes.ById[id]
+		if recipe then
+			for _, req in recipe.toppings do
+				used[req.ingredient] = true
+			end
+		end
+	end
+	local out = {}
+	for _, ingredient in Recipes.IngredientOrder do
+		if used[ingredient] then
+			table.insert(out, ingredient)
+		end
+	end
+	return out
+end
+
+-- The i-th order of a shift whose menu is `menu` (recipe ids). The order keeps its doneness
+-- and slices from ShiftOrders, and its recipe while that is on the menu; otherwise the menu's
+-- recipes take turns.
+function Recipes.menuOrder(menu: { string }, i: number): { recipe: string, bake: string, slices: number }
+	local def = Recipes.ShiftOrders[((i - 1) % #Recipes.ShiftOrders) + 1]
+	local recipe = if table.find(menu, def.recipe) then def.recipe else menu[((i - 1) % #menu) + 1]
+	return { recipe = recipe, bake = def.bake, slices = def.slices }
+end
 
 Recipes.Cast = {
 	{ name = "Marta", colour = Color3.fromRGB(214, 120, 96) },
