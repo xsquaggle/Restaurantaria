@@ -1086,7 +1086,8 @@ function ctx.showResult(ticketId: number)
 	})
 	Art.apply(toast, "ui_card_result")
 	Ui.text({
-		Text = string.format("%s · %d%% · +%d tips", customer.label, r.overall, r.tip),
+		-- The order's reward in coins, like the summary (r.tip is the whole reward, not a tip part).
+		Text = string.format("%s · %d%% · +%d coin%s", customer.label, r.overall, r.tip, if r.tip == 1 then "" else "s"),
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 24,
 		Position = UDim2.fromOffset(12, 8),
