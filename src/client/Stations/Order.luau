@@ -118,6 +118,7 @@ function Order.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
+	takeButton:setIcon("icon_take_order_white")
 	takeButton.frame.Size = UDim2.fromScale(1, 1)
 	takeButton.frame.Parent = ctx.actionHost("Order")
 
@@ -358,9 +359,14 @@ function Order.new(ctx: any, container: Frame)
 			end
 		end
 		local full = active >= Config.Shift.maxActiveTickets
+		-- Nobody at the counter while more customers are due is an automatic wait (standby);
+		-- a full rail is the player's to fix, so the button stays disabled.
+		local arriving = #waiting == 0 and not full and #snap.customers < Config.Shift.customerCount
 		takeButton:setEnabled(selected ~= nil and not full)
+		takeButton:setStandby(arriving)
 		-- The action keeps its name; why it is unavailable goes on the hint strip.
-		statusText = if #waiting == 0 then "No one waiting. Check your pizzas."
+		statusText = if arriving then "Next customer on the way. Check your pizzas."
+			elseif #waiting == 0 then "No one waiting. Check your pizzas."
 			elseif full then "Rail full: serve a pizza to free a ticket"
 			else nil
 	end

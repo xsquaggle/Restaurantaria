@@ -23,7 +23,7 @@ local C = Theme.Colour
 local Topping = {}
 
 -- Full-screen art behind the station (Assets.Meta.backgrounds).
-Topping.background = "counter_topping"
+Topping.background = "bg_topping_clean_v2"
 
 local PRESS = TweenInfo.new(Theme.Motion.press, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local RELEASE = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)

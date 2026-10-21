@@ -4,7 +4,9 @@
 -- Sources: art/manifest.json (generated art and Astra's UI proofs).
 
 local Assets = {
-	-- Topping station: gameplay and environment art (Claude, Higgsfield).
+	-- Topping station: gameplay and environment art (Claude, Higgsfield). The counter_topping
+	-- tiles are the earlier preparation background, kept for comparison; bg_topping_clean_v2
+	-- (below) replaced them (QA-005).
 	counter_topping_1 = "rbxassetid://105850371985802",
 	counter_topping_2 = "rbxassetid://130737619585739",
 	counter_topping_3 = "rbxassetid://110291528763744",
@@ -108,8 +110,9 @@ local Assets = {
 	icon_nav_cut_selected = "rbxassetid://123059077852515",
 	icon_nav_order_idle = "rbxassetid://87613164021732",
 	icon_nav_order_selected = "rbxassetid://104587797480629",
-	icon_nav_topping_idle = "rbxassetid://128604933070868",
-	icon_nav_topping_selected = "rbxassetid://123206400850691",
+	-- Dough subject (Astra response 6) in place of the tomato.
+	icon_nav_topping_idle = "rbxassetid://87487309691466",
+	icon_nav_topping_selected = "rbxassetid://112384285693498",
 	icon_oven_white = "rbxassetid://81918378805088",
 	icon_slices_4 = "rbxassetid://90427064086595",
 	icon_slices_6 = "rbxassetid://137097938639592",
@@ -169,6 +172,19 @@ local Assets = {
 	ui_patience_neutral = "rbxassetid://122474786748509",
 	ui_patience_impatient = "rbxassetid://84095838030339",
 	ui_patience_grumpy = "rbxassetid://131536348161735",
+	-- Interface extension (Astra, response 6, 2026-10-20): Overdone state, standby button, hint
+	-- chip, dialogue bubble and tail, pressed glove and arrow, action icons, clean Topping surface.
+	ui_oven_badge_overdone = "rbxassetid://85347697967002",
+	ui_ring_fill_overdone = "rbxassetid://102194194928020",
+	ui_button_primary_standby = "rbxassetid://123279775014466",
+	ui_hint_chip = "rbxassetid://118093426619889",
+	ui_speech_bubble = "rbxassetid://102241835390356",
+	ui_speech_tail = "rbxassetid://109572663907288",
+	ui_tutorial_hand_pressed = "rbxassetid://125934640701576",
+	ui_tutorial_arrow = "rbxassetid://97501261652583",
+	icon_take_order_white = "rbxassetid://111662746013650",
+	icon_serve_white = "rbxassetid://76831607027353",
+	bg_topping_clean_v2 = "rbxassetid://72607256484344",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",
@@ -212,8 +228,18 @@ Assets.Meta = {
 	-- Oven badge (128 canvas, body 6-122) and ring fills (256 canvas, body 8-248).
 	ovenBadge = { body = 116 / 128 },
 	ringFill = { body = 240 / 256 },
-	-- Tutorial glove: fingertip in its 256 px canvas.
+	-- Tutorial glove: fingertip in its 256 px canvas (the pressed glove shares it), and the
+	-- arrow's tip in its own 256 px canvas (it points up).
 	tutorialHand = { tip = Vector2.new(0.44336, 0.05078) },
+	tutorialArrow = { tip = Vector2.new(0.49609, 0.0625) },
+	-- Summary panel (840x600): the manifest's corrected slice, scaled by the smaller axis.
+	panelSummary = { slice = Rect.new(80, 80, 760, 520), width = 840, height = 600 },
+	-- Hint chip (512x128, body 8-504 x 8-120) and the dialogue bubble (512x256, body 8-504 x
+	-- 8-248), both scaled by min(width / source width, height / source height). The tail
+	-- (128x64) is its own image: it scales with the bubble and overlaps its bottom by 26 px.
+	hintChip = { slice = Rect.new(64, 60, 448, 68), width = 512, height = 128 },
+	speechBubble = { slice = Rect.new(80, 80, 432, 176), width = 512, height = 256 },
+	speechTail = { width = 128, height = 64, overlap = 26 },
 	-- V1 button (secondary actions until V2 secondary art arrives): 640x207 export.
 	primarySlice = Rect.new(73, 61, 566, 149),
 	primaryAspect = 640 / 207,
@@ -231,6 +257,8 @@ Assets.Meta = {
 	-- Full-screen backgrounds: virtual size and how they are tiled (each tile <= 1024 px).
 	backgrounds = {
 		counter_topping = { width = 1920, height = 1080, cols = 2, rows = 2 },
+		-- One image, centred: the surface is plain, so either axis may crop (QA-005).
+		bg_topping_clean_v2 = { width = 1024, height = 576, cols = 1, rows = 1, align = Vector2.new(0.5, 0.5) },
 		bg_order = { width = 1920, height = 1080, cols = 2, rows = 2 },
 		bg_bake = { width = 1920, height = 1080, cols = 2, rows = 2 },
 		bg_cut = { width = 1920, height = 1080, cols = 2, rows = 2 },

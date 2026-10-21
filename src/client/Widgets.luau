@@ -22,6 +22,9 @@ local Widgets = {}
 -- Action button: one fixed hitbox and label anchor across idle/pressed/disabled/highlighted.
 -- Primary actions use Astra's coral V2 button and secondary actions her cream one; each
 -- family's states share one body outline, so only the image changes between states.
+-- Primary buttons also have a mint standby state for an automatic wait (the action becomes
+-- possible by itself, as when the next customer is on the way): it keeps its label in dark
+-- text and never responds to a press. An action the player can make possible stays disabled.
 
 export type Button = {
 	frame: Frame,
@@ -31,8 +34,10 @@ export type Button = {
 	setHighlighted: (Button, boolean) -> (),
 	setLabel: (Button, string) -> (),
 	setIcon: (Button, string?) -> (),
+	setStandby: (Button, boolean) -> (),
 	enabled: boolean,
 	highlighted: boolean,
+	standby: boolean,
 }
 
 local BUTTON_STATES = { "idle", "pressed", "disabled", "highlighted" }
@@ -53,6 +58,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 				table.insert(names, "ui_button_secondary_" .. state)
 			end
 		end
+		table.insert(names, "ui_button_primary_standby")
 		Art.preload(names)
 	end
 	local frame = Ui.new("Frame", { Name = (text:gsub("%W", "")) .. "Button", BackgroundTransparency = 1, Size = UDim2.fromOffset(220, 70) })
@@ -108,12 +114,16 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 	local self: Button
 	local pressed = false
 	local function render()
-		local state = if not self.enabled then "disabled" elseif pressed then "pressed" elseif self.highlighted then "highlighted" else "idle"
+		local state = if self.standby and primary then "standby"
+			elseif not self.enabled then "disabled"
+			elseif pressed then "pressed"
+			elseif self.highlighted then "highlighted"
+			else "idle"
 		-- The cream family has no highlighted state; it stays idle.
 		Art.apply(art, artPrefix .. (if not primary and state == "highlighted" then "idle" else state))
 		if primary then
-			label.TextColor3 = if state == "disabled" then C.labelDisabled else C.label
-			stroke.Enabled = state ~= "disabled"
+			label.TextColor3 = if state == "disabled" then C.labelDisabled elseif state == "standby" then C.labelStandby else C.label
+			stroke.Enabled = state ~= "disabled" and state ~= "standby"
 		else
 			label.TextColor3 = if state == "disabled" then C.mutedInk else C.ink
 		end
@@ -164,6 +174,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		label = label,
 		enabled = true,
 		highlighted = false,
+		standby = false,
 		setEnabled = function(b: Button, on: boolean)
 			b.enabled = on
 			render()
@@ -182,9 +193,16 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 			end
 			layout()
 		end,
+		-- Standby also disables the action, so a press does nothing until it ends.
+		setStandby = function(b: Button, on: boolean)
+			if b.standby ~= on then
+				b.standby = on
+				render()
+			end
+		end,
 	}
 	hit.MouseButton1Down:Connect(function()
-		if self.enabled then
+		if self.enabled and not self.standby then
 			pressed = true
 			render()
 			TweenService:Create(press, PRESS_IN, { Scale = 0.96 }):Play()
@@ -203,7 +221,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 	local lastFired = -math.huge
 	hit.Activated:Connect(function()
 		release()
-		if self.enabled and os.clock() - lastFired >= Theme.Motion.repeatGuard then
+		if self.enabled and not self.standby and os.clock() - lastFired >= Theme.Motion.repeatGuard then
 			lastFired = os.clock()
 			onActivated()
 		end
@@ -232,7 +250,9 @@ local HALF = NumberSequence.new({
 	NumberSequenceKeypoint.new(0.5001, 1),
 	NumberSequenceKeypoint.new(1, 1),
 })
-local OVEN_STATES = { "idle", "cooking", "ready", "burnt" }
+-- Overdone (past the ticket's bake, before Burnt) has its own warning-orange badge and ring,
+-- the same shapes as Ready's; the live word always names the state.
+local OVEN_STATES = { "idle", "cooking", "ready", "overdone", "burnt" }
 
 function Widgets.ovenStatus(width: number, height: number, compact: boolean): OvenStatus
 	local names = {}
@@ -1063,83 +1083,247 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	Art.apply(groove, "fx_cut_groove_c")
 end
 
--- Reserved hint strip between the work surface and the tab bar: one line of live text and,
--- optionally, a row of key icons with live labels. It never takes input and never sits over
--- food, trays, ovens, tickets or controls, because the layout gives it its own band.
--- Backing is Astra's cream result card until the A21 hint chip exists.
+-- Reserved hint strip between the work surface and the tab bar: live text and, optionally, a
+-- row of key icons with live labels, on Astra's hint chip (A21). It never takes input and
+-- never sits over food, trays, ovens, tickets or controls, because the layout gives it its
+-- own band. Text too long for the band wraps to a second line before it would shrink; the
+-- chip then grows upward from the band's foot.
 export type HintStrip = { frame: Frame, set: (HintStrip, string?, { { icon: string, text: string } }?) -> () }
 
+-- Text bounds by font, size, wrap width and text; hint lines repeat, so each is measured once.
+local textBounds: { [string]: Vector2 } = {}
+local function measure(text: string, font: Font, size: number, width: number): Vector2
+	local key = string.format("%s|%s|%d|%d|%s", font.Family, font.Weight.Name, size, width, text)
+	local b = textBounds[key]
+	if b == nil then
+		local params = Instance.new("GetTextBoundsParams")
+		params.Text = text
+		params.Font = font
+		params.Size = size
+		params.Width = width
+		local ok, bounds = pcall(TextService.GetTextBoundsAsync, TextService, params)
+		if not ok then
+			return Vector2.zero
+		end
+		b = bounds
+		textBounds[key] = bounds
+	end
+	return b :: Vector2
+end
+
 function Widgets.hintStrip(width: number, height: number, compact: boolean): HintStrip
-	Art.preload({ "ui_card_result" })
+	local meta = Assets.Meta.hintChip
+	Art.preload({ "ui_hint_chip" })
 	local frame = Ui.new("Frame", { Name = "Hints", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, height) })
-	local card = Ui.new("ImageLabel", {
-		Name = "Card",
+	-- Side padding is the manifest's (16 / 24 px). Its 12 / 18 px top and bottom do not fit
+	-- the reserved band (34 px on phones), so a single line is centred in the band instead.
+	local padX = if compact then 16 else 24
+	local textSize = if compact then 16 else 18
+	local keyTextSize = 16
+	local iconSize = if compact then 24 else 32
+	local gap = if compact then 6 else 10
+	local keyGap = 3
+	local oneLineH = height - 4
+	local chip = Ui.new("ImageLabel", {
+		Name = "Chip",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Assets.Meta.card.slice,
-		SliceScale = math.min(0.5, (height - 4) / (2 * Assets.Meta.card.corner)),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, height - 4),
+		SliceCenter = meta.slice,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -2),
+		Size = UDim2.fromOffset(0, oneLineH),
 		Visible = false,
 		Parent = frame,
 	}, {
-		Ui.new("UIPadding", { PaddingLeft = UDim.new(0, if compact then 12 else 20), PaddingRight = UDim.new(0, if compact then 12 else 20) }),
-		Ui.new("UISizeConstraint", { MaxSize = Vector2.new(width - 8, math.huge) }),
 		Ui.new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, if compact then 6 else 10),
+			Padding = UDim.new(0, gap),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	Art.apply(card, "ui_card_result")
-	local textSize = if compact then 16 else 18
+	Art.apply(chip, "ui_hint_chip")
 	local label = Ui.text({
 		FontFace = Theme.Font.display,
 		TextSize = textSize,
-		TextWrapped = false,
+		TextWrapped = true,
 		TextColor3 = C.ink,
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, height - 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Size = UDim2.fromOffset(0, oneLineH),
 		LayoutOrder = 0,
-		Parent = card,
+		Parent = chip,
 	})
-	local iconSize = if compact then 24 else 32
 	local keys: { Frame } = {}
+	local shown = ""
+	local function showKeys(entries: { { icon: string, text: string } })
+		for i, e in entries do
+			local key = keys[i]
+			if not key then
+				key = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = i, Parent = chip }, {
+					Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, keyGap), SortOrder = Enum.SortOrder.LayoutOrder }),
+					Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1 }),
+					Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = keyTextSize, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
+				})
+				keys[i] = key
+			end
+			key.Visible = true
+			if key:GetAttribute("Icon") ~= e.icon then
+				key:SetAttribute("Icon", e.icon)
+				Art.apply(key:FindFirstChild("Icon") :: ImageLabel, e.icon)
+			end
+			(key:FindFirstChild("Text") :: TextLabel).Text = e.text
+		end
+		for i = #entries + 1, #keys do
+			keys[i].Visible = false
+		end
+	end
+	-- Measures the line and keys (measuring can yield), then shows them on a chip sized to fit.
+	local function fit(signature: string, text: string, entries: { { icon: string, text: string } })
+		local items = #entries + (if text ~= "" then 1 else 0)
+		local contentW = math.max(items - 1, 0) * gap
+		for _, e in entries do
+			contentW += iconSize + keyGap + math.ceil(measure(e.text, Theme.Font.bodyBold, keyTextSize, 100000).X)
+		end
+		local textW, textH, lineH = 0, 0, 0
+		if text ~= "" then
+			local one = measure(text, Theme.Font.display, textSize, 100000)
+			lineH = math.ceil(one.Y)
+			local room = math.floor(width - 8 - padX * 2 - contentW)
+			if one.X <= room then
+				textW, textH = math.ceil(one.X), lineH
+			else
+				textW, textH = room, math.ceil(measure(text, Theme.Font.display, textSize, room).Y)
+			end
+		end
+		if signature ~= shown then
+			return
+		end
+		label.Text = text
+		label.Visible = text ~= ""
+		label.Size = UDim2.fromOffset(textW, textH)
+		showKeys(entries)
+		local w = contentW + textW + padX * 2
+		local h = math.max(oneLineH, textH + (oneLineH - lineH))
+		chip.Size = UDim2.fromOffset(w, h)
+		chip.SliceScale = math.max(math.min(w / meta.width, h / meta.height), 0.01)
+		chip.Visible = true
+	end
 	local strip: HintStrip
 	strip = {
 		frame = frame,
 		set = function(_s: HintStrip, text: string?, legend: { { icon: string, text: string } }?)
 			local entries = legend or {}
-			card.Visible = (text ~= nil and text ~= "") or #entries > 0
-			label.Text = text or ""
-			label.Visible = label.Text ~= ""
-			for i, e in entries do
-				local key = keys[i]
-				if not key then
-					key = Ui.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = i, Parent = card }, {
-						Ui.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }),
-						Ui.new("ImageLabel", { Name = "Icon", BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1 }),
-						Ui.text({ Name = "Text", FontFace = Theme.Font.bodyBold, TextSize = 16, TextColor3 = C.ink, TextWrapped = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, iconSize), LayoutOrder = 2 }),
-					})
-					keys[i] = key
-				end
-				key.Visible = true
-				if key:GetAttribute("Icon") ~= e.icon then
-					key:SetAttribute("Icon", e.icon)
-					Art.apply(key:FindFirstChild("Icon") :: ImageLabel, e.icon)
-				end
-				(key:FindFirstChild("Text") :: TextLabel).Text = e.text
+			local line = text or ""
+			local parts = { line }
+			for _, e in entries do
+				table.insert(parts, e.icon .. "=" .. e.text)
 			end
-			for i = #entries + 1, #keys do
-				keys[i].Visible = false
+			local signature = table.concat(parts, "|")
+			if signature == shown then
+				return
+			end
+			shown = signature
+			if line == "" and #entries == 0 then
+				chip.Visible = false
+			else
+				task.spawn(fit, signature, line, entries)
 			end
 		end,
 	}
 	return strip
+end
+
+------------------------------------------------------------------------------------------
+-- Dialogue bubble (A23): Astra's bubble body, nine-sliced, with her tail as a separate image
+-- in front of it, so stretching the body never stretches the tail. The tail scales with the
+-- body, overlaps its lower border by 26 source px (its open cream top covers the border),
+-- points down and stays on the straight part of the bottom edge. Nothing here clips, and the
+-- container has no fill. Live text wraps at the width given and the body grows to fit it.
+
+export type SpeechBubble = {
+	frame: Frame,
+	set: (SpeechBubble, string, number?) -> (),
+	tip: (SpeechBubble) -> Vector2,
+}
+
+function Widgets.speechBubble(maxWidth: number, compact: boolean): SpeechBubble
+	local bm, tm = Assets.Meta.speechBubble, Assets.Meta.speechTail
+	Art.preload({ "ui_speech_bubble", "ui_speech_tail" })
+	-- Manifest's recommended content padding (phone 16 / 12, desktop 24 / 18).
+	local padX, padY = if compact then 16 else 24, if compact then 12 else 18
+	local textSize = 16
+	local frame = Ui.new("Frame", { Name = "Speech", BackgroundTransparency = 1, Size = UDim2.fromOffset(maxWidth, 0) })
+	local body = Ui.new("ImageLabel", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = bm.slice,
+		ZIndex = 1,
+		Parent = frame,
+	})
+	Art.apply(body, "ui_speech_bubble")
+	local tail = Ui.new("ImageLabel", {
+		Name = "Tail",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AnchorPoint = Vector2.new(0.5, 0),
+		ZIndex = 2,
+		Parent = frame,
+	})
+	Art.apply(tail, "ui_speech_tail")
+	local label = Ui.text({
+		FontFace = Theme.Font.bodySemi,
+		TextSize = textSize,
+		TextWrapped = true,
+		TextColor3 = C.ink,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(padX, padY),
+		ZIndex = 3,
+		Parent = body,
+	})
+	local tipAt = Vector2.zero
+	local shown = ""
+	local bubble: SpeechBubble
+	-- along: the tail's place on the bottom edge, 0 (left) to 1 (right); default the middle.
+	local function fit(text: string, along: number)
+		local key = text .. "|" .. along
+		local bounds = measure(text, Theme.Font.bodySemi, textSize, maxWidth - padX * 2)
+		if key ~= shown then
+			return
+		end
+		label.Text = text
+		local tw, th = math.ceil(bounds.X), math.ceil(bounds.Y)
+		local w, h = tw + padX * 2, th + padY * 2
+		local sc = math.min(w / bm.width, h / bm.height)
+		body.Size = UDim2.fromOffset(w, h)
+		body.SliceScale = sc
+		label.Size = UDim2.fromOffset(tw, th)
+		-- The straight run of the bottom edge lies inside the slice's side margins; the tail's
+		-- drawn width (8-120 of its 128 px) stays within it.
+		local half = (tm.width / 2 - 8) * sc
+		local lo, hi = bm.slice.Min.X * sc + half, w - (bm.width - bm.slice.Max.X) * sc - half
+		local x = if hi > lo then lo + (hi - lo) * math.clamp(along, 0, 1) else w / 2
+		local top = h - tm.overlap * sc
+		tail.Size = UDim2.fromOffset(tm.width * sc, tm.height * sc)
+		tail.Position = UDim2.fromOffset(x, top)
+		-- The tail's point is the bottom of its drawn body (row 48 of 64).
+		tipAt = Vector2.new(x, top + 48 * sc)
+		frame.Size = UDim2.fromOffset(w, math.ceil(top + tm.height * sc))
+	end
+	bubble = {
+		frame = frame,
+		set = function(_b: SpeechBubble, text: string, along: number?)
+			local a = along or 0.5
+			shown = text .. "|" .. a
+			task.spawn(fit, text, a)
+		end,
+		-- Where the tail points, from the frame's top left, for placing it over a speaker.
+		tip = function(_b: SpeechBubble): Vector2
+			return tipAt
+		end,
+	}
+	return bubble
 end
 
 function Widgets.tweenIn(frame: GuiObject, offsetX: number)

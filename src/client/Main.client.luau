@@ -194,7 +194,8 @@ function ctx.ovenStatus(bakeId: string, seconds: number): any
 	elseif state == "perfect" then
 		return { progress = progress, state = "ready", word = "Ready", text = "Ready", ready = true, alert = true }
 	elseif state == "over" then
-		return { progress = 1, state = "ready", word = "Overdone", text = "Overdone", ready = true, alert = true, over = true }
+		-- Astra's warning-orange ring and badge; the word carries the meaning.
+		return { progress = 1, state = "overdone", word = "Overdone", text = "Overdone", ready = true, alert = true, over = true }
 	end
 	-- Red is kept for burnt (and errors) only.
 	return { progress = 1, state = "burnt", word = "Burnt", text = "Burnt", ready = true, alert = true, burnt = true }
@@ -256,9 +257,10 @@ local function badge(parent: GuiObject, size: number): ImageLabel
 	return b
 end
 
--- Full-screen background art cut into tiles (Assets.Meta.backgrounds), scaled to cover the
--- screen. Wide screens lose a little top and bottom; narrow ones lose the right edge, so
--- the props on the left stay in view.
+-- Full-screen background art cut into tiles (Assets.Meta.backgrounds), scaled uniformly to
+-- cover the screen. Wide screens lose a little top and bottom; narrow ones lose the right
+-- edge, so the props on the left stay in view, unless the background sets its own alignment.
+-- A background in one piece is applied under its own name.
 local function background(name: string): Frame
 	local meta = Assets.Meta.backgrounds[name]
 	-- The backdrop covers the whole viewport. Its own AbsoluteSize is stale after a resize
@@ -266,11 +268,12 @@ local function background(name: string): Frame
 	-- edges over the brown fill (QA-004), so the size comes from the camera.
 	local screen = workspace.CurrentCamera.ViewportSize
 	local k = math.max(screen.X / meta.width, screen.Y / meta.height)
+	local align = meta.align or Vector2.new(0, 0.5)
 	local holder = Ui.new("Frame", {
 		Name = name,
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0, 0.5),
+		AnchorPoint = align,
+		Position = UDim2.fromScale(align.X, align.Y),
 		Size = UDim2.fromOffset(math.ceil(meta.width * k), math.ceil(meta.height * k)),
 		Visible = false,
 		Parent = backdrop,
@@ -286,7 +289,7 @@ local function background(name: string): Frame
 			})
 			-- Tiles get their art only while the station shows (see switchTo): four
 			-- full-screen backgrounds at once overrun Studio's dev-art memory budget.
-			tile:SetAttribute("Art", string.format("%s_%d", name, r * meta.cols + c + 1))
+			tile:SetAttribute("Art", if meta.cols * meta.rows == 1 then name else string.format("%s_%d", name, r * meta.cols + c + 1))
 		end
 	end
 	return holder
@@ -894,6 +897,8 @@ local function refreshRail(snap: any)
 		if ctx.station == "Order" then
 			if waiting > 0 then
 				ui.railNote:set("Take an order", "Tap the button below.")
+			elseif #snap.customers < Config.Shift.customerCount then
+				ui.railNote:set("No one waiting", "Next customer on the way")
 			else
 				ui.railNote:set("No one waiting", "Check your pizzas")
 			end
@@ -984,10 +989,10 @@ local function refreshSummary(snap: any)
 		Name = "Card",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		-- Astra's metadata candidate (QA review, diagnostics/summary-slice-override-candidate):
-		-- 80 px margins so the slices clear the drawn corners, scaled by the smaller axis.
-		SliceCenter = Rect.new(80, 80, 760, 520),
-		SliceScale = math.min(cardW / 840, cardH / 600),
+		-- 80 px margins so the slices clear the drawn corners, scaled by the smaller axis (the
+		-- manifest's correction, Assets.Meta.panelSummary).
+		SliceCenter = Assets.Meta.panelSummary.slice,
+		SliceScale = math.min(cardW / Assets.Meta.panelSummary.width, cardH / Assets.Meta.panelSummary.height),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(cardW, cardH),

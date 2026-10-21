@@ -57,23 +57,25 @@ function Cut.new(ctx: any, container: Frame)
 	local preview = Ui.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4, Parent = view.frame })
 	local current: any = nil
 
-	-- Live cut count on Astra's cream result card (stand-in backing until the A21 hint chip
-	-- arrives), so it reads over the busy backdrop. Same width as Undo, clear of the pizza.
+	-- Live cut count on Astra's hint chip (A21), so it reads over the busy backdrop. Same width
+	-- as Undo, clear of the pizza.
 	local guideSize = if ctx.compact then 18 else 22
 	local guidePad = if ctx.compact then 8 else 12
+	local guideH = guideSize * 2 + guidePad * 2 + 4
+	local chip = Assets.Meta.hintChip
 	local guideCard = Ui.new("ImageLabel", {
 		Name = "Guide",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Assets.Meta.card.slice,
-		SliceScale = math.min(0.4, (guideSize * 2 + guidePad * 2 + 4) / (2 * Assets.Meta.card.corner)),
+		SliceCenter = chip.slice,
+		SliceScale = math.min(undoW / chip.width, guideH / chip.height),
 		Position = UDim2.fromOffset(pad, pad),
-		Size = UDim2.fromOffset(undoW, guideSize * 2 + guidePad * 2 + 4),
+		Size = UDim2.fromOffset(undoW, guideH),
 		Visible = false,
 		ZIndex = 6,
 		Parent = frame,
 	})
-	Art.apply(guideCard, "ui_card_result")
+	Art.apply(guideCard, "ui_hint_chip")
 	local guide = Ui.text({
 		Text = "",
 		FontFace = Theme.Font.display,
@@ -114,6 +116,7 @@ function Cut.new(ctx: any, container: Frame)
 			end)
 		end
 	end)
+	serve:setIcon("icon_serve_white")
 	serve.frame.Size = UDim2.fromScale(1, 1)
 	serve.frame.Parent = ctx.actionHost("Cut")
 

@@ -20,6 +20,8 @@ Theme.Colour = {
 	label = Color3.fromHex("#FFF8E8"),
 	labelStroke = Color3.fromHex("#643027"),
 	labelDisabled = Color3.fromHex("#40241F"),
+	-- Dark live text on the mint standby button (response 6 manifest).
+	labelStandby = Color3.fromHex("#40241F"),
 	-- Scene stand-ins until station art exists.
 	wall = Color3.fromHex("#F3E2C4"),
 	counter = Color3.fromHex("#B98A5E"),

@@ -269,10 +269,13 @@ function Bake.new(ctx: any, container: Frame)
 	end
 
 	-- First-shift pointer. A ready oven gets the glove on its Take out; otherwise the strip
-	-- teaches the gauge: take out when the needle reaches the ticket's bake. Phones key the
-	-- bakes in the ovens (or the active ticket's) plus Burnt; wide screens key all of them.
+	-- teaches the gauge: take out when the needle reaches the ticket's bake, with the arrow on
+	-- the first baking oven's gauge (from the right, clear of the oven number and the plate).
+	-- Phones key the bakes in the ovens (or the active ticket's) plus Burnt; wide screens key
+	-- all of them.
 	function station.hint(snap: any, now: number): any
 		local wanted, seen = {}, {}
+		local gauge: GuiObject? = nil
 		for _, slot in slots do
 			local pizza = slot.pizza
 			if pizza then
@@ -281,6 +284,7 @@ function Bake.new(ctx: any, container: Frame)
 				if status.ready and not status.burnt then
 					return { target = slot.button.frame, text = if status.over then "Past the ticket's bake: take it out now" else "Ready! Tap Take out", from = "left" }
 				end
+				gauge = gauge or slot.pivot
 				if not seen[customer.order.bake] then
 					seen[customer.order.bake] = true
 					table.insert(wanted, customer.order.bake)
@@ -301,6 +305,9 @@ function Bake.new(ctx: any, container: Frame)
 		end
 		table.insert(legend, { icon = "ui_oven_badge_burnt", text = "Burnt" })
 		return {
+			target = gauge,
+			from = "right",
+			pointer = "arrow",
 			text = if ctx.compact then "Take out at the ticket's bake:" else "Take it out when the needle reaches the ticket's bake:",
 			legend = legend,
 		}
