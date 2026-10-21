@@ -361,7 +361,7 @@ function Order.new(ctx: any, container: Frame)
 		local full = active >= Config.Shift.maxActiveTickets
 		-- Nobody at the counter while more customers are due is an automatic wait (standby);
 		-- a full rail is the player's to fix, so the button stays disabled.
-		local arriving = #waiting == 0 and not full and #snap.customers < Config.Shift.customerCount
+		local arriving = #waiting == 0 and not full and #snap.customers < snap.customerCount
 		takeButton:setEnabled(selected ~= nil and not full)
 		takeButton:setStandby(arriving)
 		-- The action keeps its name; why it is unavailable goes on the hint strip.

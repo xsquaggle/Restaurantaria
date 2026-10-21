@@ -44,6 +44,8 @@ type Shift = {
 	-- fixed when the shift starts.
 	menu: { string },
 	ingredients: { string },
+	-- Customers this shift serves, fixed when it starts.
+	customerCount: number,
 	startedAt: number,
 	nextArrival: number,
 	nextId: number,
@@ -85,12 +87,22 @@ local function menuFor(player: Player): { string }
 	return table.clone(if profile then profile.data.unlockedRecipes else Recipes.Starting)
 end
 
+-- One customer on a save's first shift (the tutorial), the full count after it.
+local function customerCountFor(player: Player): number
+	local profile = SaveService.profiles[player]
+	if profile and profile.data.shiftsCompleted == 0 then
+		return Config.Shift.tutorialCustomers
+	end
+	return Config.Shift.customerCount
+end
+
 function ShiftService.newShift(player: Player): Shift
 	local menu = menuFor(player)
 	return {
 		id = HttpService:GenerateGUID(false),
 		menu = menu,
 		ingredients = Recipes.ingredientsFor(menu),
+		customerCount = customerCountFor(player),
 		startedAt = now(),
 		nextArrival = 1,
 		nextId = 1,
@@ -165,7 +177,7 @@ function ShiftService.tick(session: Session): boolean
 	local changed = false
 	local t = now()
 	local elapsed = t - shift.startedAt
-	while shift.nextArrival <= Config.Shift.customerCount and elapsed >= Config.Shift.arrivals[shift.nextArrival] do
+	while shift.nextArrival <= shift.customerCount and elapsed >= Config.Shift.arrivals[shift.nextArrival] do
 		local i = shift.nextArrival
 		local present, visits, names = {}, {}, {}
 		for _, c in shift.customers do
@@ -350,7 +362,7 @@ end
 
 local function finishIfDone(session: Session)
 	local shift = session.shift
-	if shift.nextArrival <= Config.Shift.customerCount then
+	if shift.nextArrival <= shift.customerCount then
 		return
 	end
 	for _, c in shift.customers do
@@ -484,6 +496,7 @@ function ShiftService.snapshot(player: Player): any
 		shiftId = shift.id,
 		menu = shift.menu,
 		ingredients = shift.ingredients,
+		customerCount = shift.customerCount,
 		startedAt = shift.startedAt,
 		customers = shift.customers,
 		pizzas = pizzas,

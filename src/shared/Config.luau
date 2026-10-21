@@ -6,6 +6,9 @@ local Config = {}
 Config.Shift = {
 	-- Customers served in one shift (separate from the character roster size).
 	customerCount = 6,
+	-- Customers on a save's first shift, the tutorial (Lawson, 2026-10-21). Later shifts use
+	-- customerCount.
+	tutorialCustomers = 1,
 	-- Seconds after shift start when each customer arrives.
 	arrivals = { 1, 10, 24, 50, 64, 90 },
 	maxActiveTickets = 3,

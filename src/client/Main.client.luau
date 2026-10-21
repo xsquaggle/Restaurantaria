@@ -897,7 +897,7 @@ local function refreshRail(snap: any)
 		if ctx.station == "Order" then
 			if waiting > 0 then
 				ui.railNote:set("Take an order", "Tap the button below.")
-			elseif #snap.customers < Config.Shift.customerCount then
+			elseif #snap.customers < snap.customerCount then
 				ui.railNote:set("No one waiting", "Next customer on the way")
 			else
 				ui.railNote:set("No one waiting", "Check your pizzas")
@@ -1001,9 +1001,11 @@ local function refreshSummary(snap: any)
 	})
 	Art.apply(card, "ui_panel_summary")
 	local profile = snap.profile or {}
-	-- Reward first and largest; rank and the save line are secondary.
+	-- Reward first and largest; rank and the save line are secondary. The shift's reward is
+	-- shown as coins, the same currency as the HUD balance (snap.tips is that total; there is
+	-- no separate tip component).
 	Ui.text({
-		Text = string.format("+%d tips", snap.tips),
+		Text = string.format("Earned: %d coin%s", snap.tips, if snap.tips == 1 then "" else "s"),
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 30 else 44,
 		TextColor3 = C.tomato,

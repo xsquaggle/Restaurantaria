@@ -140,7 +140,7 @@ if RunService:IsStudio() then
 			shift.startedAt -= 1000
 			-- A character can only be in the shop once, so later customers walk in as earlier
 			-- ones are served: repeat until everyone has come and gone.
-			for _round = 1, Config.Shift.customerCount + 1 do
+			for _round = 1, shift.customerCount + 1 do
 				ShiftService.tick(session)
 				local clock = workspace:GetServerTimeNow()
 				-- Open tickets first so taking new orders never hits the rail limit.
