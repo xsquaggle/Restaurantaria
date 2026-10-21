@@ -4,8 +4,10 @@
 local Config = {}
 
 Config.Shift = {
-	-- Customers served in one shift (separate from the character roster size).
-	customerCount = 6,
+	-- Customers served in one shift after the tutorial (separate from the character roster
+	-- size). Three, provisionally (Lawson, 2026-10-21), until arrival spacing and ticket
+	-- pressure are tuned against the full preparation cycle.
+	customerCount = 3,
 	-- Customers on a save's first shift, the tutorial (Lawson, 2026-10-21). Later shifts use
 	-- customerCount.
 	tutorialCustomers = 1,
