@@ -22,6 +22,11 @@ local OrderLobby = require(script.Parent.OrderLobby)
 local OrderRoom = {}
 
 local COUNTER = "prop3d_order_counter"
+-- The inherited counter: the same mesh and size with a worn finish. It is shown when
+-- ReplicatedStorage's "CounterState" attribute is "worn" and the model is in Models3D;
+-- otherwise the clean, restored counter is. Until restoration purchases exist the attribute
+-- is set by hand in Studio.
+local WORN_COUNTER = "prop3d_order_counter_worn"
 -- Far from the baseplate and spawn so nothing else is in shot.
 local ORIGIN = Vector3.new(0, 400, 0)
 -- Camera height above the counter top and distance in front of its staff-side edge, in
@@ -48,13 +53,21 @@ function OrderRoom.available(): boolean
 	return Model3D.has(COUNTER)
 end
 
+local function counterName(): string
+	if ReplicatedStorage:GetAttribute("CounterState") == "worn" and Model3D.has(WORN_COUNTER) then
+		return WORN_COUNTER
+	end
+	return COUNTER
+end
+
 -- ctx: the station context; container: the station's frame (its absolute rect is the work
 -- surface). Returns nil when the model is missing.
 function OrderRoom.new(ctx: any, container: GuiObject): any
-	local size = Model3D.size(COUNTER) :: Vector3
+	local name = counterName()
+	local size = Model3D.size(name) :: Vector3
 	local folder = Instance.new("Folder")
 	folder.Name = "OrderRoom"
-	local counter = Model3D.build(COUNTER)
+	local counter = Model3D.build(name)
 	if not counter then
 		return nil
 	end
