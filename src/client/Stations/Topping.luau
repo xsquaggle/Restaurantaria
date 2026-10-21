@@ -416,7 +416,8 @@ function Topping.new(ctx: any, container: Frame)
 		return nil
 	end
 
-	-- First-shift pointer: the tray of the first topping the ticket still needs.
+	-- First-shift pointer: the tray of the first topping the ticket still needs, or Send to
+	-- oven when it needs none (a cheese pizza).
 	function station.hint(snap: any): any
 		if not current then
 			return nil
@@ -425,7 +426,8 @@ function Topping.new(ctx: any, container: Frame)
 		if not customer then
 			return nil
 		end
-		for _, req in Recipes.ById[customer.order.recipe].toppings do
+		local toppings = Recipes.ById[customer.order.recipe].toppings
+		for _, req in toppings do
 			local have = 0
 			for _, piece in current.toppings do
 				if piece.ingredient == req.ingredient then
@@ -435,6 +437,10 @@ function Topping.new(ctx: any, container: Frame)
 			if have < req.count and trays[req.ingredient] then
 				return { target = trays[req.ingredient].button, text = "Drag " .. Recipes.Ingredients[req.ingredient].plural .. " onto the pizza", from = if ctx.compact then "right" else "below" }
 			end
+		end
+		if #toppings == 0 and send.enabled then
+			-- Same approach as Take order on the rail (Order.hint).
+			return { target = send.frame, text = "No toppings: tap Send to oven", from = if ctx.compact then "aboveLeft" else "left" }
 		end
 		return nil
 	end

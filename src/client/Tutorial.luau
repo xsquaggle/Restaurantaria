@@ -16,8 +16,8 @@ local Ui = require(script.Parent.Ui)
 
 local Tutorial = {}
 
--- The action that teaches each station.
-Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", takeOut = "Bake", cut = "Cut" }
+-- The action that teaches each station. A pizza with no toppings learns Topping by being sent.
+Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", sendToOven = "Topping", takeOut = "Bake", cut = "Cut" }
 
 -- Glove and arrow rotation for each side they come from (both drawings point up).
 local ROTATION = { below = 0, above = 180, left = 90, right = -90, aboveLeft = 135 }
