@@ -142,8 +142,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		label.Position = UDim2.fromScale(0.5, 0.5)
 		label.Size = UDim2.fromOffset(innerW, innerH)
 		label.Visible = true
-		icon.Visible = iconName ~= nil
-		if iconName then
+		-- Astra's A22 icons are ivory for the coral button and barely show on the mint
+		-- standby art, so in standby the words stand alone.
+		local shownIcon = if self.standby and primary then nil else iconName
+		icon.Visible = shownIcon ~= nil
+		if shownIcon then
 			local iconSize = math.round(math.min(innerH * 1.1, h * 0.5))
 			local gap = math.round(iconSize * 0.25)
 			-- The label's width at its smallest allowed size (display font, about 0.55 em a glyph).
@@ -198,6 +201,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 			if b.standby ~= on then
 				b.standby = on
 				render()
+				layout()
 			end
 		end,
 	}
