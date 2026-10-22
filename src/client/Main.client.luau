@@ -934,7 +934,8 @@ end
 local function refreshHud(snap: any)
 	local profile = snap.profile or {}
 	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
-	local total = (profile.tips or 0) + (if snap.recorded then 0 else snap.tips)
+	-- The tutorial bonus is counted with the shift's coins until the save records both.
+	local total = (profile.tips or 0) + (if snap.recorded then 0 else snap.tips + (snap.tutorialBonus or 0))
 	ui.coins.Text = if ctx.compact then tostring(total) else string.format("%d coins", total)
 end
 
@@ -1015,6 +1016,24 @@ local function refreshSummary(snap: any)
 		ZIndex = 22,
 		Parent = card,
 	})
+	-- The one-time tutorial bonus gets its own line under the earned coins (never added to
+	-- them) and pushes the rest down; it is shown only when it pays something.
+	local bonus = snap.tutorialBonus or 0
+	local bonusH = if bonus > 0 then (if ctx.compact then 26 else 32) else 0
+	if bonus > 0 then
+		Ui.text({
+			Name = "TutorialBonus",
+			Text = string.format("Tutorial bonus: +%d coin%s", bonus, if bonus == 1 then "" else "s"),
+			FontFace = Theme.Font.display,
+			TextSize = if ctx.compact then 18 else 24,
+			TextColor3 = C.tomato,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Size = UDim2.new(1, 0, 0, if ctx.compact then 22 else 28),
+			Position = UDim2.fromOffset(0, if ctx.compact then 88 else 126),
+			ZIndex = 22,
+			Parent = card,
+		})
+	end
 	local lines = {
 		string.format("Experience: +%d", snap.xp),
 		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
@@ -1038,7 +1057,7 @@ local function refreshSummary(snap: any)
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.new(0, 24, 0, if ctx.compact then 92 else 132),
+		Position = UDim2.new(0, 24, 0, (if ctx.compact then 92 else 132) + bonusH),
 		Size = UDim2.new(1, -48, 0, if ctx.compact then 80 else 100),
 		ZIndex = 22,
 		Parent = card,

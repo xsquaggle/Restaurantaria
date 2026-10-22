@@ -14,7 +14,7 @@ local STORE_NAME = "Restaurantaria_Progress_v1"
 local RECENT_SHIFT_LIMIT = 30
 local RETRIES = 3
 
-export type Data = { tips: number, xp: number, shiftsCompleted: number, recentShiftIds: { string }, unlockedRecipes: { string } }
+export type Data = { tips: number, xp: number, shiftsCompleted: number, recentShiftIds: { string }, unlockedRecipes: { string }, tutorialBonusPaid: boolean }
 export type Profile = { status: string, data: Data, message: string? }
 
 local SaveService = {}
@@ -37,7 +37,7 @@ do
 end
 
 local function defaultData(): Data
-	return { tips = 0, xp = 0, shiftsCompleted = 0, recentShiftIds = {}, unlockedRecipes = table.clone(Recipes.Starting) }
+	return { tips = 0, xp = 0, shiftsCompleted = 0, recentShiftIds = {}, unlockedRecipes = table.clone(Recipes.Starting), tutorialBonusPaid = false }
 end
 
 local function sanitize(raw: any): Data
@@ -46,6 +46,8 @@ local function sanitize(raw: any): Data
 		data.tips = if type(raw.tips) == "number" then raw.tips else 0
 		data.xp = if type(raw.xp) == "number" then raw.xp else 0
 		data.shiftsCompleted = if type(raw.shiftsCompleted) == "number" then raw.shiftsCompleted else 0
+		-- Saves from before the flag existed count as used once they are past the tutorial.
+		data.tutorialBonusPaid = if type(raw.tutorialBonusPaid) == "boolean" then raw.tutorialBonusPaid else data.shiftsCompleted > 0
 		if type(raw.recentShiftIds) == "table" then
 			for _, id in raw.recentShiftIds do
 				if type(id) == "string" then
@@ -116,17 +118,25 @@ function SaveService.rank(xp: number): number
 	return 1 + xp // Config.Rewards.xpPerRank
 end
 
--- Adds one shift's rewards exactly once. Returns (saved, message).
-function SaveService.commitShift(player: Player, shiftId: string, tips: number, xp: number): (boolean, string?)
+-- Adds one shift's rewards exactly once. tutorialBonus is set only for a tutorial shift; it is
+-- paid at most once per save, guarded by the saved flag inside the same write as the shift's
+-- coins. Returns (saved, message, bonus actually paid).
+function SaveService.commitShift(player: Player, shiftId: string, tips: number, xp: number, tutorialBonus: number?): (boolean, string?, number)
 	local profile = SaveService.profiles[player]
 	if not profile then
-		return false, "No profile"
+		return false, "No profile", 0
 	end
 	if table.find(profile.data.recentShiftIds, shiftId) then
-		return true, "Already recorded"
+		return true, "Already recorded", 0
 	end
+	local bonusPaid = 0
 	local function apply(data: Data)
-		data.tips += tips
+		bonusPaid = 0
+		if tutorialBonus and not data.tutorialBonusPaid then
+			bonusPaid = tutorialBonus
+			data.tutorialBonusPaid = true -- set even for a 0 bonus: the guarantee is used once
+		end
+		data.tips += tips + bonusPaid
 		data.xp += xp
 		data.shiftsCompleted += 1
 		table.insert(data.recentShiftIds, shiftId)
@@ -138,7 +148,7 @@ function SaveService.commitShift(player: Player, shiftId: string, tips: number, 
 	if profile.status ~= "ok" then
 		-- Keep the session's totals visible, but never write over data we failed to read.
 		apply(profile.data)
-		return false, profile.message
+		return false, profile.message, bonusPaid
 	end
 
 	local latest: Data? = nil
@@ -155,9 +165,9 @@ function SaveService.commitShift(player: Player, shiftId: string, tips: number, 
 	end)
 	if ok then
 		profile.data = if result ~= nil then sanitize(result) else (latest :: Data)
-		return true, nil
+		return true, nil, bonusPaid
 	end
-	return false, "Couldn't save this shift: " .. tostring(result)
+	return false, "Couldn't save this shift: " .. tostring(result), 0
 end
 
 function SaveService.release(player: Player)

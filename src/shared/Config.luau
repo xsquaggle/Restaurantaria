@@ -63,6 +63,9 @@ Config.Rewards = {
 	baseTip = 12, -- tip at a 100% grade, scaled by grade
 	xpPerOrder = 10,
 	xpPerRank = 100,
+	-- One-time tutorial bonus (Lawson 2026-10-21): the first completed tutorial order is topped
+	-- up to this many coins, paid as its own labelled amount, never folded into the tip or grade.
+	tutorialGuarantee = 4,
 }
 
 Config.Dev = {

@@ -80,7 +80,7 @@ if RunService:IsStudio() then
 			return "no session"
 		end
 		if command == "state" then
-			local lines = { string.format("lastSeq=%d rejected=%d tips=%d finished=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.finished), table.concat(session.shift.menu, ",")) }
+			local lines = { string.format("lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), table.concat(session.shift.menu, ",")) }
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
@@ -91,7 +91,7 @@ if RunService:IsStudio() then
 			end
 			local profile = SaveService.profiles[player]
 			if profile then
-				table.insert(lines, string.format("profile %s tips=%d xp=%d shifts=%d", profile.status, profile.data.tips, profile.data.xp, profile.data.shiftsCompleted))
+				table.insert(lines, string.format("profile %s tips=%d xp=%d shifts=%d tutorialBonusPaid=%s", profile.status, profile.data.tips, profile.data.xp, profile.data.shiftsCompleted, tostring(profile.data.tutorialBonusPaid)))
 			end
 			return table.concat(lines, "\n")
 		elseif command == "mixedOrders" then
@@ -103,6 +103,11 @@ if RunService:IsStudio() then
 			-- Abandons the current shift (no reward, nothing saved) and starts a new one.
 			session.shift = ShiftService.newShift(player)
 			push(player)
+			return "ok"
+		elseif command == "forceTip" then
+			-- value = a number of coins every served order earns, or nil to score normally.
+			-- Lets a test see the tutorial bonus fire.
+			ShiftService.devForcedTip = if type(value) == "number" then value else nil
 			return "ok"
 		elseif command == "simulateLoadFailure" then
 			SaveService.simulateLoadFailure = value == true

@@ -4,6 +4,7 @@
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
@@ -54,6 +55,10 @@ type Shift = {
 	ovens: { [number]: number | false },
 	tips: number,
 	xp: number,
+	-- The save's first shift. Its first served order may earn the one-time tutorial bonus,
+	-- kept apart from tips.
+	tutorial: boolean,
+	tutorialBonus: number?,
 	finished: boolean,
 	saved: boolean?,
 	saveMessage: string?,
@@ -87,14 +92,27 @@ local function menuFor(player: Player): { string }
 	return table.clone(if profile then profile.data.unlockedRecipes else Recipes.Starting)
 end
 
+local function isTutorial(player: Player): boolean
+	local profile = SaveService.profiles[player]
+	return profile ~= nil and profile.data.shiftsCompleted == 0
+end
+
 -- One customer on a save's first shift (the tutorial), the full count after it.
 local function customerCountFor(player: Player): number
-	local profile = SaveService.profiles[player]
-	if profile and profile.data.shiftsCompleted == 0 then
+	if isTutorial(player) then
 		return Config.Shift.tutorialCustomers
 	end
 	return Config.Shift.customerCount
 end
+
+-- Coins that top the tutorial's first completed order up to the guarantee.
+function ShiftService.tutorialBonusFor(tip: number): number
+	return math.max(0, Config.Rewards.tutorialGuarantee - tip)
+end
+
+-- Studio test hook: when set, each served order's coins are forced to this value, so the
+-- tutorial bonus can be seen firing (it never fires under today's grade formula).
+ShiftService.devForcedTip = nil :: number?
 
 function ShiftService.newShift(player: Player): Shift
 	local menu = menuFor(player)
@@ -111,6 +129,8 @@ function ShiftService.newShift(player: Player): Shift
 		ovens = { false, false },
 		tips = 0,
 		xp = 0,
+		tutorial = isTutorial(player),
+		tutorialBonus = nil,
 		finished = false,
 	}
 end
@@ -374,7 +394,11 @@ local function finishIfDone(session: Session)
 	shift.saveMessage = "Saving..."
 	-- The save can retry for several seconds; don't hold the Serve reply for it.
 	task.spawn(function()
-		local saved, message = SaveService.commitShift(session.player, shift.id, shift.tips, shift.xp)
+		local saved, message, bonusPaid = SaveService.commitShift(session.player, shift.id, shift.tips, shift.xp, shift.tutorialBonus)
+		if shift.tutorialBonus then
+			-- What the save actually paid: 0 if this save had already used its bonus.
+			shift.tutorialBonus = bonusPaid
+		end
 		shift.saved = saved
 		shift.saveMessage = if saved then nil else message
 		if ShiftService.changed then
@@ -400,10 +424,20 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local cut = Scoring.cut(order.slices, pizza.cuts)
 	local overall = math.floor((wait.score + topping.score + bake.score + cut.score) / 4 + 0.5)
 	local tip = math.floor(Config.Rewards.baseTip * overall / 100 + 0.5)
+	if ShiftService.devForcedTip and RunService:IsStudio() then
+		tip = ShiftService.devForcedTip :: number
+	end
+	-- The tutorial's first completed order is topped up to the guarantee by a separate bonus;
+	-- the grade and the order's own coins stay as earned. Paid by commitShift, once per save.
+	local tutorialBonus = nil
+	if shift.tutorial and shift.tutorialBonus == nil then
+		tutorialBonus = ShiftService.tutorialBonusFor(tip)
+		shift.tutorialBonus = tutorialBonus
+	end
 
 	pizza.stage = "served"
 	customer.status = "served"
-	customer.result = { wait = wait, topping = topping, bake = bake, cut = cut, overall = overall, tip = tip }
+	customer.result = { wait = wait, topping = topping, bake = bake, cut = cut, overall = overall, tip = tip, tutorialBonus = tutorialBonus }
 	shift.tips += tip
 	shift.xp += math.floor(Config.Rewards.xpPerOrder * overall / 100 + 0.5)
 	finishIfDone(session)
@@ -502,6 +536,8 @@ function ShiftService.snapshot(player: Player): any
 		pizzas = pizzas,
 		ovens = shift.ovens,
 		tips = shift.tips,
+		-- Shown on its own line; never part of tips.
+		tutorialBonus = shift.tutorialBonus or 0,
 		xp = shift.xp,
 		finished = shift.finished,
 		saved = shift.saved,
