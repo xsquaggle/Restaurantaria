@@ -60,7 +60,12 @@ type Shift = {
 	tutorial: boolean,
 	tutorialBonus: number?,
 	finished: boolean,
-	saved: boolean?,
+	-- Set when the shift ends: the rewards to commit, unchanged on every attempt.
+	receipt: SaveService.Receipt?,
+	-- nil while running, then "pending" (being saved), "saved", "session" (kept for this
+	-- session only, by design) or "retry" (the save failed; the receipt waits for another
+	-- attempt). The next shift can't start until it is "saved" or "session".
+	settlement: string?,
 	saveMessage: string?,
 }
 type Session = {
@@ -150,8 +155,13 @@ function ShiftService.start(player: Player): Session
 end
 
 function ShiftService.stop(player: Player)
-	-- Leaving mid-shift abandons it: no reward, no penalty.
+	-- Leaving mid-shift abandons it: no reward, no penalty. A finished shift whose save
+	-- failed gets one last attempt with its receipt before the profile is released.
+	local session = ShiftService.sessions[player]
 	ShiftService.sessions[player] = nil
+	if session and session.shift.settlement == "retry" and session.shift.receipt then
+		SaveService.commitShift(player, session.shift.receipt)
+	end
 end
 
 local function activeTickets(shift: Shift): number
@@ -380,9 +390,32 @@ function Actions.undoCut(shift: Shift, args: any): (boolean, string?)
 	return true, nil
 end
 
+-- Commits the finished shift's receipt in the background (the save can retry for several
+-- seconds; don't hold the reply for it). One attempt at a time.
+local function settle(session: Session, shift: Shift)
+	if shift.settlement == "pending" or not shift.receipt then
+		return
+	end
+	shift.settlement = "pending"
+	shift.saveMessage = "Saving..."
+	task.spawn(function()
+		local outcome = SaveService.commitShift(session.player, shift.receipt :: SaveService.Receipt)
+		if outcome.bonusPaid ~= nil and shift.tutorialBonus ~= nil then
+			-- What the save actually paid: 0 if this save had already used its bonus. A failed
+			-- save leaves the requested amount in place.
+			shift.tutorialBonus = outcome.bonusPaid
+		end
+		shift.settlement = outcome.state
+		shift.saveMessage = outcome.message
+		if ShiftService.changed then
+			ShiftService.changed(session.player)
+		end
+	end)
+end
+
 local function finishIfDone(session: Session)
 	local shift = session.shift
-	if shift.nextArrival <= shift.customerCount then
+	if shift.finished or shift.nextArrival <= shift.customerCount then
 		return
 	end
 	for _, c in shift.customers do
@@ -391,21 +424,11 @@ local function finishIfDone(session: Session)
 		end
 	end
 	shift.finished = true
-	shift.saveMessage = "Saving..."
-	-- The save can retry for several seconds; don't hold the Serve reply for it.
-	task.spawn(function()
-		local saved, message, bonusPaid = SaveService.commitShift(session.player, shift.id, shift.tips, shift.xp, shift.tutorialBonus)
-		if shift.tutorialBonus then
-			-- What the save actually paid: 0 if this save had already used its bonus.
-			shift.tutorialBonus = bonusPaid
-		end
-		shift.saved = saved
-		shift.saveMessage = if saved then nil else message
-		if ShiftService.changed then
-			ShiftService.changed(session.player)
-		end
-	end)
+	shift.receipt = table.freeze({ shiftId = shift.id, tips = shift.tips, xp = shift.xp, tutorialBonus = shift.tutorialBonus })
+	settle(session, shift)
 end
+-- For tests.
+ShiftService.finishIfDone = finishIfDone
 
 function Actions.serve(shift: Shift, args: any, session: Session): (boolean, string?)
 	local pizza, err = getPizza(shift, args.pizzaId, "cutting")
@@ -448,7 +471,26 @@ function Actions.newShift(shift: Shift, _args: any, session: Session): (boolean,
 	if not shift.finished then
 		return false, "shift still running"
 	end
+	-- The next shift starts from the saved profile, so this one's rewards must be settled
+	-- first: never replaced while saving or after a failed save.
+	if shift.settlement == "pending" then
+		return false, "progress still saving"
+	elseif shift.settlement ~= "saved" and shift.settlement ~= "session" then
+		return false, "progress not saved yet"
+	end
 	session.shift = ShiftService.newShift(session.player)
+	return true, nil
+end
+
+-- Commits a finished shift's receipt again after a failed save.
+function Actions.retrySave(shift: Shift, _args: any, session: Session): (boolean, string?)
+	if not shift.finished then
+		return false, "shift still running"
+	end
+	if shift.settlement ~= "retry" then
+		return false, if shift.settlement == "pending" then "progress still saving" else "nothing to retry"
+	end
+	settle(session, shift)
 	return true, nil
 end
 
@@ -499,7 +541,7 @@ function ShiftService.handle(player: Player, seq: any, action: any, args: any): 
 	if type(args) ~= "table" then
 		return reject("bad arguments")
 	end
-	if session.shift.finished and action ~= "newShift" then
+	if session.shift.finished and action ~= "newShift" and action ~= "retrySave" then
 		return reject("shift is over")
 	end
 	local ok, reason = Actions[action](session.shift, args, session)
@@ -540,7 +582,7 @@ function ShiftService.snapshot(player: Player): any
 		tutorialBonus = shift.tutorialBonus or 0,
 		xp = shift.xp,
 		finished = shift.finished,
-		saved = shift.saved,
+		settlement = shift.settlement,
 		-- True once this shift's tips are inside profile.tips (saved, or kept in memory after
 		-- a failed load), so the HUD never counts them twice.
 		recorded = profile ~= nil and table.find(profile.data.recentShiftIds, shift.id) ~= nil,

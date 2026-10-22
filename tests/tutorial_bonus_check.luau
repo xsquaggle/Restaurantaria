@@ -34,29 +34,32 @@ end
 
 -- Fresh save: a tutorial shift earning 1 coin gets 3, balance 4, flag set.
 local p = freshProfile()
-local _, _, paid = SaveService.commitShift(fake, "t1", 1, 3, 3)
+local function commit(id: string, tips: number, xp: number, bonus: number?): number?
+	return SaveService.commitShift(fake, { shiftId = id, tips = tips, xp = xp, tutorialBonus = bonus }).bonusPaid
+end
+local paid = commit("t1", 1, 3, 3)
 check("fresh: paid", paid, 3)
 check("fresh: balance", p.data.tips, 4)
 check("fresh: flag", p.data.tutorialBonusPaid, true)
--- The same shift id again pays nothing.
-_, _, paid = SaveService.commitShift(fake, "t1", 1, 3, 3)
-check("same shift: paid", paid, 0)
+-- The same shift id again pays nothing more; it reports what that shift was paid.
+paid = commit("t1", 1, 3, 3)
+check("same shift: reported", paid, 3)
 check("same shift: balance", p.data.tips, 4)
 -- A replayed tutorial (new shift id, same save) pays its coins but no second bonus.
-_, _, paid = SaveService.commitShift(fake, "t2", 1, 3, 3)
+paid = commit("t2", 1, 3, 3)
 check("replay: paid", paid, 0)
 check("replay: balance", p.data.tips, 5)
 
 -- A zero bonus still uses the guarantee.
 p = freshProfile()
-_, _, paid = SaveService.commitShift(fake, "z1", 6, 6, 0)
+paid = commit("z1", 6, 6, 0)
 check("zero: paid", paid, 0)
 check("zero: flag", p.data.tutorialBonusPaid, true)
 check("zero: balance", p.data.tips, 6)
 
 -- A later (non-tutorial) shift never touches the flag or pays a bonus.
 p = freshProfile()
-_, _, paid = SaveService.commitShift(fake, "n1", 2, 2, nil)
+paid = commit("n1", 2, 2, nil)
 check("later: paid", paid, 0)
 check("later: flag", p.data.tutorialBonusPaid, false)
 check("later: balance", p.data.tips, 2)

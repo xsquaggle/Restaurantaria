@@ -966,7 +966,7 @@ local function refreshSummary(snap: any)
 	summary.Visible = snap.finished == true
 	ui.hudScrim.Visible = snap.finished == true
 	-- Rebuilt when the save result arrives, which can be after the shift ends.
-	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.saved), tostring(snap.saveMessage)) else nil
+	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.settlement), tostring(snap.saveMessage)) else nil
 	if not snap.finished or ui.summaryShift == key then
 		return
 	end
@@ -1037,10 +1037,10 @@ local function refreshSummary(snap: any)
 	local lines = {
 		string.format("Experience: +%d", snap.xp),
 		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
-		if snap.saved then "Progress saved"
-			elseif snap.saveMessage == "Saving..." then "Saving..."
-			-- Player text only: the technical reason stays in the HUD save label.
-			else "Progress not saved",
+		if snap.settlement == "saved" then "Progress saved"
+			elseif snap.settlement == "retry" then "Couldn't save yet. Rewards kept."
+			elseif snap.settlement == "session" then "Progress not saved"
+			else "Saving...",
 	}
 	Ui.text({
 		Text = "Shift complete",
@@ -1062,9 +1062,22 @@ local function refreshSummary(snap: any)
 		ZIndex = 22,
 		Parent = card,
 	})
+	-- The server starts the next shift only once this one's rewards are settled; the button
+	-- says so: a standby "Saving..." while the save runs, "Retry save" after a failed one.
+	local settled = snap.settlement == "saved" or snap.settlement == "session"
 	local again = Widgets.button("Next shift", function()
-		ctx.send("newShift", {})
+		if snap.settlement == "retry" then
+			ctx.send("retrySave", {})
+		elseif settled then
+			ctx.send("newShift", {})
+		end
 	end)
+	if snap.settlement == "retry" then
+		again:setLabel("Retry save")
+	elseif not settled then
+		again:setLabel("Saving...")
+		again:setStandby(true)
+	end
 	again.frame.AnchorPoint = Vector2.new(0.5, 1)
 	again.frame.Position = UDim2.new(0.5, 0, 1, -16)
 	again.frame.Size = UDim2.fromOffset(if ctx.compact then 200 else 260, if ctx.compact then 56 else 72)
