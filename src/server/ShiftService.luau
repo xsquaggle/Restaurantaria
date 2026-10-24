@@ -60,6 +60,8 @@ type Shift = {
 	tutorial: boolean,
 	tutorialBonus: number?,
 	finished: boolean,
+	-- The save store of the profile this shift began on; its receipt is only written there.
+	store: any?,
 	-- Set when the shift ends: the rewards to commit, unchanged on every attempt.
 	receipt: SaveService.Receipt?,
 	-- nil while running, then "pending" (being saved), "saved", "session" (kept for this
@@ -76,7 +78,12 @@ type Session = {
 	shift: Shift,
 	rejected: number,
 	version: number,
+	-- Set once the player is leaving (or the server closing): no more intents are accepted.
+	leaving: boolean?,
 }
+
+-- How long leaving waits for a finished shift's save, inside Roblox's 30 s shutdown window.
+local LEAVE_SECONDS = 25
 
 local ShiftService = {}
 ShiftService.sessions = {} :: { [Player]: Session }
@@ -121,6 +128,7 @@ ShiftService.devForcedTip = nil :: number?
 
 function ShiftService.newShift(player: Player): Shift
 	local menu = menuFor(player)
+	local profile = SaveService.profiles[player]
 	return {
 		id = HttpService:GenerateGUID(false),
 		menu = menu,
@@ -137,6 +145,7 @@ function ShiftService.newShift(player: Player): Shift
 		tutorial = isTutorial(player),
 		tutorialBonus = nil,
 		finished = false,
+		store = if profile then profile.store else nil,
 	}
 end
 
@@ -152,16 +161,6 @@ function ShiftService.start(player: Player): Session
 	}
 	ShiftService.sessions[player] = session
 	return session
-end
-
-function ShiftService.stop(player: Player)
-	-- Leaving mid-shift abandons it: no reward, no penalty. A finished shift whose save
-	-- failed gets one last attempt with its receipt before the profile is released.
-	local session = ShiftService.sessions[player]
-	ShiftService.sessions[player] = nil
-	if session and session.shift.settlement == "retry" and session.shift.receipt then
-		SaveService.commitShift(player, session.shift.receipt)
-	end
 end
 
 local function activeTickets(shift: Shift): number
@@ -424,11 +423,82 @@ local function finishIfDone(session: Session)
 		end
 	end
 	shift.finished = true
-	shift.receipt = table.freeze({ shiftId = shift.id, tips = shift.tips, xp = shift.xp, tutorialBonus = shift.tutorialBonus })
+	shift.receipt = table.freeze({ shiftId = shift.id, tips = shift.tips, xp = shift.xp, tutorialBonus = shift.tutorialBonus, store = shift.store })
 	settle(session, shift)
 end
 -- For tests.
 ShiftService.finishIfDone = finishIfDone
+
+local function waitUntil(done: () -> boolean, deadline: number)
+	while not done() and os.clock() < deadline do
+		task.wait(0.1)
+	end
+end
+
+-- The player is leaving, or the server is closing. A running shift is abandoned: no reward,
+-- no penalty. A finished shift's save is settled before the caller releases the profile: an
+-- attempt in flight is waited for, never raced, and a failed one gets one more attempt with
+-- the same receipt. Bounded by deadline (os.clock, default 25 s from now); past it the
+-- receipt may stay unsaved, and a warning says so. A second call while the first is still
+-- settling waits for it. Returns the shift's settlement (nil for an abandoned shift).
+function ShiftService.stop(player: Player, deadline: number?): string?
+	local session = ShiftService.sessions[player]
+	if not session then
+		return nil
+	end
+	local limit = deadline or os.clock() + LEAVE_SECONDS
+	local shift = session.shift
+	if session.leaving then
+		waitUntil(function()
+			return ShiftService.sessions[player] ~= session
+		end, limit)
+		return shift.settlement
+	end
+	session.leaving = true
+	if shift.finished and shift.receipt then
+		local function notPending()
+			return shift.settlement ~= "pending"
+		end
+		waitUntil(notPending, limit)
+		if shift.settlement == "retry" and os.clock() < limit then
+			settle(session, shift)
+			waitUntil(notPending, limit)
+		end
+		if shift.settlement ~= "saved" and shift.settlement ~= "session" then
+			warn(string.format("[Save] %s left before shift %s was saved (%s)", player.Name, shift.id, tostring(shift.settlement)))
+		end
+	end
+	if ShiftService.sessions[player] == session then
+		ShiftService.sessions[player] = nil
+	end
+	return shift.settlement
+end
+
+-- stop, then release the player's profile.
+function ShiftService.leave(player: Player, deadline: number?): string?
+	local settlement = ShiftService.stop(player, deadline)
+	SaveService.release(player)
+	return settlement
+end
+
+-- Server shutdown (BindToClose): every player leaves at once, all within `seconds`.
+function ShiftService.closeAll(seconds: number)
+	local deadline = os.clock() + seconds
+	local open = 0
+	for player in ShiftService.sessions do
+		open += 1
+		task.spawn(function()
+			local ok, err = pcall(ShiftService.leave, player, deadline)
+			if not ok then
+				warn("[Save] closing: " .. tostring(err))
+			end
+			open -= 1
+		end)
+	end
+	waitUntil(function()
+		return open == 0
+	end, deadline)
+end
 
 function Actions.serve(shift: Shift, args: any, session: Session): (boolean, string?)
 	local pizza, err = getPizza(shift, args.pizzaId, "cutting")
@@ -524,6 +594,9 @@ function ShiftService.handle(player: Player, seq: any, action: any, args: any): 
 	local function reject(reason: string): (boolean, string?)
 		session.rejected += 1
 		return false, reason
+	end
+	if session.leaving then
+		return reject("leaving")
 	end
 	if not isId(seq) then
 		return reject("bad sequence")

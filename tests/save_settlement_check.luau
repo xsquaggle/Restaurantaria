@@ -1,8 +1,12 @@
 -- Checks for shift save settlement: the next shift waits for the save, a failed save keeps
--- the shift's receipt for a retry, and no retry, lost reply or second session pays twice.
--- Run from the Studio command bar (or the Studio MCP in Edit mode) after a sync. Every save
--- goes to an in-memory FakeStore; the real DataStore is never read or written, and the test
--- refuses to run if the fake store is not in place.
+-- the shift's receipt for a retry, no retry, lost reply or second session pays twice, leaving
+-- or a server shutdown settles the save before the profile goes, and nothing earned on a test
+-- store reaches the real one.
+-- Run from the Studio command bar (or the Studio MCP in Edit mode) after a sync, or offline
+-- with tests/offline/run.py. Every save goes to an in-memory FakeStore. For the whole run
+-- SaveService.realStore is replaced by a FakeStore stand-in, so even a broken isolation rule
+-- could only reach the stand-in: the real DataStore is never read or written. These are mock
+-- results: they say nothing about the real DataStore, a real rejoin or overlapping servers.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 local Server = ServerScriptService.Server
@@ -10,6 +14,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local FakeStore = require(Server.FakeStore)
 local SaveService = require(Server.SaveService)
 local ShiftService = require(Server.ShiftService)
+local TestStore = require(Server.TestStore)
 
 local failures = {}
 local passed = 0
@@ -24,6 +29,8 @@ end
 local KEY = "p_-4242"
 local players = {} :: { any }
 local store: any
+local trueRealStore = SaveService.realStore
+local realStandIn = FakeStore.new()
 
 -- A stand-in player on a fresh fake store (or the given one), loaded through SaveService.
 local function newPlayer(onStore: any?, raw: any?): any
@@ -33,6 +40,7 @@ local function newPlayer(onStore: any?, raw: any?): any
 	end
 	SaveService.store = store
 	assert(SaveService.store ~= SaveService.realStore, "fake store not in place")
+	assert(SaveService.realStore == realStandIn, "real store stand-in not in place")
 	local player = { UserId = -4242, Name = "SettlementTest" }
 	table.insert(players, player)
 	SaveService.load(player :: any)
@@ -64,9 +72,26 @@ local function act(session: any, action: string): (boolean, string?)
 	return ShiftService.apply(session, action, {})
 end
 
+-- A second stand-in player with its own key, on its own fresh fake store.
+local function playerOn(onStore: any, userId: number): any
+	SaveService.store = onStore
+	local player = { UserId = userId, Name = "SettlementTest" .. -userId }
+	table.insert(players, player)
+	SaveService.load(player :: any)
+	return player
+end
+
+local function waitFor(done: () -> boolean, seconds: number)
+	local t = os.clock()
+	while not done() and os.clock() - t < seconds do
+		task.wait(0.05)
+	end
+end
+
 local function run()
 	SaveService.simulateLoadFailure = false
 	SaveService.retryWait = function() end
+	SaveService.realStore = realStandIn
 
 	-- 1. Delayed successful save: Next shift waits; the shift pays once; the next is not the tutorial.
 	local p = newPlayer()
@@ -159,7 +184,7 @@ local function run()
 
 	-- 5. Duplicate shift id: in-session and against the store with a stale profile.
 	p = newPlayer()
-	local r = { shiftId = "dup", tips = 1, xp = 3, tutorialBonus = 3 }
+	local r = { shiftId = "dup", tips = 1, xp = 3, tutorialBonus = 3, store = store }
 	local o = SaveService.commitShift(p, r)
 	check("dup: first saved", o.state, "saved")
 	check("dup: first paid", o.bonusPaid, 3)
@@ -239,14 +264,237 @@ local function run()
 	store.failNext = 3
 	s = finish(p, 1, 3)
 	check("leave: retry needed", settled(s), "retry")
-	ShiftService.stop(p)
+	check("leave: settles saved", ShiftService.leave(p), "saved")
 	check("leave: stored on the way out", store.data[KEY] and store.data[KEY].tips, 4)
 	check("leave: one write", store.writes, 1)
+	check("leave: profile released", SaveService.profiles[p], nil)
+
+	-- 10. Leaving while the save is still running and it succeeds: wait for it, no second attempt.
+	p = newPlayer()
+	store.delay = 0.3
+	s = finish(p, 1, 3)
+	check("pending leave: pending", s.shift.settlement, "pending")
+	check("pending leave: saved", ShiftService.leave(p), "saved")
+	check("pending leave: one call", store.calls, 1)
+	check("pending leave: stored coins", store.data[KEY] and store.data[KEY].tips, 4)
+	check("pending leave: session gone", ShiftService.sessions[p], nil)
+	check("pending leave: profile released", SaveService.profiles[p], nil)
+
+	-- 11. Leaving while the save is running and all its attempts fail: one more attempt
+	-- after it, never alongside it.
+	p = newPlayer()
+	store.delay = 0.3
+	store.failNext = 3
+	s = finish(p, 1, 3)
+	check("pending fail leave: pending", s.shift.settlement, "pending")
+	check("pending fail leave: saved", ShiftService.leave(p), "saved")
+	check("pending fail leave: calls", store.calls, 4)
+	check("pending fail leave: never two at once", store.maxInFlight, 1)
+	check("pending fail leave: one write", store.writes, 1)
+	check("pending fail leave: stored coins", store.data[KEY] and store.data[KEY].tips, 4)
+	check("pending fail leave: bonus once", s.shift.tutorialBonus, 3)
+
+	-- 12. Leaving while every attempt fails: reported as not saved, nothing written.
+	p = newPlayer()
+	store.delay = 0.3
+	store.failNext = 6
+	s = finish(p, 1, 3)
+	check("all fail leave: not saved", ShiftService.leave(p), "retry")
+	check("all fail leave: calls", store.calls, 6)
+	check("all fail leave: never two at once", store.maxInFlight, 1)
+	check("all fail leave: nothing stored", store.data[KEY], nil)
+	check("all fail leave: profile released", SaveService.profiles[p], nil)
+
+	-- 13. Two leaves at once (PlayerRemoving and BindToClose) while every attempt fails: one
+	-- settlement with one last attempt, no race, and no client intent accepted meanwhile.
+	p = newPlayer()
+	store.delay = 0.3
+	store.failNext = 6
+	s = finish(p, 1, 3)
+	local results = {}
+	task.spawn(function()
+		results[1] = ShiftService.leave(p)
+	end)
+	task.spawn(function()
+		results[2] = ShiftService.leave(p)
+	end)
+	local ok, why = ShiftService.handle(p, s.lastSeq + 1, "retrySave", {})
+	check("double leave: intents refused", ok, false)
+	check("double leave: reason", why, "leaving")
+	waitFor(function()
+		return results[1] ~= nil and results[2] ~= nil
+	end, 15)
+	check("double leave: first not saved", results[1], "retry")
+	check("double leave: second not saved", results[2], "retry")
+	check("double leave: one last attempt only", store.calls, 6)
+	check("double leave: never two at once", store.maxInFlight, 1)
+	check("double leave: nothing stored", store.data[KEY], nil)
+	check("double leave: profile released", SaveService.profiles[p], nil)
+
+	-- 14. A leave past its deadline returns without waiting longer; the attempt in flight still
+	-- finishes on its own store (persistence is not guaranteed past the deadline).
+	p = newPlayer()
+	store.delay = 2
+	s = finish(p, 1, 3)
+	local t0 = os.clock()
+	check("deadline: still pending", ShiftService.leave(p, os.clock() + 0.5), "pending")
+	check("deadline: returned in time", os.clock() - t0 < 1.5, true)
+	check("deadline: session gone", ShiftService.sessions[p], nil)
+	waitFor(function()
+		return store.writes > 0
+	end, 10)
+	check("deadline: late attempt stored", store.data[KEY] and store.data[KEY] and store.data[KEY].tips, 4)
+
+	-- 15. Server shutdown (BindToClose): every player settles together, then is released.
+	for _, player in players do
+		ShiftService.sessions[player] = nil
+	end
+	local storeA, storeB, storeC = FakeStore.new(), FakeStore.new(), FakeStore.new()
+	local a = playerOn(storeA, -4301)
+	local b = playerOn(storeB, -4302)
+	local c = playerOn(storeC, -4303)
+	storeA.delay = 0.3
+	storeB.delay = 0.3
+	storeB.failNext = 3
+	finish(a, 1, 3)
+	finish(b, 2, 3)
+	ShiftService.start(c) -- mid-shift when the server closes
+	ShiftService.closeAll(25)
+	check("shutdown: A stored", storeA.data["p_-4301"] and storeA.data["p_-4301"].tips, 4)
+	check("shutdown: B stored", storeB.data["p_-4302"] and storeB.data["p_-4302"].tips, 4)
+	check("shutdown: B never two at once", storeB.maxInFlight, 1)
+	check("shutdown: B calls", storeB.calls, 4)
+	check("shutdown: C abandoned, nothing written", storeC.calls, 0)
+	check("shutdown: no sessions left", next(ShiftService.sessions), nil)
+	check("shutdown: profiles released", SaveService.profiles[a] == nil and SaveService.profiles[b] == nil and SaveService.profiles[c] == nil, true)
+
+	-- 16. Fake-to-real isolation. 16a: a shift on a fake store, then the global store pointed
+	-- back at the real one (what the old fakeStore(false) did): Retry and leaving still write
+	-- only to the fake.
+	p = newPlayer()
+	local fake = store
+	fake.failNext = 3
+	s = finish(p, 1, 3)
+	check("isolation: retry needed", settled(s), "retry")
+	SaveService.store = SaveService.realStore
+	act(s, "retrySave")
+	check("isolation: saved to its own store", settled(s), "saved")
+	check("isolation: fake stored", fake.data[KEY] and fake.data[KEY].tips, 4)
+	ShiftService.leave(p)
+	check("isolation: real untouched", realStandIn.calls, 0)
+
+	-- 16b: the profile reloaded from the real store while a fake receipt waits: the receipt is
+	-- refused, never written, and leaving does not write it either.
+	p = newPlayer()
+	fake = store
+	fake.failNext = 3
+	s = finish(p, 1, 3)
+	check("reload: retry needed", settled(s), "retry")
+	SaveService.store = SaveService.realStore
+	SaveService.load(p)
+	check("reload: profile on real", SaveService.profiles[p].store, realStandIn)
+	act(s, "retrySave")
+	check("reload: refused", settled(s), "retry")
+	check("reload: next shift still refused", (act(s, "newShift")), false)
+	check("reload: leaving refused too", ShiftService.leave(p), "retry")
+	check("reload: real never written", realStandIn.calls, 0)
+	check("reload: fake not written", fake.writes, 0)
+
+	-- 16c: the Studio fakeStore command (TestStore). No way back to the real store; no switch
+	-- while a real receipt is unsettled; after a switch everything is bound to the fake.
+	realStandIn.data[KEY] = nil
+	SaveService.store = SaveService.realStore
+	p = { UserId = -4242, Name = "SettlementTest" }
+	table.insert(players, p)
+	SaveService.load(p)
+	s = ShiftService.start(p)
+	check("command: shift on real", s.shift.store, realStandIn)
+	realStandIn.failNext = 3
+	s = finish(p, 1, 3)
+	check("command: real retry", settled(s), "retry")
+	local realCalls = realStandIn.calls
+	check("command: false refused", string.sub(TestStore.command(p, false), 1, 7), "refused")
+	check("command: switch refused while real unsettled", string.sub(TestStore.command(p, { failNext = 3 }), 1, 7), "refused")
+	check("command: still real", SaveService.store, realStandIn)
+	act(s, "retrySave")
+	check("command: real retry saved", settled(s), "saved")
+	realCalls = realStandIn.calls
+	check("command: switch", string.sub(TestStore.command(p, { failNext = 3 }), 1, 10), "fake store")
+	local fakeNow = SaveService.store
+	check("command: fake in place", fakeNow ~= realStandIn, true)
+	check("command: profile on fake", SaveService.profiles[p].store, fakeNow)
+	check("command: new shift on fake", s.shift.store, fakeNow)
+	s = finish(p, 2, 2)
+	check("command: fake retry", settled(s), "retry")
+	check("command: false still refused", string.sub(TestStore.command(p, false), 1, 7), "refused")
+	check("command: store still fake", SaveService.store, fakeNow)
+	act(s, "retrySave")
+	check("command: fake saved", settled(s), "saved")
+	check("command: fake stored (2 coins + 2 tutorial bonus)", fakeNow.data[KEY] and fakeNow.data[KEY].tips, 4)
+	act(s, "newShift")
+	fakeNow.failNext = 3
+	s = finish(p, 3, 3)
+	check("command: fake retry again", settled(s), "retry")
+	check("command: fresh allowed over a fake receipt", string.sub(TestStore.command(p, { fresh = true }), 1, 10), "fake store")
+	check("command: fresh store", SaveService.store ~= fakeNow and SaveService.store ~= realStandIn, true)
+	ShiftService.leave(p)
+	check("command: real never written after the switch", realStandIn.calls, realCalls)
+
+	-- 17. Retry through the live client path (handle: sequence and rate checks). A rate-limited
+	-- Retry leaves the receipt waiting; it is not lost.
+	p = newPlayer()
+	store.failNext = 3
+	s = finish(p, 1, 3)
+	check("live: retry needed", settled(s), "retry")
+	local receiptBefore = s.shift.receipt
+	local seq = s.lastSeq
+	local function send(action: string): (boolean, string?)
+		seq += 1
+		return ShiftService.handle(p, seq, action, {})
+	end
+	ok, why = send("newShift")
+	check("live: next refused", why, "progress not saved yet")
+	local limited = 0
+	for _ = 1, Config.Net.maxActionsPerSecond + 2 do
+		local _, reason = send("newShift")
+		if reason == "too many requests" then
+			limited += 1
+		end
+	end
+	check("live: burst rate-limited", limited > 0, true)
+	ok, why = send("retrySave")
+	check("live: limited retry refused", why, "too many requests")
+	check("live: still retry", s.shift.settlement, "retry")
+	check("live: same receipt", s.shift.receipt, receiptBefore)
+	store.delay = 0.3
+	task.wait(1.1)
+	ok, why = send("retrySave")
+	check("live: retry accepted", ok, true)
+	check("live: pending", s.shift.settlement, "pending")
+	ok, why = ShiftService.handle(p, seq, "retrySave", {})
+	check("live: replay refused", why, "replayed request")
+	ok, why = ShiftService.handle(p, "x", "retrySave", {})
+	check("live: bad sequence refused", why, "bad sequence")
+	check("live: saved", settled(s), "saved")
+	check("live: one write", store.writes, 1)
+	check("live: stored coins", store.data[KEY] and store.data[KEY].tips, 4)
+	ok, why = send("retrySave")
+	check("live: nothing to retry", why, "nothing to retry")
+	ok, why = send("placeTopping")
+	check("live: shift over", why, "shift is over")
+	check("live: rejections counted", s.rejected > 0, true)
+	ok = send("newShift")
+	check("live: next shift accepted", ok, true)
+	check("live: next not tutorial", s.shift.tutorial, false)
+
+	-- The only write the stand-in ever saw is 16c's own real-store receipt.
+	check("real store stand-in: one write, its own", realStandIn.writes, 1)
 end
 
 local ok, err = pcall(run)
 -- Always put the real store back and drop the stand-in players.
-SaveService.store = SaveService.realStore
+SaveService.realStore = trueRealStore
+SaveService.store = trueRealStore
 SaveService.retryWait = task.wait
 SaveService.simulateLoadFailure = false
 for _, player in players do

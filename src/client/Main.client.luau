@@ -15,6 +15,7 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Scoring = require(Shared.Scoring)
 local Remote = require(script.Parent.Remote)
+local SummaryLines = require(script.Parent.SummaryLines)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local Widgets = require(script.Parent.Widgets)
@@ -1001,7 +1002,6 @@ local function refreshSummary(snap: any)
 		Parent = summary,
 	})
 	Art.apply(card, "ui_panel_summary")
-	local profile = snap.profile or {}
 	-- Reward first and largest; rank and the save line are secondary. The shift's reward is
 	-- shown as coins, the same currency as the HUD balance (snap.tips is that total; there is
 	-- no separate tip component).
@@ -1034,14 +1034,7 @@ local function refreshSummary(snap: any)
 			Parent = card,
 		})
 	end
-	local lines = {
-		string.format("Experience: +%d", snap.xp),
-		string.format("Rank %d · %d shift%s completed", profile.rank or 1, profile.shiftsCompleted or 0, if profile.shiftsCompleted == 1 then "" else "s"),
-		if snap.settlement == "saved" then "Progress saved"
-			elseif snap.settlement == "retry" then "Couldn't save yet. Rewards kept."
-			elseif snap.settlement == "session" then "Progress not saved"
-			else "Saving...",
-	}
+	local lines = SummaryLines.build(snap)
 	Ui.text({
 		Text = "Shift complete",
 		FontFace = Theme.Font.display,
@@ -1064,7 +1057,7 @@ local function refreshSummary(snap: any)
 	})
 	-- The server starts the next shift only once this one's rewards are settled; the button
 	-- says so: a standby "Saving..." while the save runs, "Retry save" after a failed one.
-	local settled = snap.settlement == "saved" or snap.settlement == "session"
+	local settled = SummaryLines.settled(snap)
 	local again = Widgets.button("Next shift", function()
 		if snap.settlement == "retry" then
 			ctx.send("retrySave", {})

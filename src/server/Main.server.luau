@@ -10,9 +10,9 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
 local CustomerLooks = require(script.Parent.CustomerLooks)
-local FakeStore = require(script.Parent.FakeStore)
 local SaveService = require(script.Parent.SaveService)
 local ShiftService = require(script.Parent.ShiftService)
+local TestStore = require(script.Parent.TestStore)
 
 -- The game is played entirely in screen-space 2D; no avatar, so no touch thumbstick.
 Players.CharacterAutoLoads = false
@@ -23,7 +23,8 @@ local stateRemote = folder:WaitForChild(Net.STATE) :: RemoteEvent
 
 local function push(player: Player)
 	local snap = ShiftService.snapshot(player)
-	if snap then
+	-- A leaving player's session lasts until their save settles; nothing to send them then.
+	if snap and player.Parent then
 		stateRemote:FireClient(player, snap)
 	end
 end
@@ -53,10 +54,16 @@ for _, player in Players:GetPlayers() do
 	task.spawn(onPlayerAdded, player)
 end
 
+-- Leaving settles a finished shift's save (waits for the attempt in flight, retries a failed
+-- one) before the profile is released.
 Players.PlayerRemoving:Connect(function(player)
-	ShiftService.stop(player)
 	CustomerLooks.forget(player)
-	SaveService.release(player)
+	ShiftService.leave(player)
+end)
+
+-- Server shutdown: settle everyone's saves together within Roblox's 30 s window.
+game:BindToClose(function()
+	ShiftService.closeAll(25)
 end)
 
 task.spawn(function()
@@ -81,7 +88,10 @@ if RunService:IsStudio() then
 			return "no session"
 		end
 		if command == "state" then
-			local lines = { string.format("lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), if SaveService.store == SaveService.realStore then "real" else "fake", table.concat(session.shift.menu, ",")) }
+			local function storeName(store: any): string
+				return if store == nil then "none" elseif store == SaveService.realStore then "real" else "fake"
+			end
+			local lines = { string.format("lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s shiftStore=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), storeName(SaveService.store), storeName(session.shift.store), table.concat(session.shift.menu, ",")) }
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
@@ -114,29 +124,11 @@ if RunService:IsStudio() then
 			SaveService.simulateLoadFailure = value == true
 			return "ok"
 		elseif command == "fakeStore" then
-			-- value = { failNext, loseAckNext, delay } puts this server on an in-memory store with
-			-- those faults (never the real save) and reloads the profile from it, so the pending
-			-- and retry states can be seen; a table on a fake store only changes its faults.
-			-- false goes back to the real store without reloading.
-			if value == false then
-				SaveService.store = SaveService.realStore
-				return "real store (profile not reloaded)"
-			end
-			local fresh = SaveService.store == SaveService.realStore
-			if fresh then
-				SaveService.store = FakeStore.new()
-			end
-			local fake = SaveService.store
-			fake.failNext = value.failNext or 0
-			fake.loseAckNext = value.loseAckNext or 0
-			fake.delay = value.delay or 0
-			if fresh then
-				SaveService.simulateLoadFailure = false
-				local profile = SaveService.load(player)
-				push(player)
-				return "fake store, profile " .. profile.status
-			end
-			return "fake store faults set"
+			-- value = { failNext, loseAckNext, delay, fresh }: see TestStore. There is no way back
+			-- to the real store within a play session.
+			local result = TestStore.command(player, value)
+			push(player)
+			return result
 		elseif command == "reloadProfile" then
 			local profile = SaveService.load(player)
 			push(player)

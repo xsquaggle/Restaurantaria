@@ -40,9 +40,17 @@ command bar.
 | `playOut` | Finishes the shift with clean pizzas through the real actions |
 | `simulateLoadFailure`, bool | Next profile load fails (pair with `reloadProfile`) |
 | `reloadProfile` | Reloads the player's profile |
+| `fakeStore`, {failNext, loseAckNext, delay, fresh} | Saving goes to an in-memory store with those faults; the profile reloads from it and a new shift starts. A table on a fake store only changes faults (`fresh = true` starts a new empty one). One way: the real store comes back only with a new play session |
 
 `tests/scoring_check.luau` holds table-driven grading checks; paste it into the command bar
 after a sync.
+
+### Offline checks (mock)
+
+`python3 -I tests/offline/run.py` runs the save and summary checks without Studio, using the
+[Luau CLI](https://github.com/luau-lang/luau/releases) (on PATH or named by `$LUAU`) and a
+mock of the few Roblox APIs they use, on a virtual clock. Mock evidence only: it says nothing
+about the real DataStore, a real rejoin or overlapping servers.
 
 ## Order counter (3D, hybrid proof)
 The Order station's counter is the only 3D model. It must exist in the place as a MeshPart named `prop3d_order_counter` in `ReplicatedStorage.Models3D`, brought in with Studio's File > Import 3D from `counter_v1.fbx` (or the source GLB), with a `Yaw` attribute of -90 so the cupboard side faces the camera. Without it the Order station falls back to the 2D view.

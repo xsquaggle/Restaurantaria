@@ -4,8 +4,10 @@
 -- rewards are committed once per shift id inside UpdateAsync, so retries and parallel
 -- sessions cannot pay a shift twice. A shift's commit settles as "saved" (in the DataStore),
 -- "session" (kept for this session only, by design: the load failed or saving is
--- unavailable) or "retry" (the write failed; nothing was recorded and the caller keeps the
--- receipt to commit again).
+-- unavailable) or "retry" (the write failed, or its reply was lost; the caller keeps the
+-- receipt to commit again). A profile keeps the store it was loaded from and a receipt the
+-- store its shift began on; a receipt is only ever written to that same store, so nothing
+-- earned on a test store can reach the real save.
 
 local DataStoreService = game:GetService("DataStoreService")
 
@@ -28,9 +30,11 @@ export type Data = {
 	tutorialBonusPaid: boolean,
 	tutorialBonusReceipt: { shiftId: string, coins: number }?,
 }
-export type Profile = { status: string, data: Data, message: string? }
+-- store: where this profile was loaded from; every write for it goes there (nil: no store).
+export type Profile = { status: string, data: Data, message: string?, store: any? }
 -- One finished shift's rewards, fixed when it ends and committed unchanged on every attempt.
-export type Receipt = { shiftId: string, tips: number, xp: number, tutorialBonus: number? }
+-- store: the store of the profile the shift began on.
+export type Receipt = { shiftId: string, tips: number, xp: number, tutorialBonus: number?, store: any? }
 -- bonusPaid is what the save paid this shift as its tutorial bonus; nil when unknown (retry).
 export type Outcome = { state: string, bonusPaid: number?, message: string? }
 
@@ -52,7 +56,8 @@ do
 		storeError = tostring(result)
 	end
 end
--- The store in use. Tests and the Studio save-flow hook swap in a FakeStore.
+-- The store new loads use. Tests and the Studio save-flow hook (TestStore) swap in a FakeStore;
+-- profiles already loaded keep their own.
 SaveService.store = SaveService.realStore :: any
 -- Waits between attempts; tests make it instant.
 SaveService.retryWait = task.wait
@@ -113,13 +118,14 @@ end
 
 function SaveService.load(player: Player): Profile
 	local profile: Profile
+	local store = SaveService.store
 	if SaveService.simulateLoadFailure then
 		profile = { status = "failed", data = defaultData(), message = "Couldn't load your progress. Playing without saving so nothing gets overwritten." }
-	elseif not SaveService.store then
+	elseif not store then
 		profile = { status = "unavailable", data = defaultData(), message = "Saving is unavailable in this session (" .. tostring(storeError) .. ")" }
 	else
 		local ok, result = withRetries(function()
-			return SaveService.store:GetAsync(key(player))
+			return store:GetAsync(key(player))
 		end)
 		if ok then
 			profile = { status = "ok", data = sanitize(result) }
@@ -135,6 +141,7 @@ function SaveService.load(player: Player): Profile
 			}
 		end
 	end
+	profile.store = store
 	SaveService.profiles[player] = profile
 	return profile
 end
@@ -176,6 +183,11 @@ function SaveService.commitShift(player: Player, receipt: Receipt): Outcome
 	if not profile then
 		return { state = "retry", message = "No profile" }
 	end
+	if receipt.store ~= profile.store then
+		-- Earned on another store (a Studio test store, or before a reload from another one):
+		-- never written here.
+		return { state = "retry", message = "This shift belongs to a different save store; nothing was written." }
+	end
 	local sessionOnly = profile.status ~= "ok"
 	if table.find(profile.data.recentShiftIds, receipt.shiftId) then
 		-- For a loaded save, profile.data only holds what a write returned, so this is durable.
@@ -198,7 +210,7 @@ function SaveService.commitShift(player: Player, receipt: Receipt): Outcome
 	local latest: Data? = nil
 	local ok, result = withRetries(function()
 		paid = nil
-		return SaveService.store:UpdateAsync(key(player), function(old)
+		return (profile.store :: any):UpdateAsync(key(player), function(old)
 			local data = sanitize(old)
 			latest = data
 			if table.find(data.recentShiftIds, receipt.shiftId) then
