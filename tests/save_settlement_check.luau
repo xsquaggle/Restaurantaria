@@ -440,6 +440,88 @@ local function run()
 	ShiftService.leave(p)
 	check("command: real never written after the switch", realStandIn.calls, realCalls)
 
+	-- 16d: two players (Astra's 2026-10-24 review). A and B both load real profiles; A switches
+	-- to a fake store and leaves; B, still on the real store, must get no fake faults, no test
+	-- mutation and no forced coins, and its own fakeStore call must switch it (not "faults set").
+	-- A player who joins after a switch loads from the fake store.
+	realStandIn.data["p_-5001"] = nil
+	realStandIn.data["p_-5002"] = nil
+	realStandIn.failNext, realStandIn.loseAckNext, realStandIn.delay = 0, 0, 0
+	local realBefore = realStandIn.writes
+	local a = playerOn(realStandIn, -5001)
+	local sa = ShiftService.start(a)
+	local b = playerOn(realStandIn, -5002)
+	local sb = ShiftService.start(b)
+	check("two: A on real", TestStore.productionBound(a), true)
+	check("two: B on real", TestStore.productionBound(b), true)
+	check("two: mutator refused on real A", TestStore.guard(a) ~= nil, true)
+	check("two: forced coins refused on real A", string.sub(TestStore.forceTip(a, 9), 1, 7), "refused")
+	check("two: A switches", string.sub(TestStore.command(a, { failNext = 3, delay = 0.2 }), 1, 10), "fake store")
+	local fakeA = SaveService.profiles[a].store
+	check("two: A on its fake", fakeA ~= realStandIn and sa.shift.store == fakeA, true)
+	check("two: A mutators allowed", TestStore.guard(a), nil)
+	check("two: forced coins on fake A", TestStore.forceTip(a, 77), "ok")
+	check("two: B still on real", SaveService.profiles[b].store, realStandIn)
+	check("two: B shift still on real", sb.shift.store, realStandIn)
+	check("two: real store got no faults", realStandIn.failNext + realStandIn.loseAckNext + realStandIn.delay, 0)
+	check("two: B mutator refused", TestStore.guard(b) ~= nil, true)
+	check("two: B forced coins refused", string.sub(TestStore.forceTip(b, 9), 1, 7), "refused")
+	check("two: B has no forced coins", sb.devForcedTip, nil)
+	check("two: no server-wide forced coins", (ShiftService :: any).devForcedTip, nil)
+	-- A served order on B's real shift scores normally even while A forces 77 coins.
+	sb.shift.customers = { { id = 901, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
+	sb.shift.pizzas = { [902] = { id = 902, ticketId = 901, stage = "cutting", toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
+	sb.shift.nextArrival = sb.shift.customerCount + 2
+	check("two: B serve", (ShiftService.apply(sb, "serve", { pizzaId = 902 })), true)
+	check("two: B coins not forced", sb.shift.customers[1].result.tip ~= 77, true)
+	sa.shift.customers = { { id = 903, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
+	sa.shift.pizzas = { [904] = { id = 904, ticketId = 903, stage = "cutting", toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
+	sa.shift.nextArrival = sa.shift.customerCount + 2
+	check("two: A serve", (ShiftService.apply(sa, "serve", { pizzaId = 904 })), true)
+	check("two: A coins forced", sa.shift.customers[1].result.tip, 77)
+	check("two: A fake save fails as set", settled(sa), "retry")
+	ShiftService.leave(a)
+	check("two: A gone", ShiftService.sessions[a] == nil and SaveService.profiles[a] == nil, true)
+	-- B finished its real shift: it saves to the real store, B's own coins only.
+	check("two: B saved to real", settled(sb), "saved")
+	check("two: real got B's write", realStandIn.writes, realBefore + 1)
+	check("two: B real coins", realStandIn.data["p_-5002"].tips, sb.shift.tips + (sb.shift.tutorialBonus or 0))
+	check("two: fake A never reached real", realStandIn.data["p_-5001"], nil)
+	-- B's real receipt unsettled: B's switch is refused and the receipt kept.
+	act(sb, "newShift")
+	realStandIn.failNext = 3
+	local tipsBefore = realStandIn.data["p_-5002"].tips
+	sb.shift.customers = { { id = 905, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
+	sb.shift.pizzas = { [906] = { id = 906, ticketId = 905, stage = "cutting", toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
+	sb.shift.nextArrival = sb.shift.customerCount + 2
+	ShiftService.apply(sb, "serve", { pizzaId = 906 })
+	check("two: B real retry", settled(sb), "retry")
+	local receiptB = sb.shift.receipt
+	check("two: B switch refused while real unsettled", string.sub(TestStore.command(b, {}), 1, 7), "refused")
+	check("two: B receipt kept", sb.shift.receipt, receiptB)
+	check("two: B still real after refusal", SaveService.profiles[b].store, realStandIn)
+	act(sb, "retrySave")
+	check("two: B retry saved to real", settled(sb), "saved")
+	check("two: B real coins once", realStandIn.data["p_-5002"].tips, tipsBefore + receiptB.tips)
+	-- Settled: B's own call switches B (a new fake, never A's faults or "faults set").
+	local line = TestStore.command(b, {})
+	check("two: B switches, not faults set", string.sub(line, 1, 10), "fake store")
+	local fakeB = SaveService.profiles[b].store
+	check("two: B on its own fake", fakeB ~= realStandIn and fakeB ~= fakeA and sb.shift.store == fakeB, true)
+	check("two: B fake clean", fakeB.failNext + fakeB.delay, 0)
+	-- A later join loads from the selected test store, not the real one.
+	local c = { UserId = -5003, Name = "SettlementTest5003" }
+	table.insert(players, c)
+	SaveService.load(c :: any)
+	check("two: later join on test store", SaveService.profiles[c].store ~= realStandIn, true)
+	check("two: later join not production-bound", TestStore.productionBound(c :: any), false)
+	-- reloadProfile-style reload keeps each player on its own store.
+	SaveService.load(b, SaveService.profiles[b].store)
+	check("two: reload keeps B on its fake", SaveService.profiles[b].store, fakeB)
+	ShiftService.leave(b)
+	SaveService.release(c :: any)
+	check("two: real writes are B's two only", realStandIn.writes, realBefore + 2)
+
 	-- 17. Retry through the live client path (handle: sequence and rate checks). A rate-limited
 	-- Retry leaves the receipt waiting; it is not lost.
 	p = newPlayer()
@@ -487,8 +569,8 @@ local function run()
 	check("live: next shift accepted", ok, true)
 	check("live: next not tutorial", s.shift.tutorial, false)
 
-	-- The only write the stand-in ever saw is 16c's own real-store receipt.
-	check("real store stand-in: one write, its own", realStandIn.writes, 1)
+	-- The only writes the stand-in ever saw are 16c's and 16d's own real-store receipts.
+	check("real store stand-in: three writes, their own", realStandIn.writes, 3)
 end
 
 local ok, err = pcall(run)

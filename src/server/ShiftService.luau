@@ -80,6 +80,9 @@ type Session = {
 	version: number,
 	-- Set once the player is leaving (or the server closing): no more intents are accepted.
 	leaving: boolean?,
+	-- Studio test hook (TestStore.forceTip): each served order's coins are forced to this, so
+	-- the tutorial bonus can be seen firing. Ignored on a shift bound to the real store.
+	devForcedTip: number?,
 }
 
 -- How long leaving waits for a finished shift's save, inside Roblox's 30 s shutdown window.
@@ -121,10 +124,6 @@ end
 function ShiftService.tutorialBonusFor(tip: number): number
 	return math.max(0, Config.Rewards.tutorialGuarantee - tip)
 end
-
--- Studio test hook: when set, each served order's coins are forced to this value, so the
--- tutorial bonus can be seen firing (it never fires under today's grade formula).
-ShiftService.devForcedTip = nil :: number?
 
 function ShiftService.newShift(player: Player): Shift
 	local menu = menuFor(player)
@@ -517,8 +516,8 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local cut = Scoring.cut(order.slices, pizza.cuts)
 	local overall = math.floor((wait.score + topping.score + bake.score + cut.score) / 4 + 0.5)
 	local tip = math.floor(Config.Rewards.baseTip * overall / 100 + 0.5)
-	if ShiftService.devForcedTip and RunService:IsStudio() then
-		tip = ShiftService.devForcedTip :: number
+	if session.devForcedTip and RunService:IsStudio() and shift.store ~= SaveService.realStore then
+		tip = session.devForcedTip :: number
 	end
 	-- The tutorial's first completed order is topped up to the guarantee by a separate bonus;
 	-- the grade and the order's own coins stay as earned. Paid by commitShift, once per save.

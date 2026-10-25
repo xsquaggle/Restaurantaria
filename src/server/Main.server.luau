@@ -78,20 +78,31 @@ task.spawn(function()
 end)
 
 -- Studio-only test hook so automated playtests can inspect authoritative state.
+-- Commands that edit rewards, timing or play are test mutators: refused for a player still on
+-- the real save (TestStore.guard), so a test run needs fakeStore first.
+local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true }
+
 if RunService:IsStudio() then
 	local debug = Instance.new("BindableFunction")
 	debug.Name = "RestaurantariaDebug"
-	debug.OnInvoke = function(command: string, value: any)
-		local player = Players:GetPlayers()[1]
+	-- userId (optional) picks the player; otherwise the first one.
+	debug.OnInvoke = function(command: string, value: any, userId: number?)
+		local player = if userId then Players:GetPlayerByUserId(userId) else Players:GetPlayers()[1]
 		local session = player and ShiftService.sessions[player]
 		if not session then
 			return "no session"
+		end
+		if TEST_MUTATORS[command] then
+			local refusal = TestStore.guard(player)
+			if refusal then
+				return refusal
+			end
 		end
 		if command == "state" then
 			local function storeName(store: any): string
 				return if store == nil then "none" elseif store == SaveService.realStore then "real" else "fake"
 			end
-			local lines = { string.format("lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s shiftStore=%s menu=%s", session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), storeName(SaveService.store), storeName(session.shift.store), table.concat(session.shift.menu, ",")) }
+			local lines = { string.format("player=%d lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s shiftStore=%s menu=%s", player.UserId, session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), storeName(SaveService.store), storeName(session.shift.store), table.concat(session.shift.menu, ",")) }
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
@@ -111,15 +122,19 @@ if RunService:IsStudio() then
 			Config.Dev.mixedOrders = value == true
 			return "ok"
 		elseif command == "restartShift" then
-			-- Abandons the current shift (no reward, nothing saved) and starts a new one.
+			-- Abandons the current shift (no reward, nothing saved) and starts a new one. A real
+			-- receipt still saving or waiting for a retry is never abandoned.
+			local settlement = session.shift.settlement
+			if TestStore.productionBound(player) and (settlement == "pending" or settlement == "retry") then
+				return "refused: this shift's real save is not settled yet"
+			end
 			session.shift = ShiftService.newShift(player)
 			push(player)
 			return "ok"
 		elseif command == "forceTip" then
 			-- value = a number of coins every served order earns, or nil to score normally.
-			-- Lets a test see the tutorial bonus fire.
-			ShiftService.devForcedTip = if type(value) == "number" then value else nil
-			return "ok"
+			-- Lets a test see the tutorial bonus fire. This player only, on a test store only.
+			return TestStore.forceTip(player, value)
 		elseif command == "simulateLoadFailure" then
 			SaveService.simulateLoadFailure = value == true
 			return "ok"
@@ -130,7 +145,10 @@ if RunService:IsStudio() then
 			push(player)
 			return result
 		elseif command == "reloadProfile" then
-			local profile = SaveService.load(player)
+			-- Reloads from the store the player is already on, so it never moves a player
+			-- between the real and a test store.
+			local current = SaveService.profiles[player]
+			local profile = SaveService.load(player, current and current.store)
 			push(player)
 			return profile.status
 		elseif command == "skipArrivals" then

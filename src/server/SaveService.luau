@@ -116,9 +116,11 @@ local function withRetries<T>(fn: () -> T): (boolean, any)
 	return false, lastErr
 end
 
-function SaveService.load(player: Player): Profile
+-- onStore: load from this store instead of SaveService.store (the Studio test hook names its
+-- fake store, so a test profile can never fall back to the real one).
+function SaveService.load(player: Player, onStore: any?): Profile
 	local profile: Profile
-	local store = SaveService.store
+	local store = onStore or SaveService.store
 	if SaveService.simulateLoadFailure then
 		profile = { status = "failed", data = defaultData(), message = "Couldn't load your progress. Playing without saving so nothing gets overwritten." }
 	elseif not store then

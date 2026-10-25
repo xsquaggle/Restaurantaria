@@ -29,7 +29,11 @@ command bar.
 
 ## Test hooks (Studio only)
 
-`ServerStorage.RestaurantariaDebug` (a BindableFunction, created only in Studio):
+`ServerStorage.RestaurantariaDebug` (a BindableFunction, created only in Studio). Call it as
+`Invoke(command, value, userId?)`; without a userId it acts on the first player. Everything is
+decided by that player's own loaded store. Test mutators (`skipArrivals`, `resetPatience`,
+`setBake`, `age`, `stage`, `act`, `playOut`, `forceTip`) are refused while the player is still
+on the real save: run `fakeStore` first.
 
 | Command | Effect |
 |---------|--------|
@@ -39,8 +43,9 @@ command bar.
 | `setBake`, {slot, s} | Makes the pizza in that oven read as baked for s seconds |
 | `playOut` | Finishes the shift with clean pizzas through the real actions |
 | `simulateLoadFailure`, bool | Next profile load fails (pair with `reloadProfile`) |
-| `reloadProfile` | Reloads the player's profile |
-| `fakeStore`, {failNext, loseAckNext, delay, fresh} | Saving goes to an in-memory store with those faults; the profile reloads from it and a new shift starts. A table on a fake store only changes faults (`fresh = true` starts a new empty one). One way: the real store comes back only with a new play session |
+| `reloadProfile` | Reloads the player's profile from the store it is already on |
+| `forceTip`, n or nil | Every order this player serves earns n coins (test store only) |
+| `fakeStore`, {failNext, loseAckNext, delay, fresh} | For a player on the real save: a new in-memory store is selected first (later joins load from it too), the profile reloads from it and a new shift starts; refused while that player's real save is still pending or waiting for a retry. For a player already on a fake store it only changes that store's faults (`fresh = true` starts a new empty one). Other players are not touched. One way: the real store comes back only with a new play session |
 
 `tests/scoring_check.luau` holds table-driven grading checks; paste it into the command bar
 after a sync.
