@@ -81,7 +81,7 @@ type Session = {
 	-- Set once the player is leaving (or the server closing): no more intents are accepted.
 	leaving: boolean?,
 	-- Studio test hook (TestStore.forceTip): each served order's coins are forced to this, so
-	-- the tutorial bonus can be seen firing. Ignored on a shift bound to the real store.
+	-- the tutorial bonus can be seen firing. Ignored on a shift bound to the production store.
 	devForcedTip: number?,
 }
 
@@ -98,12 +98,12 @@ local function now(): number
 end
 
 -- The save's unlocked recipes, or every recipe while the development setting for mixed
--- orders is on.
+-- orders is on. A shift on the production store always uses the save's recipes.
 local function menuFor(player: Player): { string }
-	if Config.Dev.mixedOrders then
+	local profile = SaveService.profiles[player]
+	if Config.Dev.mixedOrders and not (profile and SaveService.kindOf(profile.store) == "production") then
 		return Recipes.all()
 	end
-	local profile = SaveService.profiles[player]
 	return table.clone(if profile then profile.data.unlockedRecipes else Recipes.Starting)
 end
 
@@ -516,7 +516,7 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local cut = Scoring.cut(order.slices, pizza.cuts)
 	local overall = math.floor((wait.score + topping.score + bake.score + cut.score) / 4 + 0.5)
 	local tip = math.floor(Config.Rewards.baseTip * overall / 100 + 0.5)
-	if session.devForcedTip and RunService:IsStudio() and shift.store ~= SaveService.realStore then
+	if session.devForcedTip and RunService:IsStudio() and SaveService.kindOf(shift.store) ~= "production" then
 		tip = session.devForcedTip :: number
 	end
 	-- The tutorial's first completed order is topped up to the guarantee by a separate bonus;

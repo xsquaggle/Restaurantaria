@@ -79,8 +79,10 @@ end)
 
 -- Studio-only test hook so automated playtests can inspect authoritative state.
 -- Commands that edit rewards, timing or play are test mutators: refused for a player still on
--- the real save (TestStore.guard), so a test run needs fakeStore first.
+-- the real save (TestStore.guard), so a test run needs fakeStore first (or a test or memory
+-- backend, SaveBackend). Server-wide test settings are refused while anyone is on it.
 local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true }
+local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true }
 
 if RunService:IsStudio() then
 	local debug = Instance.new("BindableFunction")
@@ -98,11 +100,18 @@ if RunService:IsStudio() then
 				return refusal
 			end
 		end
+		if SERVER_TEST_SETTINGS[command] then
+			local refusal = TestStore.guardServer()
+			if refusal then
+				return refusal
+			end
+		end
 		if command == "state" then
 			local function storeName(store: any): string
-				return if store == nil then "none" elseif store == SaveService.realStore then "real" else "fake"
+				local kind = SaveService.kindOf(store)
+				return if kind == "test" then "test:" .. tostring(store.name) else kind
 			end
-			local lines = { string.format("player=%d lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s shiftStore=%s menu=%s", player.UserId, session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), storeName(SaveService.store), storeName(session.shift.store), table.concat(session.shift.menu, ",")) }
+			local lines = { string.format("backend=%s:%s productionOpen=%s", SaveService.backend.kind, tostring(SaveService.backend.name), tostring(SaveService.productionStore ~= nil)), string.format("player=%d lastSeq=%d rejected=%d tips=%d tutorial=%s tutorialBonus=%s finished=%s settlement=%s store=%s shiftStore=%s menu=%s", player.UserId, session.lastSeq, session.rejected, session.shift.tips, tostring(session.shift.tutorial), tostring(session.shift.tutorialBonus), tostring(session.shift.finished), tostring(session.shift.settlement), storeName(SaveService.store), storeName(session.shift.store), table.concat(session.shift.menu, ",")) }
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),

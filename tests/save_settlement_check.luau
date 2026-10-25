@@ -4,7 +4,7 @@
 -- store reaches the real one.
 -- Run from the Studio command bar (or the Studio MCP in Edit mode) after a sync, or offline
 -- with tests/offline/run.py. Every save goes to an in-memory FakeStore. For the whole run
--- SaveService.realStore is replaced by a FakeStore stand-in, so even a broken isolation rule
+-- SaveService.productionStore is replaced by a FakeStore stand-in, so even a broken isolation rule
 -- could only reach the stand-in: the real DataStore is never read or written. These are mock
 -- results: they say nothing about the real DataStore, a real rejoin or overlapping servers.
 
@@ -29,7 +29,7 @@ end
 local KEY = "p_-4242"
 local players = {} :: { any }
 local store: any
-local trueRealStore = SaveService.realStore
+local trueProductionStore = SaveService.productionStore
 local realStandIn = FakeStore.new()
 
 -- A stand-in player on a fresh fake store (or the given one), loaded through SaveService.
@@ -39,8 +39,8 @@ local function newPlayer(onStore: any?, raw: any?): any
 		store.data[KEY] = raw
 	end
 	SaveService.store = store
-	assert(SaveService.store ~= SaveService.realStore, "fake store not in place")
-	assert(SaveService.realStore == realStandIn, "real store stand-in not in place")
+	assert(SaveService.store ~= SaveService.productionStore, "fake store not in place")
+	assert(SaveService.productionStore == realStandIn, "real store stand-in not in place")
 	local player = { UserId = -4242, Name = "SettlementTest" }
 	table.insert(players, player)
 	SaveService.load(player :: any)
@@ -91,7 +91,7 @@ end
 local function run()
 	SaveService.simulateLoadFailure = false
 	SaveService.retryWait = function() end
-	SaveService.realStore = realStandIn
+	SaveService.productionStore = realStandIn
 
 	-- 1. Delayed successful save: Next shift waits; the shift pays once; the next is not the tutorial.
 	local p = newPlayer()
@@ -376,7 +376,7 @@ local function run()
 	fake.failNext = 3
 	s = finish(p, 1, 3)
 	check("isolation: retry needed", settled(s), "retry")
-	SaveService.store = SaveService.realStore
+	SaveService.store = SaveService.productionStore
 	act(s, "retrySave")
 	check("isolation: saved to its own store", settled(s), "saved")
 	check("isolation: fake stored", fake.data[KEY] and fake.data[KEY].tips, 4)
@@ -390,7 +390,7 @@ local function run()
 	fake.failNext = 3
 	s = finish(p, 1, 3)
 	check("reload: retry needed", settled(s), "retry")
-	SaveService.store = SaveService.realStore
+	SaveService.store = SaveService.productionStore
 	SaveService.load(p)
 	check("reload: profile on real", SaveService.profiles[p].store, realStandIn)
 	act(s, "retrySave")
@@ -403,7 +403,7 @@ local function run()
 	-- 16c: the Studio fakeStore command (TestStore). No way back to the real store; no switch
 	-- while a real receipt is unsettled; after a switch everything is bound to the fake.
 	realStandIn.data[KEY] = nil
-	SaveService.store = SaveService.realStore
+	SaveService.store = SaveService.productionStore
 	p = { UserId = -4242, Name = "SettlementTest" }
 	table.insert(players, p)
 	SaveService.load(p)
@@ -575,8 +575,8 @@ end
 
 local ok, err = pcall(run)
 -- Always put the real store back and drop the stand-in players.
-SaveService.realStore = trueRealStore
-SaveService.store = trueRealStore
+SaveService.productionStore = trueProductionStore
+SaveService.store = trueProductionStore
 SaveService.retryWait = task.wait
 SaveService.simulateLoadFailure = false
 for _, player in players do

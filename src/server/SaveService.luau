@@ -9,13 +9,11 @@
 -- store its shift began on; a receipt is only ever written to that same store, so nothing
 -- earned on a test store can reach the real save.
 
-local DataStoreService = game:GetService("DataStoreService")
-
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
+local SaveBackend = require(script.Parent.SaveBackend)
 
-local STORE_NAME = "Restaurantaria_Progress_v1"
 local RECENT_SHIFT_LIMIT = 30
 local RETRIES = 3
 
@@ -41,26 +39,35 @@ export type Outcome = { state: string, bonusPaid: number?, message: string? }
 local SaveService = {}
 SaveService.profiles = {} :: { [Player]: Profile }
 
--- Test hook: when true, loads fail as if the DataStore were down.
+-- Test hook: when true, loads fail as if the DataStore were down (test and memory stores only).
 SaveService.simulateLoadFailure = false
 
-SaveService.realStore = nil :: DataStore?
-local storeError: string? = nil
-do
-	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(STORE_NAME)
-	end)
-	if ok then
-		SaveService.realStore = result
-	else
-		storeError = tostring(result)
-	end
-end
--- The store new loads use. Tests and the Studio save-flow hook (TestStore) swap in a FakeStore;
+-- Where saves go, chosen once before any store is opened (SaveBackend): kind is "production",
+-- "test" (an isolated test DataStore) or "memory" (a FakeStore).
+local selected = SaveBackend.select()
+SaveService.backend = table.freeze({ kind = selected.kind, name = selected.name })
+-- The production DataStore, only in a production runtime; nil in a test or memory one, which
+-- never opens it.
+SaveService.productionStore = if selected.kind == "production" then selected.store else nil :: any
+local storeError: string? = selected.error
+-- The store new loads use. The Studio save-flow hook (TestStore) and tests swap in a FakeStore;
 -- profiles already loaded keep their own.
-SaveService.store = SaveService.realStore :: any
+SaveService.store = selected.store :: any
 -- Waits between attempts; tests make it instant.
 SaveService.retryWait = task.wait
+
+-- What kind of store this is: "production", "test", "memory" or "none". Anything else counts
+-- as production, so test-only commands fail closed.
+function SaveService.kindOf(store: any): string
+	if store == nil then
+		return "none"
+	elseif store == SaveService.productionStore then
+		return "production"
+	elseif type(store) == "table" and (store.kind == "test" or store.kind == "memory") then
+		return store.kind
+	end
+	return "production"
+end
 
 local function defaultData(): Data
 	return { tips = 0, xp = 0, shiftsCompleted = 0, recentShiftIds = {}, unlockedRecipes = table.clone(Recipes.Starting), tutorialBonusPaid = false }
@@ -121,7 +128,8 @@ end
 function SaveService.load(player: Player, onStore: any?): Profile
 	local profile: Profile
 	local store = onStore or SaveService.store
-	if SaveService.simulateLoadFailure then
+	-- The load-failure test hook never applies to a production load.
+	if SaveService.simulateLoadFailure and SaveService.kindOf(store) ~= "production" then
 		profile = { status = "failed", data = defaultData(), message = "Couldn't load your progress. Playing without saving so nothing gets overwritten." }
 	elseif not store then
 		profile = { status = "unavailable", data = defaultData(), message = "Saving is unavailable in this session (" .. tostring(storeError) .. ")" }

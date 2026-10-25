@@ -1,13 +1,15 @@
 --!strict
--- Studio test hook behind Main's fakeStore command and its test mutators: puts a player's
--- saving on an in-memory FakeStore so the pending and retry states can be seen without
--- touching the real save. Everything is decided by the selected player's own loaded store,
--- never by the server-wide one: with two players, one switching to a fake store changes
--- nothing for the other. A player still bound to the real store gets no test faults and no
--- test mutations (forced coins, scripted play, clock edits). One way only: once a player is on
--- a fake store, the real store comes back only with a new play session. Every profile, shift
--- and receipt also keeps the store it began on (SaveService, ShiftService), so nothing made on
--- a fake store can reach the real one.
+-- Studio test hook behind Main's fakeStore command and its test mutators. Store kinds come
+-- from SaveService.kindOf: production (the real save), test (an isolated test DataStore
+-- behind the TestDataStore adapter) and memory (a FakeStore). Everything is decided by the
+-- selected player's own loaded store, never by the server-wide one. A player still bound to
+-- the production store gets no test faults and no test mutations (forced coins, scripted
+-- play, clock edits, mixed orders, load failures). fakeStore moves a player off production
+-- onto a new FakeStore, one way only: production comes back only with a new play session.
+-- On a test or memory store it sets that store's faults; on the test DataStore the faults
+-- live in the adapter, never on the DataStore object itself. Every profile, shift and
+-- receipt keeps the store it began on (SaveService, ShiftService), so nothing made on a test
+-- or memory store can reach production.
 
 local FakeStore = require(script.Parent.FakeStore)
 local SaveService = require(script.Parent.SaveService)
@@ -19,20 +21,35 @@ local function unsettled(settlement: string?): boolean
 	return settlement == "pending" or settlement == "retry"
 end
 
-local function isFake(store: any): boolean
-	return store ~= nil and store ~= SaveService.realStore
+-- A store test faults may be set on: the isolated test DataStore's adapter or a FakeStore.
+local function isTestKind(store: any): boolean
+	local kind = SaveService.kindOf(store)
+	return kind == "test" or kind == "memory"
 end
 
--- True while the player's loaded profile or current shift is bound to the real store (a shift
--- begun there can still commit there after a reload). With no real store at all, nothing is.
+-- True while the player's loaded profile or current shift is bound to the production store (a
+-- shift begun there can still commit there after a reload).
 function TestStore.productionBound(player: Player): boolean
-	local real = SaveService.realStore
-	if real == nil then
-		return false
-	end
 	local profile = SaveService.profiles[player]
 	local session = ShiftService.sessions[player]
-	return (profile ~= nil and profile.store == real) or (session ~= nil and session.shift.store == real)
+	return (profile ~= nil and SaveService.kindOf(profile.store) == "production")
+		or (session ~= nil and SaveService.kindOf(session.shift.store) == "production")
+end
+
+-- True while anyone on this server is bound to production: server-wide test settings
+-- (mixedOrders, simulateLoadFailure) are refused then.
+function TestStore.anyProductionBound(): boolean
+	for player in SaveService.profiles do
+		if TestStore.productionBound(player) then
+			return true
+		end
+	end
+	for player in ShiftService.sessions do
+		if TestStore.productionBound(player) then
+			return true
+		end
+	end
+	return false
 end
 
 -- Refusal line for a test mutator (a command that edits rewards, timing or play), or nil when
@@ -44,34 +61,44 @@ function TestStore.guard(player: Player): string?
 	return nil
 end
 
--- value = { failNext, loseAckNext, delay, fresh }. When the player is bound to the real store,
--- or with fresh = true, this selects a new empty fake store first, then reloads the player's
--- profile from it and starts a new shift (the current one is abandoned: no reward). A real
--- receipt that is not settled yet is never abandoned: the switch is refused. When the player
--- is already on a fake store, without fresh, it only changes that store's faults. Anything
--- else (false included) is refused. Returns a line for the caller.
+-- Refusal line for a server-wide test setting, or nil when nobody is on production.
+function TestStore.guardServer(): string?
+	if TestStore.anyProductionBound() then
+		return "refused: a player on this server is on the real save; run fakeStore first"
+	end
+	return nil
+end
+
+-- value = { failNext, loseAckNext, delay, fresh }. When the player is bound to production, has
+-- no store, or with fresh = true, this selects a new empty FakeStore first, then reloads the
+-- player's profile from it and starts a new shift (the current one is abandoned: no reward).
+-- A receipt for a persistent store (production or test) that is not settled yet is never
+-- abandoned: the switch is refused. When the player is already on a test or memory store,
+-- without fresh, it only sets that store's faults (the adapter's, for the test DataStore).
+-- Anything else (false included) is refused. Returns a line for the caller.
 function TestStore.command(player: Player, value: any): string
 	if type(value) ~= "table" then
 		return "refused: the real store comes back only with a new play session"
 	end
 	local session = ShiftService.sessions[player]
 	local profile = SaveService.profiles[player]
-	local switching = TestStore.productionBound(player) or value.fresh == true or not (profile and isFake(profile.store))
-	if switching and session and not isFake(session.shift.store) and unsettled(session.shift.settlement) then
-		-- Its receipt belongs to the real save; abandoning it would lose real rewards.
-		return "refused: this shift's real save is not settled yet"
+	local current = profile and profile.store
+	local switching = TestStore.productionBound(player) or value.fresh == true or not isTestKind(current)
+	if switching and session and SaveService.kindOf(session.shift.store) ~= "memory" and unsettled(session.shift.settlement) then
+		-- Its receipt belongs to a persistent save; abandoning it would lose its rewards.
+		return "refused: this shift's save is not settled yet"
 	end
-	local fake = if switching then FakeStore.new() else (profile :: SaveService.Profile).store
-	fake.failNext = value.failNext or 0
-	fake.loseAckNext = value.loseAckNext or 0
-	fake.delay = value.delay or 0
+	local target = if switching then FakeStore.new() else current
+	target.failNext = value.failNext or 0
+	target.loseAckNext = value.loseAckNext or 0
+	target.delay = value.delay or 0
 	if not switching then
-		return "fake store faults set"
+		return SaveService.kindOf(target) .. " store faults set"
 	end
 	-- The isolated store is chosen before the profile loads; later joins load from it too.
-	SaveService.store = fake
+	SaveService.store = target
 	SaveService.simulateLoadFailure = false
-	local loaded = SaveService.load(player, fake)
+	local loaded = SaveService.load(player, target)
 	if session then
 		session.devForcedTip = nil
 		session.shift = ShiftService.newShift(player)

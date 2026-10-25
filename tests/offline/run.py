@@ -17,6 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_CHECKS = [
     "tests/tutorial_bonus_check.luau",
     "tests/save_settlement_check.luau",
+    "tests/save_backend_check.luau",
     "tests/summary_lines_check.luau",
 ]
 

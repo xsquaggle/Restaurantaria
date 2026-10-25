@@ -23,7 +23,7 @@ local function copy(v: any): any
 end
 
 function FakeStore.new(): any
-	local self: any = { data = {}, failNext = 0, loseAckNext = 0, delay = 0, interleave = nil, calls = 0, writes = 0, transforms = 0, gets = 0, inFlight = {}, maxInFlight = 0 }
+	local self: any = { kind = "memory", data = {}, failNext = 0, loseAckNext = 0, delay = 0, interleave = nil, calls = 0, writes = 0, transforms = 0, gets = 0, inFlight = {}, maxInFlight = 0 }
 
 	function self.GetAsync(_s: any, key: string): any
 		self.gets += 1

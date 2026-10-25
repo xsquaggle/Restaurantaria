@@ -27,17 +27,39 @@ types and ranges, and stage legality, then grades and pays out itself.
 `HttpService.HttpEnabled` on for the fetch and restores it). Set `SHA` and run it from the
 command bar.
 
+## Save backends
+
+`SaveBackend` picks where progress is saved, once at server start, before any DataStore is
+opened or profile loaded. Without settings it is production (`Restaurantaria_Progress_v1`).
+In Studio only, ServerStorage attributes select another one; set them in Edit before Play and
+remove them afterwards:
+
+| `RestaurantariaSaveBackend` | Saves go to |
+|---|---|
+| (absent) or `production` | the real save |
+| `test` | the isolated DataStore named by `RestaurantariaTestStore`, which must start with `Restaurantaria_TEST_`; through `TestDataStore`, a test-only adapter that can inject faults |
+| `memory` | an in-memory FakeStore (nothing persists) |
+
+A test or memory runtime never opens the production DataStore: a missing or refused test name
+gives no store (progress kept for the session only). Live servers ignore the attributes, so
+the selector cannot isolate a live server; that needs a separate experience.
+`tests/studio/persistence_check.luau` runs the real-store scenarios on the test backend
+(Server datamodel during Play).
+
 ## Test hooks (Studio only)
 
 `ServerStorage.RestaurantariaDebug` (a BindableFunction, created only in Studio). Call it as
 `Invoke(command, value, userId?)`; without a userId it acts on the first player. Everything is
 decided by that player's own loaded store. Test mutators (`skipArrivals`, `resetPatience`,
 `setBake`, `age`, `stage`, `act`, `playOut`, `forceTip`) are refused while the player is still
-on the real save: run `fakeStore` first.
+on the real save: run `fakeStore` first, or start Play on the test or memory backend. The
+server-wide settings `mixedOrders` and `simulateLoadFailure` are refused while any player is on
+the real save, and never apply to a production profile.
 
 | Command | Effect |
 |---------|--------|
-| `state` | Authoritative shift, pizza and profile state as text |
+| `state` | Backend, authoritative shift, pizza and profile state as text |
+| `mixedOrders`, bool | Orders draw on every recipe for shifts started after it (not on the real save) |
 | `skipArrivals`, n | Moves the shift clock n seconds forward |
 | `resetPatience` | Refills every unserved customer's patience |
 | `setBake`, {slot, s} | Makes the pizza in that oven read as baked for s seconds |
@@ -45,7 +67,7 @@ on the real save: run `fakeStore` first.
 | `simulateLoadFailure`, bool | Next profile load fails (pair with `reloadProfile`) |
 | `reloadProfile` | Reloads the player's profile from the store it is already on |
 | `forceTip`, n or nil | Every order this player serves earns n coins (test store only) |
-| `fakeStore`, {failNext, loseAckNext, delay, fresh} | For a player on the real save: a new in-memory store is selected first (later joins load from it too), the profile reloads from it and a new shift starts; refused while that player's real save is still pending or waiting for a retry. For a player already on a fake store it only changes that store's faults (`fresh = true` starts a new empty one). Other players are not touched. One way: the real store comes back only with a new play session |
+| `fakeStore`, {failNext, loseAckNext, delay, fresh} | For a player on the real save: a new in-memory store is selected first (later joins load from it too), the profile reloads from it and a new shift starts; refused while that player's real save is still pending or waiting for a retry. For a player already on a fake store, or on the test DataStore, it only changes that store's faults (on the test DataStore the adapter's; `fresh = true` starts a new empty in-memory one). Other players are not touched. One way: the real store comes back only with a new play session |
 
 `tests/scoring_check.luau` holds table-driven grading checks; paste it into the command bar
 after a sync.
