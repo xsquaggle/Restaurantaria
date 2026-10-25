@@ -21,6 +21,22 @@ local function unsettled(settlement: string?): boolean
 	return settlement == "pending" or settlement == "retry"
 end
 
+-- True while the session's shift holds a receipt for a persistent store (production or the
+-- isolated test DataStore) that is still saving or waiting for a retry. Abandoning that shift
+-- (fakeStore switching, restartShift) would lose its rewards, so both refuse then.
+function TestStore.persistentUnsettled(session: any): boolean
+	return SaveService.kindOf(session.shift.store) ~= "memory" and unsettled(session.shift.settlement)
+end
+
+-- Refusal line for restartShift, or nil when the current shift may be abandoned.
+function TestStore.restartRefusal(player: Player): string?
+	local session = ShiftService.sessions[player]
+	if session and TestStore.persistentUnsettled(session) then
+		return "refused: this shift's save is not settled yet"
+	end
+	return nil
+end
+
 -- A store test faults may be set on: the isolated test DataStore's adapter or a FakeStore.
 local function isTestKind(store: any): boolean
 	local kind = SaveService.kindOf(store)
@@ -84,7 +100,7 @@ function TestStore.command(player: Player, value: any): string
 	local profile = SaveService.profiles[player]
 	local current = profile and profile.store
 	local switching = TestStore.productionBound(player) or value.fresh == true or not isTestKind(current)
-	if switching and session and SaveService.kindOf(session.shift.store) ~= "memory" and unsettled(session.shift.settlement) then
+	if switching and session and TestStore.persistentUnsettled(session) then
 		-- Its receipt belongs to a persistent save; abandoning it would lose its rewards.
 		return "refused: this shift's save is not settled yet"
 	end

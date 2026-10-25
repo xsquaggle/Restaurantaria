@@ -127,6 +127,8 @@ local function run()
 	check("mixed orders ignored on production", table.concat(ShiftService.newShift(p :: any).menu, ","), "cheese")
 	SaveService.simulateLoadFailure = true
 	check("load failure ignored on production", SaveService.load(p :: any, productionStandIn).status, "ok")
+	ShiftService.sessions[p].shift.settlement = "pending"
+	check("restart refused while production save pending", TestStore.restartRefusal(p :: any), "refused: this shift's save is not settled yet")
 	ShiftService.sessions[p] = nil
 	SaveService.profiles[p] = nil
 	check("nobody on production: allowed", TestStore.guardServer(), nil)
@@ -146,9 +148,17 @@ local function run()
 	session.shift.receipt = receipt(session.shift.id, 1, 1, adapter)
 	session.shift.settlement = "retry"
 	check("switch refused while test save unsettled", TestStore.command(a :: any, { fresh = true }), "refused: this shift's save is not settled yet")
+	-- restartShift follows the same rule: a pending or retrying test-DataStore receipt is kept.
+	check("restart refused while test save retrying", TestStore.restartRefusal(a :: any), "refused: this shift's save is not settled yet")
+	session.shift.settlement = "pending"
+	check("restart refused while test save pending", TestStore.restartRefusal(a :: any), "refused: this shift's save is not settled yet")
 	session.shift.settlement = "saved"
+	check("restart allowed once settled", TestStore.restartRefusal(a :: any), nil)
 	check("switch to memory once settled", TestStore.command(a :: any, { fresh = true }), "fake store, profile ok, new shift")
 	check("now on memory", SaveService.kindOf(SaveService.profiles[a].store), "memory")
+	-- A memory store's receipt is a test copy only: restarting may drop it, as fakeStore may.
+	session.shift.settlement = "retry"
+	check("restart allowed on memory while retrying", TestStore.restartRefusal(a :: any), nil)
 	ShiftService.sessions[a] = nil
 
 	-- 5. Same-account overlap: an old session (slow server) and a new one on one key.

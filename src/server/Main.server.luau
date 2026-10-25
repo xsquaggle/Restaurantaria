@@ -131,11 +131,12 @@ if RunService:IsStudio() then
 			Config.Dev.mixedOrders = value == true
 			return "ok"
 		elseif command == "restartShift" then
-			-- Abandons the current shift (no reward, nothing saved) and starts a new one. A real
-			-- receipt still saving or waiting for a retry is never abandoned.
-			local settlement = session.shift.settlement
-			if TestStore.productionBound(player) and (settlement == "pending" or settlement == "retry") then
-				return "refused: this shift's real save is not settled yet"
+			-- Abandons the current shift (no reward, nothing saved) and starts a new one. A receipt
+			-- for a persistent store (production or the test DataStore) still saving or waiting
+			-- for a retry is never abandoned (TestStore.restartRefusal, as fakeStore).
+			local refusal = TestStore.restartRefusal(player)
+			if refusal then
+				return refusal
 			end
 			session.shift = ShiftService.newShift(player)
 			push(player)
