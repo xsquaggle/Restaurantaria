@@ -149,12 +149,21 @@ local function layout(stations: Frame, hints: Frame): any
 	return { compact = compact, W = W, H = H, margin = margin, gap = gap, cellW = cellW, cellH = cellH, gridW = gridW, env = env, cx = cx, cy = H / 2 }
 end
 
-local function placeBody(parent: Instance, key: string, e: G.Ellipse, cx: number, cy: number, colour: Color3, z: number): Frame
+-- UDim offsets are whole pixels (Studio measured: a 0.95 px registration offset vanished), so
+-- registered bodies are placed and sized with Scale against the parent, which renders at
+-- sub-pixel precision (measured: a 0.5 px Scale move moved the drawn centroid 0.50 px).
+local function exact(canvas: GuiObject, parent: GuiObject, pl: G.Placement, cx: number, cy: number, raw: boolean?)
+	local W, H = parent.AbsoluteSize.X, parent.AbsoluteSize.Y
+	local ox, oy = if raw then 0 else pl.offset.x, if raw then 0 else pl.offset.y
+	canvas.Size = UDim2.fromScale(pl.width / W, pl.height / H)
+	canvas.Rotation = pl.rotation
+	canvas.Position = UDim2.fromScale((cx + ox) / W, (cy + oy) / H)
+end
+
+local function placeBody(parent: GuiObject, key: string, e: G.Ellipse, cx: number, cy: number, colour: Color3, z: number, raw: boolean?): Frame
 	local pl = G.bodyPlacement(e, PrepProof.BODIES[key])
 	local canvas = bodyCanvas(key, colour, z, parent)
-	canvas.Size = UDim2.fromOffset(pl.width, pl.height)
-	canvas.Rotation = pl.rotation
-	canvas.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
+	exact(canvas, parent, pl, cx, cy, raw)
 	return canvas
 end
 
@@ -207,7 +216,7 @@ function PrepProof.run(mode: string, opts: any?): string
 	local function add(line: string)
 		table.insert(out, line)
 	end
-	label("STAND-IN fixtures (Studio only, not art)", if L.compact then 14 else 18, fx, UDim2.fromOffset(4, 2))
+	label("STAND-IN fixtures (Studio only, not art)", if L.compact then 14 else 18, fx, UDim2.new(1, -4, 1, -2), Vector2.new(1, 1))
 	add(string.format("viewport %s station %dx%d hints %s+%s nav %s rail %s", tostring(workspace.CurrentCamera.ViewportSize), L.W, L.H, tostring(hints.AbsolutePosition), tostring(hints.AbsoluteSize), tostring((root:FindFirstChild("Nav") :: GuiObject).AbsolutePosition), tostring((root:FindFirstChild("Rail") :: GuiObject).AbsolutePosition)))
 	local env = L.env
 	add(string.format("frame %d crust %s over-roll %s mat exact %s -> %d fits=%s shortfall=%d", env.frame, r2(env.crust), r2(env.overRoll), r2(env.matExact), env.mat, tostring(env.fits), env.shortfall))
@@ -264,7 +273,7 @@ function PrepProof.run(mode: string, opts: any?): string
 		mat()
 		local S = G.shape(o.a or 0.35, o.b or o.a or 0.35, math.rad(o.turn or 0))
 		local e = G.ellipseOf(G.viewMatrix(S, env.frame, o.flatten))
-		local img = placeBody(fx, o.key or "P4", e, L.cx, L.cy, o.colour or MEASURE, 4)
+		local img = placeBody(fx, o.key or "P4", e, L.cx, L.cy, o.colour or MEASURE, 4, o.raw)
 		if o.hideMat then
 			for _, c in fx:GetChildren() do
 				if c.Name == "MatStandIn" or c.Name == "TargetRing" then
@@ -274,7 +283,7 @@ function PrepProof.run(mode: string, opts: any?): string
 		end
 		task.wait(0.2)
 		local pivot = stations.AbsolutePosition + Vector2.new(L.cx, L.cy)
-		add(string.format("body %s expected %sx%s px at %s deg; pivot (gui) %s; image %s rotation %s", o.key or "P4", r2(2 * e.major), r2(2 * e.minor), r2(math.deg(e.angle)), tostring(pivot), tostring(img.AbsoluteSize), r2(img.AbsoluteRotation)))
+		add(string.format("registration %s; body %s expected %sx%s px at %s deg; pivot (gui) %s; image %s rotation %s", if o.raw then "OFF (control)" else "on", o.key or "P4", r2(2 * e.major), r2(2 * e.minor), r2(math.deg(e.angle)), tostring(pivot), tostring(img.AbsoluteSize), r2(img.AbsoluteRotation)))
 	elseif mode == "pin" then
 		mat()
 		placeBody(fx, "P4", G.ellipseOf(G.viewMatrix(G.shape(0.95, 0.95, 0), env.frame)), L.cx, L.cy, DOUGH, 4)
@@ -337,7 +346,7 @@ function PrepProof.run(mode: string, opts: any?): string
 		local log = {}
 		local t0 = os.clock()
 		local p1, p2 = { x = -1, y = 0.1 }, { x = 1, y = -0.1 }
-		local worst, prevD = 0, nil :: number?
+		local worst, prevD, prevE = 0, nil :: number?, 0
 		local worstJump = 0
 		while true do
 			local t = os.clock() - t0
@@ -347,10 +356,7 @@ function PrepProof.run(mode: string, opts: any?): string
 			local fade = math.clamp(t / 0.1, 0, 1) -- 0.1 s hand-off: P3 out, state 1 in, same oval
 			for _, pair in { { p3, "P3" }, { p4, "P4" } } do
 				local img, key = pair[1], pair[2]
-				local pl = G.bodyPlacement(e, PrepProof.BODIES[key])
-				img.Size = UDim2.fromOffset(pl.width, pl.height)
-				img.Rotation = pl.rotation
-				img.Position = UDim2.fromOffset(L.cx + pl.offset.x, L.cy + pl.offset.y)
+				exact(img, fx, G.bodyPlacement(e, PrepProof.BODIES[key]), L.cx, L.cy)
 			end
 			setAlpha(p3, 1 - fade)
 			setAlpha(p4, fade)
@@ -360,15 +366,15 @@ function PrepProof.run(mode: string, opts: any?): string
 			local d4 = p4.AbsoluteSize.X * PrepProof.BODIES.P4.alphaX
 			worst = math.max(worst, math.abs(d3 - 2 * e.major), math.abs(d4 - 2 * e.major))
 			if prevD then
-				worstJump = math.max(worstJump, math.abs(d4 - prevD))
+				worstJump = math.max(worstJump, math.abs((d4 - prevD) - (2 * e.major - prevE)))
 			end
-			prevD = d4
+			prevD, prevE = d4, 2 * e.major
 			table.insert(log, string.format("t=%.3f expected %.2f P3 %.2f (opacity %.2f) P4 %.2f (opacity %.2f)", t, 2 * e.major, d3, 1 - fade, d4, fade))
 			if u >= 1 and t > 0.55 then
 				break
 			end
 		end
-		add(string.format("frames %d; worst drawn-body error vs expected oval %.3f px; largest frame-to-frame body change %.3f px", #log, worst, worstJump))
+		add(string.format("frames %d; worst drawn-body error vs expected oval %.3f px; largest frame-to-frame body change beyond the expected oval's own change %.3f px", #log, worst, worstJump))
 		for _, l in log do
 			add(l)
 		end
