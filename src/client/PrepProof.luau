@@ -1,13 +1,12 @@
 --!strict
 -- Studio-only Prep contract proof (cooking plan rev 6, build step 2's measurements, with Astra's
 -- response 9 corrections). Declared engineering STAND-INs, never art: flat ovals drawn into an
--- EditableImage, plain bars and text buttons, every view labelled "STAND-IN". Nothing requires
+-- built-in white circle, plain bars and text buttons, every view labelled "STAND-IN". Nothing requires
 -- this module; a Studio play test calls it from the command bar or the Studio MCP:
 --   require(LocalPlayer.PlayerScripts.Client.PrepProof).run(mode, opts)
 -- It refuses to run outside Studio. It places fixtures over the live station area, measures
 -- them and returns a report; unmount() removes them and restores any layout it changed.
 
-local AssetService = game:GetService("AssetService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -18,7 +17,6 @@ local Food = require(Shared.PrepFood)
 
 local PrepProof = {}
 
-local CANVAS = 512
 -- Declared stand-in bodies: alpha diameter share and a deliberate centre offset (canvas share)
 -- so registration is exercised, as a manifest would declare them.
 PrepProof.BODIES = {
@@ -29,7 +27,6 @@ local MEASURE = Color3.fromRGB(0, 255, 0) -- measurement colour for pixel captur
 local DOUGH = Color3.fromRGB(236, 212, 168) -- beige stand-in dough
 
 local state: any = { parts = {}, restore = {} }
-local images: { [string]: EditableImage } = {}
 
 local function guiRoot(): (Frame, Frame, Frame)
 	local gui = (Players.LocalPlayer :: Player).PlayerGui:WaitForChild("Restaurantaria")
@@ -48,41 +45,29 @@ local function new(class: string, props: { [string]: any }): any
 	return inst
 end
 
--- A white disc of the declared body on a transparent canvas (2 x 2 supersampled edge). Tinted
--- by ImageColor3. The body is a circle; the oval comes from the draw transform only.
-local function bodyImage(key: string): EditableImage
-	if images[key] then
-		return images[key]
-	end
+-- Stand-in bodies are Roblox's built-in white circle texture (EditableImage is blocked in this
+-- place). Its own body was measured from a native 1920x1080 capture: 785.7 px across when drawn
+-- 800 px (alpha share 0.9822). Each declared body is a transparent canvas frame holding that
+-- circle at the declared share and centre, so the canvas behaves like a delivered image with
+-- those manifest values. Children turn with their canvas (no shear), as an image would.
+local CIRCLE = "rbxasset://textures/whiteCircle.png"
+PrepProof.CIRCLE_ALPHA = 0.9822
+
+local function bodyCanvas(key: string, colour: Color3, z: number, parent: Instance): Frame
 	local body = PrepProof.BODIES[key]
-	local image = AssetService:CreateEditableImage({ Size = Vector2.new(CANVAS, CANVAS) })
-	local buf = buffer.create(CANVAS * CANVAS * 4)
-	local r = body.alphaX * CANVAS / 2
-	local cx, cy = CANVAS / 2 + body.centreX * CANVAS, CANVAS / 2 + body.centreY * CANVAS
-	for y = 0, CANVAS - 1 do
-		for x = 0, CANVAS - 1 do
-			local cover = 0
-			for sy = 0, 1 do
-				for sx = 0, 1 do
-					local dx, dy = x + 0.25 + sx * 0.5 - cx, y + 0.25 + sy * 0.5 - cy
-					if dx * dx + dy * dy <= r * r then
-						cover += 0.25
-					end
-				end
-			end
-			local o = (y * CANVAS + x) * 4
-			buffer.writeu8(buf, o, 255)
-			buffer.writeu8(buf, o + 1, 255)
-			buffer.writeu8(buf, o + 2, 255)
-			buffer.writeu8(buf, o + 3, math.round(cover * 255))
-		end
-		if y % 64 == 63 then
-			task.wait()
-		end
-	end
-	image:WritePixelsBuffer(Vector2.zero, Vector2.new(CANVAS, CANVAS), buf)
-	images[key] = image
-	return image
+	local canvas = new("Frame", { Name = "StandIn_" .. key, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = z, Parent = parent })
+	new("ImageLabel", {
+		Name = "Body",
+		Image = CIRCLE,
+		BackgroundTransparency = 1,
+		ImageColor3 = colour,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5 + body.centreX, 0.5 + body.centreY),
+		Size = UDim2.fromScale(body.alphaX / PrepProof.CIRCLE_ALPHA, body.alphaY / PrepProof.CIRCLE_ALPHA),
+		ZIndex = z,
+		Parent = canvas,
+	})
+	return canvas
 end
 
 local function label(text: string, size: number, parent: Instance, pos: UDim2, anchor: Vector2?): TextLabel
@@ -164,21 +149,17 @@ local function layout(stations: Frame, hints: Frame): any
 	return { compact = compact, W = W, H = H, margin = margin, gap = gap, cellW = cellW, cellH = cellH, gridW = gridW, env = env, cx = cx, cy = H / 2 }
 end
 
-local function placeBody(parent: Instance, key: string, e: G.Ellipse, cx: number, cy: number, colour: Color3, z: number): ImageLabel
+local function placeBody(parent: Instance, key: string, e: G.Ellipse, cx: number, cy: number, colour: Color3, z: number): Frame
 	local pl = G.bodyPlacement(e, PrepProof.BODIES[key])
-	local img = new("ImageLabel", {
-		Name = "StandIn_" .. key,
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(pl.width, pl.height),
-		Rotation = pl.rotation,
-		Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y),
-		ImageColor3 = colour,
-		ZIndex = z,
-		Parent = parent,
-	})
-	img.ImageContent = Content.fromObject(bodyImage(key))
-	return img
+	local canvas = bodyCanvas(key, colour, z, parent)
+	canvas.Size = UDim2.fromOffset(pl.width, pl.height)
+	canvas.Rotation = pl.rotation
+	canvas.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
+	return canvas
+end
+
+local function setAlpha(canvas: Frame, opacity: number)
+	(canvas:FindFirstChild("Body") :: ImageLabel).ImageTransparency = 1 - opacity
 end
 
 local function clipChain(inst: GuiObject): { string }
@@ -284,6 +265,13 @@ function PrepProof.run(mode: string, opts: any?): string
 		local S = G.shape(o.a or 0.35, o.b or o.a or 0.35, math.rad(o.turn or 0))
 		local e = G.ellipseOf(G.viewMatrix(S, env.frame, o.flatten))
 		local img = placeBody(fx, o.key or "P4", e, L.cx, L.cy, o.colour or MEASURE, 4)
+		if o.hideMat then
+			for _, c in fx:GetChildren() do
+				if c.Name == "MatStandIn" or c.Name == "TargetRing" then
+					c.Visible = false
+				end
+			end
+		end
 		task.wait(0.2)
 		local pivot = stations.AbsolutePosition + Vector2.new(L.cx, L.cy)
 		add(string.format("body %s expected %sx%s px at %s deg; pivot (gui) %s; image %s rotation %s", o.key or "P4", r2(2 * e.major), r2(2 * e.minor), r2(math.deg(e.angle)), tostring(pivot), tostring(img.AbsoluteSize), r2(img.AbsoluteRotation)))
@@ -345,7 +333,7 @@ function PrepProof.run(mode: string, opts: any?): string
 		local base = env.frame
 		local p3 = placeBody(fx, "P3", G.ellipseOf(G.viewMatrix(S0, base)), L.cx, L.cy, DOUGH, 4)
 		local p4 = placeBody(fx, "P4", G.ellipseOf(G.viewMatrix(S0, base)), L.cx, L.cy, DOUGH, 5)
-		p4.ImageTransparency = 1
+		setAlpha(p4, 0)
 		local log = {}
 		local t0 = os.clock()
 		local p1, p2 = { x = -1, y = 0.1 }, { x = 1, y = -0.1 }
@@ -364,8 +352,8 @@ function PrepProof.run(mode: string, opts: any?): string
 				img.Rotation = pl.rotation
 				img.Position = UDim2.fromOffset(L.cx + pl.offset.x, L.cy + pl.offset.y)
 			end
-			p3.ImageTransparency = fade
-			p4.ImageTransparency = 1 - fade
+			setAlpha(p3, 1 - fade)
+			setAlpha(p4, fade)
 			RunService.RenderStepped:Wait()
 			-- After the frame: the drawn bodies against the expected oval.
 			local d3 = p3.AbsoluteSize.X * PrepProof.BODIES.P3.alphaX
@@ -375,7 +363,7 @@ function PrepProof.run(mode: string, opts: any?): string
 				worstJump = math.max(worstJump, math.abs(d4 - prevD))
 			end
 			prevD = d4
-			table.insert(log, string.format("t=%.3f expected %.2f P3 %.2f (a=%.2f) P4 %.2f (a=%.2f)", t, 2 * e.major, d3, 1 - p3.ImageTransparency, d4, 1 - p4.ImageTransparency))
+			table.insert(log, string.format("t=%.3f expected %.2f P3 %.2f (opacity %.2f) P4 %.2f (opacity %.2f)", t, 2 * e.major, d3, 1 - fade, d4, fade))
 			if u >= 1 and t > 0.55 then
 				break
 			end
