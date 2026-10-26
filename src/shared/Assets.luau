@@ -190,6 +190,22 @@ local Assets = {
 	deco_basil_pot = "rbxassetid://129133759821938",
 	deco_shaker_pair = "rbxassetid://82029622934688",
 	deco_gingham_cloth = "rbxassetid://81389727068805",
+	-- Astra r13 Prep kit, uploaded 2026-10-26 byte-exact (sha256 = the kit manifest's): the Make
+	-- tab's board, flour, dough and rolling pin.
+	surface_prep_board = "rbxassetid://104278477689375",
+	tool_flour_crock = "rbxassetid://91804425451106",
+	tool_flour_scoop = "rbxassetid://86137927326439",
+	fx_flour_dust = "rbxassetid://116675054243626",
+	fx_flour_clump = "rbxassetid://121074614630671",
+	tool_dough_tub = "rbxassetid://83613747162655",
+	food_dough_ball = "rbxassetid://107550522847792",
+	food_dough_roll_01 = "rbxassetid://123075374455535",
+	food_dough_roll_02 = "rbxassetid://104573045440090",
+	food_dough_roll_03 = "rbxassetid://86706561631768",
+	food_dough_roll_04 = "rbxassetid://128168621384471",
+	food_dough_roll_05 = "rbxassetid://94822809031954",
+	food_dough_roll_06 = "rbxassetid://74281857814960",
+	tool_rolling_pin = "rbxassetid://87000234822762",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",

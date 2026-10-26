@@ -210,6 +210,7 @@ function Cut.new(ctx: any, container: Frame)
 		length: number,
 		outside: Vector2?, -- where the path left the accepted range, while it is outside
 		closed: boolean, -- the path came back in across the pizza; nothing more is recorded
+		dirty: boolean, -- points added since the groove was last drawn
 	}
 	local stroke: Stroke? = nil
 
@@ -252,17 +253,9 @@ function Cut.new(ctx: any, container: Frame)
 		local last = st.points[#st.points]
 		st.length += (p - last).Magnitude
 		table.insert(st.points, p)
-		-- The groove grows behind the cutter: only the part already rolled over is drawn. It is
-		-- faint until the path is long enough to cut, so it never promises a cut the release
-		-- would drop. The whole path is redrawn so straight runs stay single grooves (the groove
-		-- art squashed into many short pieces reads as pale smears).
-		local strong = st.length >= Config.Cut.minDragLength
-		local path = table.create(#st.points)
-		for i, q in st.points do
-			path[i] = { x = q.X, y = q.Y }
-		end
-		Ui.clear(preview)
-		Widgets.drawCut(preview, { path = path }, if strong then 0.3 else 0.7)
+		-- The groove is redrawn once a frame (drawGroove, from tick), not per point, so a fast
+		-- drag records every pointer sample instead of waiting on the redraw.
+		st.dirty = true
 		if #st.points > MAX_RAW then
 			-- Thin to every other point (keeping both ends); the sent path is resampled anyway.
 			local thin = {}
@@ -274,6 +267,20 @@ function Cut.new(ctx: any, container: Frame)
 			end
 			st.points = thin
 		end
+	end
+	-- The groove grows behind the cutter: only the part already rolled over is drawn. It is faint
+	-- until the path is long enough to cut, so it never promises a cut the release would drop.
+	-- The whole path is redrawn so straight runs stay single grooves (the groove art squashed
+	-- into many short pieces reads as pale smears).
+	local function drawGroove(st: Stroke)
+		st.dirty = false
+		local strong = st.length >= Config.Cut.minDragLength
+		local path = table.create(#st.points)
+		for i, q in st.points do
+			path[i] = { x = q.X, y = q.Y }
+		end
+		Ui.clear(preview)
+		Widgets.drawCut(preview, { path = path }, if strong then 0.3 else 0.7)
 	end
 	-- Records the pointer's pizza-local position on the stroke's path.
 	local function record(st: Stroke, raw: Vector2, final: boolean?)
@@ -320,13 +327,14 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end
 	-- A held stroke whose release never arrived (focus lost, window switched) would block every
-	-- new press until a ticket or station change; a new press finds it stale and drops it.
-	local function stale(st: Stroke): boolean
+	-- new press until a ticket or station change; a new press finds it stale and drops it. A
+	-- mouse button can't be pressed again without being released, so a new press of the
+	-- stroke's own button means its release was lost. (Asking whether the button is held can't
+	-- tell: during the new press it is. Roblox may hand the new press the same InputObject, so
+	-- the input's identity can't tell either.) A finger's stroke is stale once its touch ended.
+	local function stale(st: Stroke, input: InputObject, isMouse: boolean): boolean
 		if st.mouse then
-			local held = if st.button == Enum.UserInputType.MouseButton1
-				then UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-				else UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-			return not held
+			return isMouse and input.UserInputType == st.button
 		end
 		return st.input.UserInputState == Enum.UserInputState.End or st.input.UserInputState == Enum.UserInputState.Cancel
 	end
@@ -337,7 +345,7 @@ function Cut.new(ctx: any, container: Frame)
 		if not isMouse and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
-		if stroke and stroke.input ~= input and stale(stroke) then
+		if stroke and stale(stroke, input, isMouse) then
 			cancelStroke("stale (release lost)")
 		end
 		if stroke or not current or ctx.pending[current.id] then
@@ -355,6 +363,7 @@ function Cut.new(ctx: any, container: Frame)
 			length = 0,
 			outside = nil,
 			closed = false,
+			dirty = false,
 		}
 		local point = toStation(input.Position)
 		lastPoint = point
@@ -430,7 +439,11 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end
 
-	function station.tick(_now: number) end
+	function station.tick(_now: number)
+		if stroke and stroke.dirty then
+			drawGroove(stroke)
+		end
+	end
 
 	-- Leaving the station mid-stroke cancels the stroke.
 	function station.setActive(active: boolean)

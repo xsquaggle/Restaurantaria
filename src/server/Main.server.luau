@@ -8,6 +8,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local MakeDough = require(ReplicatedStorage.Shared.MakeDough)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
 local CustomerLooks = require(script.Parent.CustomerLooks)
 local SaveService = require(script.Parent.SaveService)
@@ -81,6 +82,28 @@ end)
 -- Commands that edit rewards, timing or play are test mutators: refused for a player still on
 -- the real save (TestStore.guard), so a test run needs fakeStore first (or a test or memory
 -- backend, SaveBackend). Server-wide test settings are refused while anyone is on it.
+-- Test hooks: a clean Make dough step through the real actions (three flour sweeps, the ball
+-- pulled on, eight full rolls at 0, 90, 45 and 135 degrees: round, mean radius 1.03), then on
+-- to toppings. `act` reports refusals.
+local function cleanDough(act: (string, any) -> (), pizzaId: number)
+	for _, y in { -0.6, 0, 0.6 } do
+		local sampler = MakeDough.flourSampler()
+		local points = {}
+		for i = 0, 40 do
+			for _, p in sampler.feed({ x = -1.05 + 2.1 * i / 40, y = y }) do
+				table.insert(points, p)
+			end
+		end
+		act("flour", { pizzaId = pizzaId, points = points })
+	end
+	act("placeDough", { pizzaId = pizzaId })
+	for _, deg in { 0, 90, 45, 135, 90, 0, 135, 45 } do
+		local a = math.rad(deg)
+		act("rollDough", { pizzaId = pizzaId, x1 = -1.2 * math.cos(a), y1 = -1.2 * math.sin(a), x2 = 1.2 * math.cos(a), y2 = 1.2 * math.sin(a) })
+	end
+	act("finishDough", { pizzaId = pizzaId, from = "dough" })
+end
+
 local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true }
 local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true }
 
@@ -115,10 +138,11 @@ if RunService:IsStudio() then
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
-					if r then string.format(" grade=%d (wait %d top %d bake %d cut %d) tip=%d", r.overall, r.wait.score, r.topping.score, r.bake.score, r.cut.score, r.tip) else ""))
+					if r then string.format(" grade=%d (wait %d make %d bake %d cut %d) tip=%d", r.overall, r.wait.score, r.make.score, r.bake.score, r.cut.score, r.tip) else ""))
 			end
 			for id, pz in session.shift.pizzas do
-				table.insert(lines, string.format("pizza %d ticket=%d stage=%s toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
+				local mk = pz.make
+				table.insert(lines, string.format("pizza %d ticket=%d stage=%s make=%s flour=%d placed=%s rolls=%d toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, mk.step, MakeDough.stampCount(mk), tostring(mk.placed), #mk.strokes, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
 			end
 			local profile = SaveService.profiles[player]
 			if profile then
@@ -208,6 +232,9 @@ if RunService:IsStudio() then
 							continue
 						end
 						if pizza.stage == "topping" then
+							if pizza.make.step == "dough" then
+								cleanDough(act, pizza.id)
+							end
 							for _, req in Recipes.ById[c.order.recipe].toppings do
 								for i = 1, req.count do
 									local t = (i - 0.5) / req.count
@@ -249,6 +276,9 @@ if RunService:IsStudio() then
 				end
 			end
 			local function top(pizza: any, recipeId: string, share: number)
+				if pizza.make.step == "dough" then
+					cleanDough(act, pizza.id)
+				end
 				for _, req in Recipes.ById[recipeId].toppings do
 					for i = 1, math.round(req.count * share) do
 						local t = (i - 0.5) / req.count

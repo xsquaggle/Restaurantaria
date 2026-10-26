@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local MakeDough = require(Shared.MakeDough)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
 local CustomerLooks = require(script.Parent.CustomerLooks)
@@ -32,7 +33,9 @@ type Customer = {
 type Pizza = {
 	id: number,
 	ticketId: number,
-	stage: string, -- "topping" | "oven" | "cutting" | "served"
+	stage: string, -- "topping" (the Make tab) | "oven" | "cutting" | "served"
+	-- The Make tab's dough steps (MakeDough); toppings only once make.step is "toppings".
+	make: MakeDough.Make,
 	toppings: { Scoring.Piece },
 	slot: number?,
 	bakeStart: number?,
@@ -283,15 +286,110 @@ function Actions.takeOrder(shift: Shift, args: any): (boolean, string?)
 		return false, "ticket rail is full"
 	end
 	customer.status = "ordered"
-	local pizza: Pizza = { id = shift.nextId, ticketId = customer.id, stage = "topping", toppings = {}, cuts = {} }
+	local pizza: Pizza = { id = shift.nextId, ticketId = customer.id, stage = "topping", make = MakeDough.new(), toppings = {}, cuts = {} }
 	shift.nextId += 1
 	shift.pizzas[pizza.id] = pizza
 	customer.pizzaId = pizza.id
 	return true, nil
 end
 
+-- A pizza on the Make tab at its given step ("dough" or "toppings").
+local function makePizza(shift: Shift, id: any, step: string): (Pizza?, string?)
+	local pizza, err = getPizza(shift, id, "topping")
+	if not pizza then
+		return nil, err
+	end
+	if pizza.make.step ~= step then
+		return nil, if step == "dough" then "dough is done" else "dough not finished"
+	end
+	return pizza, nil
+end
+
+-- Make, dough step: one flour stroke (its dust stamps), sent whole on release.
+function Actions.flour(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "dough")
+	if not pizza then
+		return false, err
+	end
+	local stroke, reason = MakeDough.validateFlour(pizza.make, args.points)
+	if not stroke then
+		return false, reason
+	end
+	table.insert(pizza.make.flour, stroke)
+	return true, nil
+end
+
+-- Make, dough step: pull the dough ball onto the board (it lands in the centre). The board is
+-- floured first.
+function Actions.placeDough(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "dough")
+	if not pizza then
+		return false, err
+	end
+	if pizza.make.placed then
+		return false, "the dough is already on the board"
+	end
+	if #pizza.make.flour == 0 then
+		return false, "flour the board first"
+	end
+	pizza.make.placed = true
+	return true, nil
+end
+
+-- Make, dough step: one roll, press to release.
+function Actions.rollDough(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "dough")
+	if not pizza then
+		return false, err
+	end
+	local line, reason = MakeDough.validateRoll(pizza.make, args)
+	if not line then
+		return false, reason
+	end
+	table.insert(pizza.make.strokes, line)
+	return true, nil
+end
+
+-- Make, dough step: takes back the last roll; with none, lifts the ball off the board; with the
+-- ball off, removes the last flour stroke.
+function Actions.undoDough(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "dough")
+	if not pizza then
+		return false, err
+	end
+	local make = pizza.make
+	if #make.strokes > 0 then
+		table.remove(make.strokes)
+	elseif make.placed then
+		make.placed = false
+	elseif #make.flour > 0 then
+		table.remove(make.flour)
+	else
+		return false, "nothing to undo"
+	end
+	return true, nil
+end
+
+-- Make: the dough is done and the pizza moves on. Sauce and cheese are not hands-on yet: the
+-- pizza goes straight to toppings with today's sauced and cheesed look. `from` guards a double
+-- tap.
+function Actions.finishDough(shift: Shift, args: any): (boolean, string?)
+	if args.from ~= "dough" then
+		return false, "bad step"
+	end
+	local pizza, err = makePizza(shift, args.pizzaId, "dough")
+	if not pizza then
+		return false, err
+	end
+	if not MakeDough.canFinish(pizza.make) then
+		return false, "roll the dough first"
+	end
+	pizza.make.step = "toppings"
+	return true, nil
+end
+
 function Actions.placeTopping(shift: Shift, args: any): (boolean, string?)
-	local pizza, err = getPizza(shift, args.pizzaId, "topping")
+	local pizza, err = makePizza(shift, args.pizzaId, "toppings")
 	if not pizza then
 		return false, err
 	end
@@ -315,7 +413,7 @@ function Actions.placeTopping(shift: Shift, args: any): (boolean, string?)
 end
 
 function Actions.undoTopping(shift: Shift, args: any): (boolean, string?)
-	local pizza, err = getPizza(shift, args.pizzaId, "topping")
+	local pizza, err = makePizza(shift, args.pizzaId, "toppings")
 	if not pizza then
 		return false, err
 	end
@@ -327,7 +425,7 @@ function Actions.undoTopping(shift: Shift, args: any): (boolean, string?)
 end
 
 function Actions.sendToOven(shift: Shift, args: any): (boolean, string?)
-	local pizza, err = getPizza(shift, args.pizzaId, "topping")
+	local pizza, err = makePizza(shift, args.pizzaId, "toppings")
 	if not pizza then
 		return false, err
 	end
@@ -508,10 +606,10 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local order = customer.order
 	local recipe = Recipes.ById[order.recipe]
 	local wait = Scoring.wait(Scoring.patienceFraction(customer.arrivedAt, now()))
-	local topping = Scoring.toppings(recipe, pizza.toppings)
+	local make = Scoring.make(recipe, pizza.make, pizza.toppings)
 	local bake = Scoring.bake(order.bake, pizza.bakeSeconds :: number)
 	local cut = Scoring.cut(order.slices, pizza.cuts)
-	local overall = math.floor((wait.score + topping.score + bake.score + cut.score) / 4 + 0.5)
+	local overall = math.floor((wait.score + make.score + bake.score + cut.score) / 4 + 0.5)
 	local tip = math.floor(Config.Rewards.baseTip * overall / 100 + 0.5)
 	if session.devForcedTip and RunService:IsStudio() and SaveService.kindOf(shift.store) ~= "production" then
 		tip = session.devForcedTip :: number
@@ -526,7 +624,7 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 
 	pizza.stage = "served"
 	customer.status = "served"
-	customer.result = { wait = wait, topping = topping, bake = bake, cut = cut, overall = overall, tip = tip, tutorialBonus = tutorialBonus }
+	customer.result = { wait = wait, make = make, bake = bake, cut = cut, overall = overall, tip = tip, tutorialBonus = tutorialBonus }
 	shift.tips += tip
 	shift.xp += math.floor(Config.Rewards.xpPerOrder * overall / 100 + 0.5)
 	finishIfDone(session)

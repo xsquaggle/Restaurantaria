@@ -1,5 +1,6 @@
 --!strict
--- Topping station, composed like the approved reference: the pizza on its board is the
+-- Topping view, the last step of the Make station (Stations/Make.luau), composed like the
+-- approved reference: the pizza on its board is the
 -- centre of the counter and the five ingredient trays sit in a row beneath it. Drag a piece
 -- from a tray onto the pizza, or tap a tray and then tap the pizza where it should go.
 -- The ticket and "Send to oven" live in the rail (Main.client.luau).
@@ -444,7 +445,7 @@ function Topping.new(ctx: any, container: Frame)
 
 	local shownId: number? = nil
 	local decorPlaced = false
-	local station = { frame = frame }
+	local station = { frame = frame, sendButton = send }
 
 	function station.refresh(snap: any)
 		local list = snap.ingredients or Recipes.IngredientOrder
@@ -469,6 +470,10 @@ function Topping.new(ctx: any, container: Frame)
 		end
 		pick.Visible = stocked[chosen] == true
 		current = ctx.focusPizza(snap, "topping")
+		-- Only a pizza whose dough is done; before that, Make shows its dough step.
+		if current and current.make and current.make.step ~= "toppings" then
+			current = nil
+		end
 		local id = if current then current.id else nil
 		local leavingNow = sending ~= nil and sending == id
 		if id ~= shownId and not leavingNow then

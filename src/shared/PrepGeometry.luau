@@ -180,11 +180,18 @@ function PrepGeometry.localStretch(S: Mat2, frame: number, flatten: number?): Ma
 	return mat(K.a / PrepGeometry.CRUST, K.b / PrepGeometry.CRUST, K.c / PrepGeometry.CRUST, K.d / PrepGeometry.CRUST)
 end
 
--- Roll model (provisional, plan 3.1). A stroke p1 -> p2 must cross the dough. It stretches the
--- dough along its own direction u by 1 + 0.35 x (the share of the dough's longest chord along u
--- it covers) x taper, where taper is 1 until the dough's radius along u reaches 0.95, then
--- falls to 0 at the 1.1 cap. Semi-axes stop at 1.1. Judged on the two end points only, so equal
--- physical strokes give equal shapes whatever the event rate.
+-- Roll model (provisional, plan 3.1; the taper revised 2026-10-26). A stroke p1 -> p2 must
+-- cross the dough. It stretches the dough along its own direction u by up to 35 % x (the share
+-- of the dough's longest chord along u the stroke covers). The stretch is applied in ROLL_STEPS
+-- equal parts, and each part is tapered by the dough's radius along u at that moment: 1 until
+-- TAPER_FROM, falling to 0 at the 1.1 cap. So thin dough resists more as the stroke goes on and
+-- a full stroke on a nearly full-size dough lands near full size instead of jumping to the cap
+-- (the first model tapered once, by the radius before the stroke: 0.861 -> 1.1 in one stroke).
+-- Semi-axes stop at 1.1. Judged on the two end points only, so equal physical strokes give
+-- equal shapes whatever the event rate.
+PrepGeometry.TAPER_FROM = 0.85 -- proposal
+PrepGeometry.ROLL_STEPS = 16
+
 -- The dough's radius along direction u (half its longest chord in that direction).
 local function radiusAlong(S: Mat2, u: Vec): number
 	local v = PrepGeometry.apply(PrepGeometry.inverse(S), u)
@@ -225,17 +232,22 @@ function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 		return nil
 	end
 	local u = { x = dx / len, y = dy / len }
-	local half = radiusAlong(S, u)
-	local cover = math.clamp(chord / (2 * half), 0, 1)
-	local taper = math.clamp((PrepGeometry.CAP - half) / (PrepGeometry.CAP - PrepGeometry.CRUST), 0, 1)
-	local k = PrepGeometry.STRETCH * cover * taper
-	-- New outline = (I + k u u^T) applied to the old one; keep the symmetric factor of A S^2 A^T.
-	local A = mat(1 + k * u.x * u.x, k * u.x * u.y, k * u.x * u.y, 1 + k * u.y * u.y)
-	local AS = PrepGeometry.mul(A, S)
-	local l1, l2, angle = symEigen(PrepGeometry.mul(AS, transpose(AS)))
-	local a = math.min(math.sqrt(l1), PrepGeometry.CAP)
-	local b = math.min(math.sqrt(math.max(l2, 0)), PrepGeometry.CAP)
-	return fromEigen(a, b, angle)
+	local cover = math.clamp(chord / (2 * radiusAlong(S, u)), 0, 1)
+	-- Untapered, the parts multiply to exactly 1 + 0.35 x cover, as one undivided stretch would.
+	local part = (1 + PrepGeometry.STRETCH * cover) ^ (1 / PrepGeometry.ROLL_STEPS) - 1
+	for _ = 1, PrepGeometry.ROLL_STEPS do
+		local half = radiusAlong(S, u)
+		local taper = math.clamp((PrepGeometry.CAP - half) / (PrepGeometry.CAP - PrepGeometry.TAPER_FROM), 0, 1)
+		local k = part * taper
+		-- New outline = (I + k u u^T) applied to the old one; keep the symmetric factor of A S^2 A^T.
+		local A = mat(1 + k * u.x * u.x, k * u.x * u.y, k * u.x * u.y, 1 + k * u.y * u.y)
+		local AS = PrepGeometry.mul(A, S)
+		local l1, l2, angle = symEigen(PrepGeometry.mul(AS, transpose(AS)))
+		local a = math.min(math.sqrt(l1), PrepGeometry.CAP)
+		local b = math.min(math.sqrt(math.max(l2, 0)), PrepGeometry.CAP)
+		S = fromEigen(a, b, angle)
+	end
+	return S
 end
 
 -- The dough after a list of committed strokes ({ x1, y1, x2, y2 }); strokes that miss are skipped.

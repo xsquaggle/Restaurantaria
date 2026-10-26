@@ -21,6 +21,7 @@ DEFAULT_CHECKS = [
     "tests/summary_lines_check.luau",
     "tests/prep_check.luau",
     "tests/cut_check.luau",
+    "tests/make_check.luau",
 ]
 
 

@@ -22,11 +22,14 @@ local Widgets = require(script.Parent.Widgets)
 local Tutorial = require(script.Parent.Tutorial)
 local Stations = {
 	Order = require(script.Parent.Stations.Order),
-	Topping = require(script.Parent.Stations.Topping),
+	-- The Make tab keeps the station key "Topping" in code; players read "Make" (STATION_LABEL).
+	Topping = require(script.Parent.Stations.Make),
 	Bake = require(script.Parent.Stations.Bake),
 	Cut = require(script.Parent.Stations.Cut),
 }
 local STATION_ORDER = { "Order", "Topping", "Bake", "Cut" }
+-- Tab labels players read, where they differ from the station key.
+local STATION_LABEL = { Topping = "Make" }
 
 local C = Theme.Colour
 local NAV_SLIDE = TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -34,7 +37,7 @@ local NAV_POP = TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Back, Enum.Ea
 -- The empty rail's note away from Order (QA-006 copy).
 local RAIL_NOTE = {
 	Topping = "Go to Order to start a pizza",
-	Bake = "Add toppings, then send to an oven",
+	Bake = "Make a pizza, then send it to an oven",
 	Cut = "Take a pizza from the oven to cut",
 }
 local player = Players.LocalPlayer
@@ -696,7 +699,7 @@ local function buildLayout()
 			Parent = content,
 		})
 		local label = Ui.text({
-			Text = name,
+			Text = STATION_LABEL[name] or name,
 			FontFace = Theme.Font.display,
 			TextSize = labelSize,
 			TextWrapped = false,
@@ -1092,7 +1095,7 @@ function ctx.showResult(ticketId: number)
 	local r = customer.result
 	Ui.clear(ui.toastHolder)
 	local notes = {}
-	for _, part in { r.topping, r.bake, r.cut, r.wait } do
+	for _, part in { r.make, r.bake, r.cut, r.wait } do
 		for _, n in part.notes do
 			if #notes < 3 then
 				table.insert(notes, n)
@@ -1121,7 +1124,7 @@ function ctx.showResult(ticketId: number)
 		Parent = toast,
 	})
 	Ui.text({
-		Text = string.format("Wait %d · Topping %d · Bake %d · Cut %d", r.wait.score, r.topping.score, r.bake.score, r.cut.score),
+		Text = string.format("Wait %d · Make %d · Bake %d · Cut %d", r.wait.score, r.make.score, r.bake.score, r.cut.score),
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if ctx.compact then 14 else 18,
 		Position = UDim2.fromOffset(12, if ctx.compact then 36 else 40),

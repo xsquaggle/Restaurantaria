@@ -16,8 +16,19 @@ local Ui = require(script.Parent.Ui)
 
 local Tutorial = {}
 
--- The action that teaches each station. A pizza with no toppings learns Topping by being sent.
-Tutorial.Lesson = { takeOrder = "Order", placeTopping = "Topping", sendToOven = "Topping", takeOut = "Bake", cut = "Cut" }
+-- The action that teaches each station. Make (station key Topping) teaches one lesson per part
+-- of its dough step (Make.hint reads them) and is learned as a whole when a pizza is sent.
+Tutorial.Lesson = {
+	takeOrder = "Order",
+	flour = "Make.flour",
+	placeDough = "Make.dough",
+	rollDough = "Make.roll",
+	finishDough = "Make.next",
+	placeTopping = "Make.toppings",
+	sendToOven = "Topping",
+	takeOut = "Bake",
+	cut = "Cut",
+}
 
 -- Glove and arrow rotation for each side they come from (both drawings point up).
 local ROTATION = { below = 0, above = 180, left = 90, right = -90, aboveLeft = 135 }

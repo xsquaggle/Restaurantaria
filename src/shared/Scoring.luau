@@ -3,6 +3,7 @@
 -- Pizza-local coordinates are normalized: centre (0, 0), crust edge radius 1, x right, y down.
 
 local Config = require(script.Parent.Config)
+local MakeDough = require(script.Parent.MakeDough)
 local Recipes = require(script.Parent.Recipes)
 
 export type Piece = { ingredient: string, x: number, y: number }
@@ -107,6 +108,23 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 	return { score = math.floor(score + 0.5), notes = notes }
 end
 
+-- The Make part of the order grade (proposal, 2026-10-26): the Dough score (flour inside it) and,
+-- only when the ticket asks for toppings, the Toppings score, averaged. A cheese order is its
+-- Dough score alone: no free topping score. Sauce and cheese are not graded until they are
+-- hands-on. The order grade stays the four-part average with Make in Topping's place.
+function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Piece }): Grade
+	local dough = MakeDough.grade(make)
+	local notes = table.clone(dough.notes)
+	if #recipe.toppings == 0 then
+		return { score = dough.score, notes = notes, detail = { dough = dough } }
+	end
+	local toppings = Scoring.toppings(recipe, pieces)
+	for _, n in toppings.notes do
+		table.insert(notes, n)
+	end
+	return { score = math.floor((dough.score + toppings.score) / 2 + 0.5), notes = notes, detail = { dough = dough, toppings = toppings } }
+end
+
 function Scoring.bakeState(target: number, seconds: number): string
 	local cfg = Config.Oven
 	local delta = seconds - target
@@ -163,15 +181,20 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 		return nil, "cut path missing"
 	end
 	local n = #points
+	if n > cfg.maxPoints then
+		return nil, "cut path too long"
+	end
+	-- A plain list only. Counting stops one past the length, so a table stuffed with extra keys
+	-- costs at most maxPoints + 1 steps.
 	local count = 0
 	for _ in points do
 		count += 1
+		if count > n then
+			break
+		end
 	end
 	if n < 2 or count ~= n then
 		return nil, "cut path missing"
-	end
-	if n > cfg.maxPoints then
-		return nil, "cut path too long"
 	end
 	local path: { Point } = table.create(n)
 	for i = 1, n do
