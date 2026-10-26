@@ -1,5 +1,6 @@
 --!strict
--- Cutting station: drag across the pizza to cut; each line is a chord through the drag.
+-- Cutting station: drag across the pizza to cut. Cuts are freehand: the groove follows the
+-- dragged path, and the server keeps that path and grades how straight and complete it is.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -7,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local Scoring = require(Shared.Scoring)
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Parent = script.Parent.Parent
@@ -190,12 +192,26 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- Drag to cut, with a live preview chord. Drags may start anywhere on the board, so a
-	-- stroke that begins just off the crust still counts. One stroke at a time: it belongs to
-	-- the input that started it (the mouse, or that one finger) and to the pizza it started on;
-	-- other fingers are ignored and a ticket or station change cancels it without cutting.
-	local RANGE = 1.599 -- just inside the server's accepted range (+-1.6), so a clipped end never rounds past it
-	type Stroke = { input: InputObject, mouse: boolean, button: Enum.UserInputType, pizzaId: number, start: Vector2 }
+	-- Drag to cut. Drags may start anywhere on the board, so a stroke that begins just off the
+	-- crust still counts. One stroke at a time: it belongs to the input that started it (the
+	-- mouse, or that one finger) and to the pizza it started on; other fingers are ignored and
+	-- a ticket or station change cancels it without cutting. The stroke records the dragged
+	-- path (freehand, Lawson 2026-10-26); the release sends it, resampled to at most
+	-- Config.Cut.maxPoints points, for the server to grade.
+	local RANGE = 1.599 -- just inside the server's accepted range (+-1.6), so a clipped point never rounds past it
+	local SPACING = 0.03 -- cut units between recorded points
+	local MAX_RAW = 400 -- recorded points kept before thinning
+	type Stroke = {
+		input: InputObject,
+		mouse: boolean,
+		button: Enum.UserInputType,
+		pizzaId: number,
+		points: { Vector2 },
+		length: number,
+		outside: Vector2?, -- where the path left the accepted range, while it is outside
+		closed: boolean, -- the path came back in across the pizza; nothing more is recorded
+		strong: boolean, -- the groove is drawn at full strength
+	}
 	local stroke: Stroke? = nil
 
 	-- Pizza-local point of a screen position, not clamped.
@@ -203,25 +219,99 @@ function Cut.new(ctx: any, container: Frame)
 		local rel = (Vector2.new(position.X, position.Y) - view.frame.AbsolutePosition) / view.frame.AbsoluteSize
 		return Vector2.new(rel.X * 2 - 1, rel.Y * 2 - 1)
 	end
-	-- The stroke's end inside the accepted range, moved back along the stroke so the cut keeps
-	-- the dragged direction (clamping each axis on its own bent long drags toward 45 degrees).
-	local function endPoint(s: Vector2, e: Vector2): Vector2
-		local d = e - s
+	local function inRange(p: Vector2): boolean
+		return math.abs(p.X) <= RANGE and math.abs(p.Y) <= RANGE
+	end
+	-- Where the segment from a (inside the range) towards b leaves the range; clipping each axis
+	-- on its own would bend the path.
+	local function rangeExit(a: Vector2, b: Vector2): Vector2
+		local d = b - a
 		local t = 1
 		for _, axis in { "X", "Y" } do
-			local dv, sv = (d :: any)[axis], (s :: any)[axis]
+			local dv, av = (d :: any)[axis], (a :: any)[axis]
 			if dv > 1e-9 then
-				t = math.min(t, (RANGE - sv) / dv)
+				t = math.min(t, (RANGE - av) / dv)
 			elseif dv < -1e-9 then
-				t = math.min(t, (-RANGE - sv) / dv)
+				t = math.min(t, (-RANGE - av) / dv)
 			end
 		end
-		return s + d * math.max(t, 0)
+		return a + d * math.max(t, 0)
+	end
+	-- Distance from the centre to the segment a-b.
+	local function centreDistance(a: Vector2, b: Vector2): number
+		local d = b - a
+		local t = if d.Magnitude < 1e-9 then 0 else math.clamp(-a:Dot(d) / d:Dot(d), 0, 1)
+		return (a + d * t).Magnitude
 	end
 	local function trace(line: string)
 		local log = IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutTrace")
 		if type(log) == "string" and #log < 60000 then
 			LocalPlayer:SetAttribute("RestaurantariaCutTrace", log .. string.format("%.3f %s\n", os.clock(), line))
+		end
+	end
+	local function groove(a: Vector2, b: Vector2, strong: boolean)
+		Widgets.drawCut(preview, { path = { { x = a.X, y = a.Y }, { x = b.X, y = b.Y } } }, if strong then 0.3 else 0.7)
+	end
+	local function addPoint(st: Stroke, p: Vector2)
+		local last = st.points[#st.points]
+		st.length += (p - last).Magnitude
+		table.insert(st.points, p)
+		-- The groove grows behind the cutter: only the part already rolled over is drawn. It is
+		-- faint until the path is long enough to cut, so it never promises a cut the release
+		-- would drop.
+		local strong = st.length >= Config.Cut.minDragLength
+		if strong and not st.strong then
+			st.strong = true
+			for _, g in preview:GetChildren() do
+				if g:IsA("ImageLabel") then
+					g.ImageTransparency = 0.3
+				end
+			end
+		end
+		groove(last, p, strong)
+		if #st.points > MAX_RAW then
+			-- Thin to every other point (keeping both ends); the sent path is resampled anyway.
+			local thin = {}
+			for i = 1, #st.points, 2 do
+				table.insert(thin, st.points[i])
+			end
+			if thin[#thin] ~= st.points[#st.points] then
+				table.insert(thin, st.points[#st.points])
+			end
+			st.points = thin
+		end
+	end
+	-- Records the pointer's pizza-local position on the stroke's path.
+	local function record(st: Stroke, raw: Vector2, final: boolean?)
+		if st.closed then
+			return
+		end
+		local last = st.points[#st.points]
+		if st.outside then
+			if not inRange(raw) then
+				return
+			end
+			-- Back in range: where it re-entered, unless the jump from where it left would run
+			-- across the pizza, which the wheel never rolled over. Then the path ends where it left.
+			local entry = rangeExit(raw, st.outside)
+			if centreDistance(st.outside, entry) < Config.Cut.crustRadius then
+				st.closed = true
+				return
+			end
+			addPoint(st, entry)
+			st.outside = nil
+			last = entry
+		end
+		if not inRange(raw) then
+			local exit = rangeExit(last, raw)
+			if (exit - last).Magnitude > 1e-4 then
+				addPoint(st, exit)
+			end
+			st.outside = exit
+			return
+		end
+		if (raw - last).Magnitude >= SPACING or (final and (raw - last).Magnitude > 1e-4) then
+			addPoint(st, raw)
 		end
 	end
 	local function endStroke()
@@ -235,6 +325,17 @@ function Cut.new(ctx: any, container: Frame)
 			endStroke()
 		end
 	end
+	-- A held stroke whose release never arrived (focus lost, window switched) would block every
+	-- new press until a ticket or station change; a new press finds it stale and drops it.
+	local function stale(st: Stroke): boolean
+		if st.mouse then
+			local held = if st.button == Enum.UserInputType.MouseButton1
+				then UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+				else UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+			return not held
+		end
+		return st.input.UserInputState == Enum.UserInputState.End or st.input.UserInputState == Enum.UserInputState.Cancel
+	end
 
 	board.InputBegan:Connect(function(input: InputObject)
 		local isMouse = input.UserInputType == Enum.UserInputType.MouseButton1
@@ -242,13 +343,26 @@ function Cut.new(ctx: any, container: Frame)
 		if not isMouse and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
+		if stroke and stroke.input ~= input and stale(stroke) then
+			cancelStroke("stale (release lost)")
+		end
 		if stroke or not current or ctx.pending[current.id] then
 			trace("ignored begin " .. input.UserInputType.Name .. (if stroke then " (stroke held)" else ""))
 			return
 		end
 		local p = rawLocal(input.Position)
 		local s = Vector2.new(math.clamp(p.X, -RANGE, RANGE), math.clamp(p.Y, -RANGE, RANGE))
-		stroke = { input = input, mouse = isMouse, button = input.UserInputType, pizzaId = current.id, start = s }
+		stroke = {
+			input = input,
+			mouse = isMouse,
+			button = input.UserInputType,
+			pizzaId = current.id,
+			points = { s },
+			length = 0,
+			outside = nil,
+			closed = false,
+			strong = false,
+		}
 		local point = toStation(input.Position)
 		lastPoint = point
 		TweenService:Create(cutter, PICK, { Position = UDim2.fromOffset(point.X, point.Y) }):Play()
@@ -261,15 +375,7 @@ function Cut.new(ctx: any, container: Frame)
 		end
 		if (st.mouse and input.UserInputType == Enum.UserInputType.MouseMovement) or (not st.mouse and input == st.input) then
 			follow(toStation(input.Position))
-			local e = endPoint(st.start, rawLocal(input.Position))
-			Ui.clear(preview)
-			local len = (e - st.start).Magnitude
-			if len > 0.05 then
-				-- The groove only follows the cutter: it shows where the wheel has rolled, never
-				-- the line ahead of it (Lawson, 2026-10-26). Faint until the drag is long enough
-				-- to cut, so it never promises a cut the release would drop.
-				Widgets.drawCut(preview, { x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, if len >= Config.Cut.minDragLength then 0.3 else 0.7, true)
-			end
+			record(st, rawLocal(input.Position))
 		end
 	end)
 	ctx.connect(UserInputService.InputEnded, function(input: InputObject)
@@ -280,21 +386,29 @@ function Cut.new(ctx: any, container: Frame)
 		if (st.mouse and input.UserInputType ~= st.button) or (not st.mouse and input ~= st.input) then
 			return
 		end
+		record(st, rawLocal(input.Position), true)
 		endStroke()
 		if not current or current.id ~= st.pizzaId then
 			trace("dropped: pizza changed")
 			return
 		end
-		local e = endPoint(st.start, rawLocal(input.Position))
-		local len = (e - st.start).Magnitude
-		local angle = math.deg(math.atan2(e.Y - st.start.Y, e.X - st.start.X))
-		if len >= Config.Cut.minDragLength then
-			trace(string.format("send %s screen=%.0f,%.0f line=%.3f,%.3f>%.3f,%.3f angle=%.1f pizza=%d", input.UserInputType.Name, input.Position.X, input.Position.Y, st.start.X, st.start.Y, e.X, e.Y, angle, st.pizzaId))
-			ctx.send("cut", { pizzaId = st.pizzaId, x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, function(ok, reason)
-				trace(string.format("reply ok=%s %s", tostring(ok), tostring(reason)))
+		local raw = table.create(#st.points)
+		for i, p in st.points do
+			raw[i] = { x = p.X, y = p.Y }
+		end
+		local path = Scoring.resamplePath(raw, Config.Cut.maxPoints)
+		-- The server's own grading, run first so a refusal is explained instead of sent.
+		local cut, reason = Scoring.cutPath(path)
+		if cut then
+			local first, last = path[1], path[#path]
+			trace(string.format("send %s screen=%.0f,%.0f points=%d raw=%d from=%.3f,%.3f to=%.3f,%.3f length=%.3f angle=%.1f straight=%.3f dev=%.4f complete=%.3f pizza=%d",
+				input.UserInputType.Name, input.Position.X, input.Position.Y, #path, #st.points, first.x, first.y, last.x, last.y, st.length,
+				math.deg(math.atan2(cut.y2 - cut.y1, cut.x2 - cut.x1)), cut.straightness :: number, (cut :: any).deviation, cut.completeness :: number, st.pizzaId))
+			ctx.send("cut", { pizzaId = st.pizzaId, path = path }, function(ok, why)
+				trace(string.format("reply ok=%s %s", tostring(ok), tostring(why)))
 			end)
 		else
-			trace(string.format("too short %.3f < %.2f", len, Config.Cut.minDragLength))
+			trace(string.format("refused locally: %s length=%.3f points=%d", tostring(reason), st.length, #path))
 			guide.Text = "Drag all the way\nacross the pizza"
 			task.delay(1.5, ctx.refresh)
 		end

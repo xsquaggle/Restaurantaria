@@ -52,6 +52,23 @@ Config.Cut = {
 	perfectDegrees = 5,
 	zeroDegrees = 30,
 	minDragLength = 0.9, -- normalized; shorter drags are ignored
+	-- Freehand cuts (Lawson, 2026-10-26): the server keeps the dragged path and grades how
+	-- straight and how complete each cut is. The values below are proposals, not balance
+	-- decisions. Cut coordinates are the pizza frame's (frame edge 1), so the drawn crust edge
+	-- is at 0.95.
+	crustRadius = 0.95,
+	-- Most points one cut's path may carry. The client resamples the drag to this many.
+	maxPoints = 48,
+	-- Widest distance (cut units) of the path inside the crust from its best-fit line that
+	-- still counts as straight, and where straightness reaches zero. At 1920x1080 the pizza's
+	-- radius is about 400 px (0.04 = 16 px, 0.2 = 80 px); on a 667x375 phone about 150 px.
+	straightPerfect = 0.04,
+	straightZero = 0.2,
+	-- Share of the fitted line's chord across the crust the path covers: full credit from
+	-- completeFull, none at completeZero; below minComplete the cut is refused.
+	completeFull = 0.95,
+	completeZero = 0.5,
+	minComplete = 0.25,
 }
 
 Config.Wait = {

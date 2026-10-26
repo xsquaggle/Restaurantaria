@@ -227,7 +227,7 @@ if RunService:IsStudio() then
 							local n = c.order.slices // 2
 							for k = 0, n - 1 do
 								local a = math.rad(k * 180 / n)
-								act("cut", { pizzaId = pizza.id, x1 = math.cos(a) * 1.05, y1 = math.sin(a) * 1.05, x2 = -math.cos(a) * 1.05, y2 = -math.sin(a) * 1.05 })
+								act("cut", { pizzaId = pizza.id, path = { { x = math.cos(a) * 1.05, y = math.sin(a) * 1.05 }, { x = -math.cos(a) * 1.05, y = -math.sin(a) * 1.05 } } })
 							end
 							act("serve", { pizzaId = pizza.id })
 						end

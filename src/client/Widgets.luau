@@ -1038,7 +1038,7 @@ function Widgets.pizza(): PizzaView
 			end
 			local parts = { tostring(pizza.id) }
 			for _, line in pizza.cuts or {} do
-				table.insert(parts, string.format("%.3f%.3f%.3f%.3f", line.x1, line.y1, line.x2, line.y2))
+				table.insert(parts, string.format("%.3f%.3f%.3f%.3f/%d", line.x1, line.y1, line.x2, line.y2, if line.path then #line.path else 0))
 			end
 			local key = table.concat(parts, ",")
 			if key ~= cutKey then
@@ -1054,12 +1054,83 @@ function Widgets.pizza(): PizzaView
 end
 
 -- A cut: the generated cut crevice (G9 v3: a dark slit with shadowed, lifted edges and no
--- food drawn inside it) stretched along the chord of the infinite line through the two
--- points, clipped to the pizza circle, so the pizza underneath stays the food. `transparency` fades it (the live preview);
--- `segmentOnly` draws only the part between the two points (the live stroke follows the cutter).
+-- food drawn inside it), so the pizza underneath stays the food. A freehand cut (`line.path`,
+-- the committed path or a live stroke's newest piece) is drawn along its path, one stretched
+-- groove per straight run, clipped to the crust. A plain line (x1..y2, no path) is drawn as
+-- the chord of the infinite line through its two points, clipped to the crust.
+-- `transparency` fades it (the live stroke).
 local CRUST_EDGE = 0.95
 
-function Widgets.drawCut(layer: Frame, line: any, transparency: number?, segmentOnly: boolean?)
+local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by: number, transparency: number?)
+	local dx, dy = bx - ax, by - ay
+	local len = math.sqrt(dx * dx + dy * dy)
+	if len < 1e-3 then
+		return
+	end
+	local groove = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ImageTransparency = transparency or 0,
+		ScaleType = Enum.ScaleType.Stretch,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5 + (ax + bx) * 0.25, 0.5 + (ay + by) * 0.25),
+		-- A hair longer than the run, so turns along a freehand path don't open gaps.
+		Size = UDim2.fromScale(len / 2 + 0.008, 0.03),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		ZIndex = 3,
+		Parent = layer,
+	})
+	Art.apply(groove, "fx_cut_groove_c")
+end
+
+-- The part of segment a-b inside the crust, as parameters along it (nil when none).
+local function clipToCrust(ax: number, ay: number, bx: number, by: number): (number?, number?)
+	local dx, dy = bx - ax, by - ay
+	local A = dx * dx + dy * dy
+	if A < 1e-12 then
+		return nil, nil
+	end
+	local B = 2 * (ax * dx + ay * dy)
+	local C = ax * ax + ay * ay - CRUST_EDGE * CRUST_EDGE
+	local disc = B * B - 4 * A * C
+	if disc <= 0 then
+		return nil, nil
+	end
+	local r = math.sqrt(disc)
+	local t0, t1 = math.max(0, (-B - r) / (2 * A)), math.min(1, (-B + r) / (2 * A))
+	if t1 - t0 < 1e-6 then
+		return nil, nil
+	end
+	return t0, t1
+end
+
+function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
+	local path = line.path
+	if path then
+		-- Merge nearly straight runs (turns under 4 degrees) so a steady stroke stays one groove.
+		local runs = { path[1] }
+		for i = 2, #path do
+			local p = path[i]
+			if #runs >= 2 then
+				local a, b = runs[#runs - 1], runs[#runs]
+				local h1 = math.atan2(b.y - a.y, b.x - a.x)
+				local h2 = math.atan2(p.y - b.y, p.x - b.x)
+				if math.abs((h2 - h1 + math.pi) % (2 * math.pi) - math.pi) < math.rad(4) then
+					runs[#runs] = p
+					continue
+				end
+			end
+			table.insert(runs, p)
+		end
+		for i = 2, #runs do
+			local a, b = runs[i - 1], runs[i]
+			local t0, t1 = clipToCrust(a.x, a.y, b.x, b.y)
+			if t0 and t1 then
+				local dx, dy = b.x - a.x, b.y - a.y
+				groovePiece(layer, a.x + dx * t0, a.y + dy * t0, a.x + dx * t1, a.y + dy * t1, transparency)
+			end
+		end
+		return
+	end
 	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-4 then
@@ -1072,32 +1143,8 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?, segment
 	if d2 >= 1 then
 		return
 	end
-	-- The crust edge sits a little inside the pizza frame; stop the groove there.
 	local half = math.sqrt(1 - d2) * CRUST_EDGE
-	-- Along the line, measured from its closest point to the centre: the whole chord, or
-	-- (segmentOnly, the live stroke) just the part the cutter has rolled over.
-	local a, b = -half, half
-	if segmentOnly then
-		local t1 = (line.x1 - cx) * ux + (line.y1 - cy) * uy
-		local t2 = (line.x2 - cx) * ux + (line.y2 - cy) * uy
-		a, b = math.max(-half, math.min(t1, t2)), math.min(half, math.max(t1, t2))
-		if b - a < 1e-3 then
-			return
-		end
-	end
-	local mid = (a + b) / 2
-	local groove = Ui.new("ImageLabel", {
-		BackgroundTransparency = 1,
-		ImageTransparency = transparency or 0,
-		ScaleType = Enum.ScaleType.Stretch,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + (cx + ux * mid) * 0.5, 0.5 + (cy + uy * mid) * 0.5),
-		Size = UDim2.fromScale((b - a) / 2, 0.03),
-		Rotation = math.deg(math.atan2(dy, dx)),
-		ZIndex = 3,
-		Parent = layer,
-	})
-	Art.apply(groove, "fx_cut_groove_c")
+	groovePiece(layer, cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half, transparency)
 end
 
 -- Reserved hint strip between the work surface and the tab bar: live text and, optionally, a

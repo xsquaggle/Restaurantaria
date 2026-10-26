@@ -37,7 +37,7 @@ type Pizza = {
 	slot: number?,
 	bakeStart: number?,
 	bakeSeconds: number?,
-	cuts: { Scoring.Line },
+	cuts: { Scoring.Cut },
 }
 type Shift = {
 	id: string,
@@ -360,19 +360,16 @@ function Actions.cut(shift: Shift, args: any): (boolean, string?)
 	if not pizza then
 		return false, err
 	end
-	for _, k in { "x1", "y1", "x2", "y2" } do
-		if not isFiniteNumber(args[k], -1.6, 1.6) then
-			return false, "cut out of range"
-		end
-	end
-	local dx, dy = args.x2 - args.x1, args.y2 - args.y1
-	if math.sqrt(dx * dx + dy * dy) < Config.Cut.minDragLength then
-		return false, "cut too short"
-	end
 	if #pizza.cuts >= Config.Cut.maxLines then
 		return false, "already cut " .. Config.Cut.maxLines .. " times"
 	end
-	table.insert(pizza.cuts, { x1 = args.x1, y1 = args.y1, x2 = args.x2, y2 = args.y2 })
+	-- Freehand: the client sends the dragged path; the server grades and keeps it (the path's
+	-- best-fit chord, the path itself and its straightness and completeness).
+	local cut, reason = Scoring.cutPath(args.path)
+	if not cut then
+		return false, reason
+	end
+	table.insert(pizza.cuts, cut)
 	return true, nil
 end
 

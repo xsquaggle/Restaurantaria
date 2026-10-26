@@ -20,6 +20,7 @@ DEFAULT_CHECKS = [
     "tests/save_backend_check.luau",
     "tests/summary_lines_check.luau",
     "tests/prep_check.luau",
+    "tests/cut_check.luau",
 ]
 
 
