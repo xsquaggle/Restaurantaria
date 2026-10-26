@@ -150,8 +150,9 @@ local function layout(stations: Frame, hints: Frame): any
 end
 
 -- UDim offsets are whole pixels (Studio measured: a 0.95 px registration offset vanished), so
--- registered bodies are placed and sized with Scale against the parent, which renders at
--- sub-pixel precision (measured: a 0.5 px Scale move moved the drawn centroid 0.50 px).
+-- registered bodies are placed and sized with Scale against the parent. That is a proposal:
+-- sub-pixel rendering of Scale placement is NOT proven (the coordinator audit found the 0.50 px
+-- figure unsupported by the captures; Astra r13 item 5). Check it with real art.
 local function exact(canvas: GuiObject, parent: GuiObject, pl: G.Placement, cx: number, cy: number, raw: boolean?)
 	local W, H = parent.AbsoluteSize.X, parent.AbsoluteSize.Y
 	local ox, oy = if raw then 0 else pl.offset.x, if raw then 0 else pl.offset.y
