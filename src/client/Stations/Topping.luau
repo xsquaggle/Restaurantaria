@@ -208,22 +208,42 @@ function Topping.new(ctx: any, container: Frame)
 	undo.frame.Parent = frame
 
 	-- Optional peripheral props (Astra r13 art, each a separate image): placed only where they
-	-- clear the board, the tray row with its lifted pick, Undo and the station edge by a
+	-- clear the board, the trays in use with their lifted pick, Undo and the station edge by a
 	-- margin; any prop that cannot fit is hidden, and phones show none, so decor never shrinks
-	-- the food or touch targets. Props sit under everything and never take input.
+	-- the food or touch targets. Hidden trays (ingredients not unlocked yet) leave their cells
+	-- to the props; placement reruns when the stocked trays change. Props sit under
+	-- everything and never take input.
 	local decor = Ui.new("Frame", { Name = "Decor", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 0, Parent = frame })
-	if not ctx.compact then
-		type Rect = { x0: number, y0: number, x1: number, y1: number }
+	type Rect = { x0: number, y0: number, x1: number, y1: number }
+	-- Art, the visible body's share of the square canvas (manifest alpha bounds), and the
+	-- corners to try, in order (fractions of the station).
+	local PROPS = {
+		{ art = "deco_basil_pot", ax = 0.879, ay = 0.850, spots = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 0, 0.5 } } },
+		{ art = "deco_shaker_pair", ax = 0.879, ay = 0.557, spots = { { 0, 0.5 }, { 1, 0 }, { 0, 0 }, { 1, 0.5 } } },
+		{ art = "deco_gingham_cloth", ax = 0.879, ay = 0.879, spots = { { 0, 1 }, { 1, 1 }, { 0, 0.5 } } },
+	}
+	local function placeDecor(inUse: (string) -> boolean)
+		Ui.clear(decor)
+		if ctx.compact then
+			return
+		end
 		local keep = margin * 1.5
 		local blocked: { Rect } = {
 			{ x0 = cx - boardD / 2, y0 = cy - boardD / 2, x1 = cx + boardD / 2, y1 = cy + boardD / 2 },
 		}
-		for i = 1, count do
-			local h = homes[i]
-			-- Chosen trays grow 10 % and lift toward the pizza, with the pick above them.
-			local hx, hy = h.X.Offset, h.Y.Offset
-			local w2, h2 = trayW * 0.55 + math.abs(lift.X.Offset), trayH * 0.55
-			table.insert(blocked, { x0 = hx - w2, y0 = hy - h2 - math.abs(lift.Y.Offset) - math.abs(pickRaise.Y.Offset) - pizzaD * 0.12, x1 = hx + w2 + math.abs(pickRaise.X.Offset) + pizzaD * 0.12, y1 = hy + h2 })
+		for i, id in Recipes.IngredientOrder do
+			if inUse(id) then
+				local h = homes[i]
+				-- Chosen trays grow 10 % and lift toward the pizza, with the pick above them.
+				local hx, hy = h.X.Offset, h.Y.Offset
+				local w2, h2 = trayW * 0.55 + math.abs(lift.X.Offset), trayH * 0.55
+				table.insert(blocked, {
+					x0 = hx - w2,
+					y0 = hy - h2 - math.abs(lift.Y.Offset) - math.abs(pickRaise.Y.Offset) - pizzaD * 0.12,
+					x1 = hx + w2 + math.abs(pickRaise.X.Offset) + pizzaD * 0.12,
+					y1 = hy + h2,
+				})
+			end
 		end
 		do
 			local u = undo.frame
@@ -234,23 +254,16 @@ function Topping.new(ctx: any, container: Frame)
 			if r.x0 < margin or r.y0 < margin or r.x1 > W - margin or r.y1 > H - margin then
 				return false
 			end
-			for _, b in blocked do
-				if r.x0 < b.x1 + keep and r.x1 > b.x0 - keep and r.y0 < b.y1 + keep and r.y1 > b.y0 - keep then
+			for _, bl in blocked do
+				if r.x0 < bl.x1 + keep and r.x1 > bl.x0 - keep and r.y0 < bl.y1 + keep and r.y1 > bl.y0 - keep then
 					return false
 				end
 			end
 			return true
 		end
-		-- Art, the visible body's share of the square canvas (manifest alpha bounds), and the
-		-- corners to try, in order (fractions of the station).
-		local props = {
-			{ art = "deco_basil_pot", ax = 0.879, ay = 0.850, spots = { { 0, 0 }, { 1, 0 }, { 0, 1 } } },
-			{ art = "deco_shaker_pair", ax = 0.879, ay = 0.557, spots = { { 1, 0 }, { 0, 0.5 }, { 1, 0.5 } } },
-			{ art = "deco_gingham_cloth", ax = 0.879, ay = 0.879, spots = { { 0, 1 }, { 1, 1 }, { 0, 0.5 } } },
-		}
 		local biggest = math.min(H * 0.26, 220)
 		local smallest = math.max(H * 0.12, 64)
-		for _, prop in props do
+		for _, prop in PROPS do
 			local placed = false
 			local size = biggest
 			while not placed and size >= smallest do
@@ -430,6 +443,7 @@ function Topping.new(ctx: any, container: Frame)
 	end)
 
 	local shownId: number? = nil
+	local decorPlaced = false
 	local station = { frame = frame }
 
 	function station.refresh(snap: any)
@@ -446,6 +460,12 @@ function Topping.new(ctx: any, container: Frame)
 		if restock and not stocked[chosen] and list[1] then
 			chosen = list[1]
 			showChosen()
+		end
+		if restock or not decorPlaced then
+			decorPlaced = true
+			placeDecor(function(id)
+				return stocked[id] == true
+			end)
 		end
 		pick.Visible = stocked[chosen] == true
 		current = ctx.focusPizza(snap, "topping")
