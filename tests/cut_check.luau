@@ -130,6 +130,13 @@ refused("nil", nil, "cut path missing")
 refused("one point", { P(0, 0) }, "cut path missing")
 refused("map, not a list", { a = P(-1, 0), b = P(1, 0) }, "cut path missing")
 refused("list with a hole", { [1] = P(-1, 0), [2] = P(0, 0), [4] = P(1, 0) }, "cut path missing")
+-- A two-point list stuffed with 1,000 extra keys is refused (key counting stops one past the
+-- list's length, so the stuffing costs nothing).
+local stuffed: any = { P(-1.05, 0), P(1.05, 0) }
+for i = 1, 1000 do
+	stuffed["k" .. i] = i
+end
+refused("list stuffed with extra keys", stuffed, "cut path missing")
 local many = {}
 for i = 1, cfg.maxPoints + 1 do
 	table.insert(many, P(-1.05 + 2.1 * (i - 1) / cfg.maxPoints, 0))

@@ -46,7 +46,9 @@ Config.Make = {
 	-- flourStep of travel; each stamp floors a disc of flourRadius.
 	flourStep = 0.15,
 	flourRadius = 0.35,
-	flourReach = 1.11, -- stamps past the board's edge are refused
+	-- Stamp centres stay this close to the middle (the board's edge, 1 / 0.9, less one stamp
+	-- radius) so no dust lands off the board; the client pulls a drag past it back inside.
+	flourReach = 0.76,
 	flourMaxPerStroke = 40,
 	flourMaxStamps = 96,
 	-- Past this many stamps the extra flour shows as clumps (looks only; not a penalty).

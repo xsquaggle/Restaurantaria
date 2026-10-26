@@ -86,11 +86,13 @@ end)
 -- pulled on, eight full rolls at 0, 90, 45 and 135 degrees: round, mean radius 1.03), then on
 -- to toppings. `act` reports refusals.
 local function cleanDough(act: (string, any) -> (), pizzaId: number)
-	for _, y in { -0.6, 0, 0.6 } do
+	local reach = Config.Make.flourReach
+	for _, y in { -0.45, 0, 0.45 } do
 		local sampler = MakeDough.flourSampler()
 		local points = {}
+		local half = math.sqrt(reach * reach - y * y) - 1e-6
 		for i = 0, 40 do
-			for _, p in sampler.feed({ x = -1.05 + 2.1 * i / 40, y = y }) do
+			for _, p in sampler.feed({ x = -half + 2 * half * i / 40, y = y }) do
 				table.insert(points, p)
 			end
 		end

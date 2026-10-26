@@ -46,7 +46,7 @@ local cfg = Config.Make
 -- The proposed constants this file's hand-worked values assume.
 check("proposal: flour step", cfg.flourStep, 0.15)
 check("proposal: flour radius", cfg.flourRadius, 0.35)
-check("proposal: flour reach", cfg.flourReach, 1.11)
+check("proposal: flour reach", cfg.flourReach, 0.76)
 check("proposal: flour per stroke", cfg.flourMaxPerStroke, 40)
 check("proposal: flour cap", cfg.flourMaxStamps, 96)
 check("proposal: flour full", cfg.flourCoverFull, 0.8)
@@ -56,8 +56,8 @@ check("proposal: min stroke", cfg.minStroke, 0.3)
 check("proposal: max strokes", cfg.maxStrokes, 24)
 check("proposal: taper from", G.TAPER_FROM, 0.85)
 
--- 1. Flour sampler: a drag from (-1, 0) to (1, 0) stamps at the press point and every 0.15 of
--- travel: x = -1 + 0.15 k for k = 0..13 (13 x 0.15 = 1.95 <= 2), 14 stamps, whether the drag
+-- 1. Flour sampler: a drag from (-0.75, 0) to (0.75, 0) stamps at the press point and every 0.15
+-- of travel: x = -0.75 + 0.15 k for k = 0..10 (10 x 0.15 = 1.5), 11 stamps, whether the drag
 -- arrives as one pointer sample or as forty.
 local function drag(n: number, from: any, to: any): { any }
 	local sampler = MakeDough.flourSampler()
@@ -69,15 +69,15 @@ local function drag(n: number, from: any, to: any): { any }
 	end
 	return out
 end
-local one = drag(1, P(-1, 0), P(1, 0))
-local forty = drag(40, P(-1, 0), P(1, 0))
-check("sampler: 14 stamps in one sample", #one, 14)
-check("sampler: 14 stamps in forty samples", #forty, 14)
+local one = drag(1, P(-0.75, 0), P(0.75, 0))
+local forty = drag(40, P(-0.75, 0), P(0.75, 0))
+check("sampler: 11 stamps in one sample", #one, 11)
+check("sampler: 11 stamps in forty samples", #forty, 11)
 local same = true
 for i = 1, math.min(#one, #forty) do
-	same = same and math.abs(one[i].x - forty[i].x) < 1e-9 and math.abs(one[i].x - (-1 + 0.15 * (i - 1))) < 1e-9
+	same = same and math.abs(one[i].x - forty[i].x) < 1e-9 and math.abs(one[i].x - (-0.75 + 0.15 * (i - 1))) < 1e-9
 end
-check("sampler: stamps at -1 + 0.15 k either way", same, true)
+check("sampler: stamps at -0.75 + 0.15 k either way", same, true)
 -- A drag that comes back counts its travel both ways: 0 -> 0.3 -> 0: stamps at 0, 0.15, 0.3,
 -- then 0.15, 0 on the way back = 5.
 local back = MakeDough.flourSampler()
@@ -90,7 +90,7 @@ local function newMake(): any
 end
 local mk = newMake()
 local okStroke = MakeDough.validateFlour(mk, one)
-check("flour: a clean stroke passes", okStroke ~= nil and #okStroke, 14)
+check("flour: a clean stroke passes", okStroke ~= nil and #okStroke, 11)
 check("flour: the stored copy is a copy", okStroke ~= nil and okStroke[1] ~= one[1], true)
 local function refused(name: string, points: any, want: string, make: any?)
 	local got, why = MakeDough.validateFlour(make or mk, points)
@@ -104,9 +104,9 @@ for i = 1, cfg.flourMaxPerStroke + 1 do
 	long[i] = P(0, 0)
 end
 refused("41 stamps", long, "bad flour stroke")
-refused("off the board", { P(1.12, 0) }, "flour off the board")
--- (0.8, 0.8) is inside the +-1.11 box but 1.131 from the centre, past the board's round edge.
-refused("past the round edge", { P(0.8, 0.8) }, "flour off the board")
+refused("off the board", { P(0.77, 0) }, "flour off the board")
+-- (0.6, 0.6) is inside the +-0.76 box but 0.849 from the centre, past the stamps' round limit.
+refused("past the round edge", { P(0.6, 0.6) }, "flour off the board")
 refused("NaN", { P(0 / 0, 0) }, "flour off the board")
 refused("a gap", { P(0, 0), P(0.16, 0) }, "flour stamps too far apart")
 check("flour: 0.15 apart passes", MakeDough.validateFlour(mk, { P(0, 0), P(0.15, 0) }) ~= nil, true)
@@ -200,7 +200,7 @@ for gx = -7, 7 do
 	local stroke = {}
 	for gy = -7, 7 do
 		local p = P(gx * 0.15, gy * 0.15)
-		if p.x * p.x + p.y * p.y <= 1.11 * 1.11 then
+		if p.x * p.x + p.y * p.y <= 0.76 * 0.76 then
 			table.insert(stroke, p)
 		end
 	end
@@ -273,7 +273,7 @@ serverRefused("finish before the dough", "finishDough", { pizzaId = 9, from = "d
 serverRefused("undo with nothing", "undoDough", { pizzaId = 9 }, "nothing to undo")
 serverRefused("flour gap", "flour", { pizzaId = 9, points = { P(0, 0), P(0.5, 0) } }, "flour stamps too far apart")
 check("server: flour accepted", (act("flour", { pizzaId = 9, points = one })), true)
-check("server: flour stored", snapshot(), "dough|1|14|false|0|0")
+check("server: flour stored", snapshot(), "dough|1|11|false|0|0")
 check("server: undo removes the flour stroke", (act("undoDough", { pizzaId = 9 })), true)
 check("server: flour gone", snapshot(), "dough|0|0|false|0|0")
 act("flour", { pizzaId = 9, points = one })
@@ -281,11 +281,11 @@ check("server: dough placed", (act("placeDough", { pizzaId = 9 })), true)
 serverRefused("dough twice", "placeDough", { pizzaId = 9 }, "the dough is already on the board")
 serverRefused("flour under the dough", "flour", { pizzaId = 9, points = { P(0, 0) } }, "the dough is already on the board")
 check("server: roll accepted", (act("rollDough", { pizzaId = 9, x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 })), true)
-check("server: roll stored", snapshot(), "dough|1|14|true|1|0")
+check("server: roll stored", snapshot(), "dough|1|11|true|1|0")
 serverRefused("roll beside", "rollDough", { pizzaId = 9, x1 = 1.5, y1 = -1, x2 = 1.5, y2 = 1 }, "roll missed the dough")
 check("server: undo takes the roll back", (act("undoDough", { pizzaId = 9 })), true)
 check("server: undo again lifts the ball", (act("undoDough", { pizzaId = 9 })), true)
-check("server: ball off, flour kept", snapshot(), "dough|1|14|false|0|0")
+check("server: ball off, flour kept", snapshot(), "dough|1|11|false|0|0")
 act("placeDough", { pizzaId = 9 })
 act("rollDough", { pizzaId = 9, x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 })
 serverRefused("finish from the wrong step", "finishDough", { pizzaId = 9, from = "toppings" }, "bad step")

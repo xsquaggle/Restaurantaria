@@ -210,8 +210,8 @@ function Make.new(ctx: any, container: Frame)
 		Name = "TubBall",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.42),
-		Size = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromScale(0.4, 0.4),
 		SizeConstraint = Enum.SizeConstraint.RelativeYY,
 		ZIndex = 6,
 		Parent = tub,
@@ -540,10 +540,15 @@ function Make.new(ctx: any, container: Frame)
 			return
 		end
 		local reach = Config.Make.flourReach
-		if p.Magnitude > reach then
+		-- Off the board the scoop drops nothing; over the board's rim the dust is pulled back
+		-- inside, so it never lands off the board.
+		if p.Magnitude > 1 / 0.9 then
 			flushFlour()
 			st.sampler = nil
 			return
+		end
+		if p.Magnitude > reach then
+			p = p.Unit * reach
 		end
 		if not st.sampler then
 			st.sampler = MakeDough.flourSampler()
@@ -554,7 +559,7 @@ function Make.new(ctx: any, container: Frame)
 			if budget <= 0 then
 				break
 			end
-			if s.x * s.x + s.y * s.y <= reach * reach then
+			if s.x * s.x + s.y * s.y <= reach * reach + 1e-9 then
 				table.insert(st.points, s)
 				budget -= 1
 				if #st.points >= Config.Make.flourMaxPerStroke then
