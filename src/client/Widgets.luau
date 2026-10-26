@@ -1055,10 +1055,11 @@ end
 
 -- A cut: the generated cut crevice (G9 v3: a dark slit with shadowed, lifted edges and no
 -- food drawn inside it) stretched along the chord of the infinite line through the two
--- points, clipped to the pizza circle, so the pizza underneath stays the food. `transparency` fades it (the live preview).
+-- points, clipped to the pizza circle, so the pizza underneath stays the food. `transparency` fades it (the live preview);
+-- `segmentOnly` draws only the part between the two points (the live stroke follows the cutter).
 local CRUST_EDGE = 0.95
 
-function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
+function Widgets.drawCut(layer: Frame, line: any, transparency: number?, segmentOnly: boolean?)
 	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-4 then
@@ -1073,13 +1074,25 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	end
 	-- The crust edge sits a little inside the pizza frame; stop the groove there.
 	local half = math.sqrt(1 - d2) * CRUST_EDGE
+	-- Along the line, measured from its closest point to the centre: the whole chord, or
+	-- (segmentOnly, the live stroke) just the part the cutter has rolled over.
+	local a, b = -half, half
+	if segmentOnly then
+		local t1 = (line.x1 - cx) * ux + (line.y1 - cy) * uy
+		local t2 = (line.x2 - cx) * ux + (line.y2 - cy) * uy
+		a, b = math.max(-half, math.min(t1, t2)), math.min(half, math.max(t1, t2))
+		if b - a < 1e-3 then
+			return
+		end
+	end
+	local mid = (a + b) / 2
 	local groove = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ImageTransparency = transparency or 0,
 		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5 + cx * 0.5, 0.5 + cy * 0.5),
-		Size = UDim2.fromScale(half, 0.03),
+		Position = UDim2.fromScale(0.5 + (cx + ux * mid) * 0.5, 0.5 + (cy + uy * mid) * 0.5),
+		Size = UDim2.fromScale((b - a) / 2, 0.03),
 		Rotation = math.deg(math.atan2(dy, dx)),
 		ZIndex = 3,
 		Parent = layer,

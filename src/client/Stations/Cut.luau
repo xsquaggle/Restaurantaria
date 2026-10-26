@@ -264,10 +264,11 @@ function Cut.new(ctx: any, container: Frame)
 			local e = endPoint(st.start, rawLocal(input.Position))
 			Ui.clear(preview)
 			local len = (e - st.start).Magnitude
-			if len > 0.2 then
-				-- Faint until the drag is long enough to cut, so the preview never promises a
-				-- cut the release would drop.
-				Widgets.drawCut(preview, { x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, if len >= Config.Cut.minDragLength then 0.45 else 0.8)
+			if len > 0.05 then
+				-- The groove only follows the cutter: it shows where the wheel has rolled, never
+				-- the line ahead of it (Lawson, 2026-10-26). Faint until the drag is long enough
+				-- to cut, so it never promises a cut the release would drop.
+				Widgets.drawCut(preview, { x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, if len >= Config.Cut.minDragLength then 0.3 else 0.7, true)
 			end
 		end
 	end)
