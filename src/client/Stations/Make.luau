@@ -856,7 +856,7 @@ function Make.new(ctx: any, container: Frame)
 				end
 				-- Between the first roll and full size Next already works, so the first shift
 				-- says what full size looks like before pointing at it.
-				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = "below" }
+				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = if compact then "left" else "below" }
 			end
 		end
 		return nil
