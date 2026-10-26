@@ -1061,25 +1061,38 @@ end
 -- `transparency` fades it (the live stroke).
 local CRUST_EDGE = 0.95
 
-local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by: number, transparency: number?)
+-- The groove art is 1024 x 21 px with tapered ends (opaque from column 10 to 1011).
+local GROOVE_W, GROOVE_H = 1024, 21
+
+-- One straight groove from a to b. `whole` stretches the whole art along it (tapered ends, for
+-- a full chord); otherwise it shows a middle section of the art cut to the run's own
+-- proportions, so a short run is not squashed (squashing 1024 px into a few dozen blurs the
+-- slit into a pale smear) and joins along a freehand path carry no tapered ends.
+local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by: number, transparency: number?, whole: boolean?)
 	local dx, dy = bx - ax, by - ay
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-3 then
 		return
 	end
+	-- A hair longer than the run, so turns along a freehand path don't open gaps.
+	local w, h = len / 2 + (if whole then 0 else 0.008), 0.03
 	local groove = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ImageTransparency = transparency or 0,
 		ScaleType = Enum.ScaleType.Stretch,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5 + (ax + bx) * 0.25, 0.5 + (ay + by) * 0.25),
-		-- A hair longer than the run, so turns along a freehand path don't open gaps.
-		Size = UDim2.fromScale(len / 2 + 0.008, 0.03),
+		Size = UDim2.fromScale(w, h),
 		Rotation = math.deg(math.atan2(dy, dx)),
 		ZIndex = 3,
 		Parent = layer,
 	})
 	Art.apply(groove, "fx_cut_groove_c")
+	if not whole then
+		local rectW = math.clamp(math.round(GROOVE_H * w / h), 8, 960)
+		groove.ImageRectOffset = Vector2.new(math.round((GROOVE_W - rectW) / 2), 0)
+		groove.ImageRectSize = Vector2.new(rectW, GROOVE_H)
+	end
 end
 
 -- The part of segment a-b inside the crust, as parameters along it (nil when none).
@@ -1162,7 +1175,7 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		return
 	end
 	local half = math.sqrt(1 - d2) * CRUST_EDGE
-	groovePiece(layer, cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half, transparency)
+	groovePiece(layer, cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half, transparency, true)
 end
 
 -- Reserved hint strip between the work surface and the tab bar: live text and, optionally, a
