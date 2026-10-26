@@ -207,6 +207,80 @@ function Topping.new(ctx: any, container: Frame)
 	undo.frame.ZIndex = 5
 	undo.frame.Parent = frame
 
+	-- Optional peripheral props (Astra r13 art, each a separate image): placed only where they
+	-- clear the board, the tray row with its lifted pick, Undo and the station edge by a
+	-- margin; any prop that cannot fit is hidden, and phones show none, so decor never shrinks
+	-- the food or touch targets. Props sit under everything and never take input.
+	local decor = Ui.new("Frame", { Name = "Decor", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 0, Parent = frame })
+	if not ctx.compact then
+		type Rect = { x0: number, y0: number, x1: number, y1: number }
+		local keep = margin * 1.5
+		local blocked: { Rect } = {
+			{ x0 = cx - boardD / 2, y0 = cy - boardD / 2, x1 = cx + boardD / 2, y1 = cy + boardD / 2 },
+		}
+		for i = 1, count do
+			local h = homes[i]
+			-- Chosen trays grow 10 % and lift toward the pizza, with the pick above them.
+			local hx, hy = h.X.Offset, h.Y.Offset
+			local w2, h2 = trayW * 0.55 + math.abs(lift.X.Offset), trayH * 0.55
+			table.insert(blocked, { x0 = hx - w2, y0 = hy - h2 - math.abs(lift.Y.Offset) - math.abs(pickRaise.Y.Offset) - pizzaD * 0.12, x1 = hx + w2 + math.abs(pickRaise.X.Offset) + pizzaD * 0.12, y1 = hy + h2 })
+		end
+		do
+			local u = undo.frame
+			local ux, uy = u.Position.X.Offset - u.AnchorPoint.X * u.Size.X.Offset, u.Position.Y.Offset - u.AnchorPoint.Y * u.Size.Y.Offset
+			table.insert(blocked, { x0 = ux, y0 = uy, x1 = ux + u.Size.X.Offset, y1 = uy + u.Size.Y.Offset })
+		end
+		local function clear(r: Rect): boolean
+			if r.x0 < margin or r.y0 < margin or r.x1 > W - margin or r.y1 > H - margin then
+				return false
+			end
+			for _, b in blocked do
+				if r.x0 < b.x1 + keep and r.x1 > b.x0 - keep and r.y0 < b.y1 + keep and r.y1 > b.y0 - keep then
+					return false
+				end
+			end
+			return true
+		end
+		-- Art, the visible body's share of the square canvas (manifest alpha bounds), and the
+		-- corners to try, in order (fractions of the station).
+		local props = {
+			{ art = "deco_basil_pot", ax = 0.879, ay = 0.850, spots = { { 0, 0 }, { 1, 0 }, { 0, 1 } } },
+			{ art = "deco_shaker_pair", ax = 0.879, ay = 0.557, spots = { { 1, 0 }, { 0, 0.5 }, { 1, 0.5 } } },
+			{ art = "deco_gingham_cloth", ax = 0.879, ay = 0.879, spots = { { 0, 1 }, { 1, 1 }, { 0, 0.5 } } },
+		}
+		local biggest = math.min(H * 0.26, 220)
+		local smallest = math.max(H * 0.12, 64)
+		for _, prop in props do
+			local placed = false
+			local size = biggest
+			while not placed and size >= smallest do
+				local bw, bh = size * prop.ax, size * prop.ay
+				for _, spot in prop.spots do
+					-- The body's top-left, pushed into the corner the spot names.
+					local x = margin + spot[1] * (W - margin * 2 - bw)
+					local y = margin + spot[2] * (H - margin * 2 - bh)
+					local r = { x0 = x, y0 = y, x1 = x + bw, y1 = y + bh }
+					if clear(r) then
+						local img = Ui.new("ImageLabel", {
+							Name = prop.art,
+							BackgroundTransparency = 1,
+							AnchorPoint = Vector2.new(0.5, 0.5),
+							Position = UDim2.fromOffset(x + bw / 2, y + bh / 2),
+							Size = UDim2.fromOffset(size, size),
+							ZIndex = 0,
+							Parent = decor,
+						})
+						Art.apply(img, prop.art)
+						table.insert(blocked, r)
+						placed = true
+						break
+					end
+				end
+				size *= 0.85
+			end
+		end
+	end
+
 	local sending: number? = nil
 
 	-- Send to oven: the rail's action for this station.

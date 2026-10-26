@@ -185,6 +185,11 @@ local Assets = {
 	icon_take_order_white = "rbxassetid://111662746013650",
 	icon_serve_white = "rbxassetid://76831607027353",
 	bg_topping_clean_v2 = "rbxassetid://72607256484344",
+	-- Astra r13 (art/astra-r13), uploaded 2026-10-26: Cut worktop and optional Topping props.
+	bg_cut_clean_ivory = "rbxassetid://88281494803877",
+	deco_basil_pot = "rbxassetid://129133759821938",
+	deco_shaker_pair = "rbxassetid://82029622934688",
+	deco_gingham_cloth = "rbxassetid://81389727068805",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",
@@ -262,6 +267,8 @@ Assets.Meta = {
 		bg_order = { width = 1920, height = 1080, cols = 2, rows = 2 },
 		bg_bake = { width = 1920, height = 1080, cols = 2, rows = 2 },
 		bg_cut = { width = 1920, height = 1080, cols = 2, rows = 2 },
+		-- Astra r13: one plain image, centred, so either axis may crop.
+		bg_cut_clean_ivory = { width = 1024, height = 576, cols = 1, rows = 1, align = Vector2.new(0.5, 0.5) },
 	},
 	-- Sprite sizes for art whose proportions drive layout.
 	trayAspect = 384 / 313,

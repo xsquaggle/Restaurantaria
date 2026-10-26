@@ -16,8 +16,15 @@ local Widgets = require(Parent.Widgets)
 
 local Cut = {}
 
--- Full-screen art behind the station (Assets.Meta.backgrounds).
-Cut.background = "bg_cut"
+-- Full-screen art behind the station (Assets.Meta.backgrounds): Astra's clean ivory cutting
+-- worktop (r13). The old bg_cut had a plant and shakers baked in that the board covered.
+Cut.background = "bg_cut_clean_ivory"
+-- Studio play tests only, through attributes on the local player (set from the Client command
+-- bar): RestaurantariaCutTrace = "" records each stroke (begin, send, reply, cancel, refusals)
+-- into that attribute; RestaurantariaCutButton2 = true lets a driver whose injected primary
+-- button arrives as MouseButton2 (swapped buttons) make real-mouse strokes.
+local IS_STUDIO = game:GetService("RunService"):IsStudio()
+local LocalPlayer = game:GetService("Players").LocalPlayer
 
 function Cut.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Cut", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
@@ -184,53 +191,111 @@ function Cut.new(ctx: any, container: Frame)
 	end
 
 	-- Drag to cut, with a live preview chord. Drags may start anywhere on the board, so a
-	-- stroke that begins just off the crust still counts.
-	local dragStart: Vector2? = nil
-	local dragInput: InputObject? = nil
+	-- stroke that begins just off the crust still counts. One stroke at a time: it belongs to
+	-- the input that started it (the mouse, or that one finger) and to the pizza it started on;
+	-- other fingers are ignored and a ticket or station change cancels it without cutting.
+	local RANGE = 1.6 -- the server's accepted coordinate range
+	type Stroke = { input: InputObject, mouse: boolean, button: Enum.UserInputType, pizzaId: number, start: Vector2 }
+	local stroke: Stroke? = nil
+
+	-- Pizza-local point of a screen position, not clamped.
+	local function rawLocal(position: Vector3): Vector2
+		local rel = (Vector2.new(position.X, position.Y) - view.frame.AbsolutePosition) / view.frame.AbsoluteSize
+		return Vector2.new(rel.X * 2 - 1, rel.Y * 2 - 1)
+	end
+	-- The stroke's end inside the accepted range, moved back along the stroke so the cut keeps
+	-- the dragged direction (clamping each axis on its own bent long drags toward 45 degrees).
+	local function endPoint(s: Vector2, e: Vector2): Vector2
+		local d = e - s
+		local t = 1
+		for _, axis in { "X", "Y" } do
+			local dv, sv = (d :: any)[axis], (s :: any)[axis]
+			if dv > 1e-9 then
+				t = math.min(t, (RANGE - sv) / dv)
+			elseif dv < -1e-9 then
+				t = math.min(t, (-RANGE - sv) / dv)
+			end
+		end
+		return s + d * math.max(t, 0)
+	end
+	local function trace(line: string)
+		local log = IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutTrace")
+		if type(log) == "string" and #log < 60000 then
+			LocalPlayer:SetAttribute("RestaurantariaCutTrace", log .. string.format("%.3f %s\n", os.clock(), line))
+		end
+	end
+	local function endStroke()
+		stroke, lastPoint = nil, nil
+		Ui.clear(preview)
+		TweenService:Create(cutter, GLIDE, { Position = rest, Rotation = REST_ANGLE }):Play()
+	end
+	local function cancelStroke(reason: string)
+		if stroke then
+			trace("cancel " .. reason .. " pizza=" .. stroke.pizzaId)
+			endStroke()
+		end
+	end
+
 	board.InputBegan:Connect(function(input: InputObject)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+		local isMouse = input.UserInputType == Enum.UserInputType.MouseButton1
+			or (IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutButton2") == true and input.UserInputType == Enum.UserInputType.MouseButton2)
+		if not isMouse and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
-		if current and not ctx.pending[current.id] then
-			local x, y = ctx.toLocal(view.frame, input.Position)
-			dragStart = Vector2.new(math.clamp(x, -1.6, 1.6), math.clamp(y, -1.6, 1.6))
-			dragInput = input
-			local point = toStation(input.Position)
-			lastPoint = point
-			TweenService:Create(cutter, PICK, { Position = UDim2.fromOffset(point.X, point.Y) }):Play()
+		if stroke or not current or ctx.pending[current.id] then
+			trace("ignored begin " .. input.UserInputType.Name .. (if stroke then " (stroke held)" else ""))
+			return
 		end
+		local p = rawLocal(input.Position)
+		local s = Vector2.new(math.clamp(p.X, -RANGE, RANGE), math.clamp(p.Y, -RANGE, RANGE))
+		stroke = { input = input, mouse = isMouse, button = input.UserInputType, pizzaId = current.id, start = s }
+		local point = toStation(input.Position)
+		lastPoint = point
+		TweenService:Create(cutter, PICK, { Position = UDim2.fromOffset(point.X, point.Y) }):Play()
+		trace(string.format("begin %s screen=%.0f,%.0f local=%.3f,%.3f pizza=%d ticket=%d", input.UserInputType.Name, input.Position.X, input.Position.Y, s.X, s.Y, current.id, current.ticketId))
 	end)
 	ctx.connect(UserInputService.InputChanged, function(input: InputObject)
-		if not dragStart then
+		local st = stroke
+		if not st then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput then
+		if (st.mouse and input.UserInputType == Enum.UserInputType.MouseMovement) or (not st.mouse and input == st.input) then
 			follow(toStation(input.Position))
-			local x, y = ctx.toLocal(view.frame, input.Position)
+			local e = endPoint(st.start, rawLocal(input.Position))
 			Ui.clear(preview)
-			local s = dragStart :: Vector2
-			if (Vector2.new(x, y) - s).Magnitude > 0.2 then
-				Widgets.drawCut(preview, { x1 = s.X, y1 = s.Y, x2 = x, y2 = y }, 0.45)
+			local len = (e - st.start).Magnitude
+			if len > 0.2 then
+				-- Faint until the drag is long enough to cut, so the preview never promises a
+				-- cut the release would drop.
+				Widgets.drawCut(preview, { x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, if len >= Config.Cut.minDragLength then 0.45 else 0.8)
 			end
 		end
 	end)
 	ctx.connect(UserInputService.InputEnded, function(input: InputObject)
-		if not dragStart then
+		local st = stroke
+		if not st then
 			return
 		end
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input ~= dragInput then
+		if (st.mouse and input.UserInputType ~= st.button) or (not st.mouse and input ~= st.input) then
 			return
 		end
-		local s = dragStart :: Vector2
-		dragStart, dragInput, lastPoint = nil, nil, nil
-		Ui.clear(preview)
-		TweenService:Create(cutter, GLIDE, { Position = rest, Rotation = REST_ANGLE }):Play()
-		if not current then
+		endStroke()
+		if not current or current.id ~= st.pizzaId then
+			trace("dropped: pizza changed")
 			return
 		end
-		local x, y = ctx.toLocal(view.frame, input.Position)
-		if (Vector2.new(x, y) - s).Magnitude >= Config.Cut.minDragLength then
-			ctx.send("cut", { pizzaId = current.id, x1 = s.X, y1 = s.Y, x2 = math.clamp(x, -1.6, 1.6), y2 = math.clamp(y, -1.6, 1.6) })
+		local e = endPoint(st.start, rawLocal(input.Position))
+		local len = (e - st.start).Magnitude
+		local angle = math.deg(math.atan2(e.Y - st.start.Y, e.X - st.start.X))
+		if len >= Config.Cut.minDragLength then
+			trace(string.format("send %s screen=%.0f,%.0f line=%.3f,%.3f>%.3f,%.3f angle=%.1f pizza=%d", input.UserInputType.Name, input.Position.X, input.Position.Y, st.start.X, st.start.Y, e.X, e.Y, angle, st.pizzaId))
+			ctx.send("cut", { pizzaId = st.pizzaId, x1 = st.start.X, y1 = st.start.Y, x2 = e.X, y2 = e.Y }, function(ok, reason)
+				trace(string.format("reply ok=%s %s", tostring(ok), tostring(reason)))
+			end)
+		else
+			trace(string.format("too short %.3f < %.2f", len, Config.Cut.minDragLength))
+			guide.Text = "Drag all the way\nacross the pizza"
+			task.delay(1.5, ctx.refresh)
 		end
 	end)
 
@@ -238,6 +303,9 @@ function Cut.new(ctx: any, container: Frame)
 
 	function station.refresh(snap: any)
 		current = ctx.focusPizza(snap, "cutting")
+		if stroke and (not current or current.id ~= stroke.pizzaId) then
+			cancelStroke("ticket changed")
+		end
 		view.frame.Visible = current ~= nil
 		serve:setEnabled(current ~= nil and not ctx.pending[current.id])
 		undo:setEnabled(current ~= nil and #current.cuts > 0)
@@ -255,6 +323,13 @@ function Cut.new(ctx: any, container: Frame)
 	end
 
 	function station.tick(_now: number) end
+
+	-- Leaving the station mid-stroke cancels the stroke.
+	function station.setActive(active: boolean)
+		if not active then
+			cancelStroke("station changed")
+		end
+	end
 
 	-- Why there is nothing to cut, on the hint strip.
 	function station.status(_snap: any): any
