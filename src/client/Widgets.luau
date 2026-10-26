@@ -1106,20 +1106,38 @@ end
 function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 	local path = line.path
 	if path then
-		-- Merge nearly straight runs (turns under 4 degrees) so a steady stroke stays one groove.
-		local runs = { path[1] }
-		for i = 2, #path do
-			local p = path[i]
-			if #runs >= 2 then
-				local a, b = runs[#runs - 1], runs[#runs]
-				local h1 = math.atan2(b.y - a.y, b.x - a.x)
-				local h2 = math.atan2(p.y - b.y, p.x - b.x)
-				if math.abs((h2 - h1 + math.pi) % (2 * math.pi) - math.pi) < math.rad(4) then
-					runs[#runs] = p
-					continue
+		-- Merge nearly straight runs (Douglas-Peucker, within 0.008 of the drawn line) so a
+		-- steady stroke stays one groove; the groove art squashed into many short pieces reads
+		-- as pale smears, and pointer jitter alone would split it.
+		local keepPoint = table.create(#path, false)
+		keepPoint[1], keepPoint[#path] = true, true
+		local function simplify(i: number, j: number)
+			if j <= i + 1 then
+				return
+			end
+			local a, b = path[i], path[j]
+			local dx, dy = b.x - a.x, b.y - a.y
+			local len = math.max(math.sqrt(dx * dx + dy * dy), 1e-9)
+			local worst, at = 0, 0
+			for k = i + 1, j - 1 do
+				local p = path[k]
+				local dist = math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len
+				if dist > worst then
+					worst, at = dist, k
 				end
 			end
-			table.insert(runs, p)
+			if worst > 0.008 then
+				keepPoint[at] = true
+				simplify(i, at)
+				simplify(at, j)
+			end
+		end
+		simplify(1, #path)
+		local runs = {}
+		for i, p in path do
+			if keepPoint[i] then
+				table.insert(runs, p)
+			end
 		end
 		for i = 2, #runs do
 			local a, b = runs[i - 1], runs[i]

@@ -210,7 +210,6 @@ function Cut.new(ctx: any, container: Frame)
 		length: number,
 		outside: Vector2?, -- where the path left the accepted range, while it is outside
 		closed: boolean, -- the path came back in across the pizza; nothing more is recorded
-		strong: boolean, -- the groove is drawn at full strength
 	}
 	local stroke: Stroke? = nil
 
@@ -249,26 +248,21 @@ function Cut.new(ctx: any, container: Frame)
 			LocalPlayer:SetAttribute("RestaurantariaCutTrace", log .. string.format("%.3f %s\n", os.clock(), line))
 		end
 	end
-	local function groove(a: Vector2, b: Vector2, strong: boolean)
-		Widgets.drawCut(preview, { path = { { x = a.X, y = a.Y }, { x = b.X, y = b.Y } } }, if strong then 0.3 else 0.7)
-	end
 	local function addPoint(st: Stroke, p: Vector2)
 		local last = st.points[#st.points]
 		st.length += (p - last).Magnitude
 		table.insert(st.points, p)
 		-- The groove grows behind the cutter: only the part already rolled over is drawn. It is
 		-- faint until the path is long enough to cut, so it never promises a cut the release
-		-- would drop.
+		-- would drop. The whole path is redrawn so straight runs stay single grooves (the groove
+		-- art squashed into many short pieces reads as pale smears).
 		local strong = st.length >= Config.Cut.minDragLength
-		if strong and not st.strong then
-			st.strong = true
-			for _, g in preview:GetChildren() do
-				if g:IsA("ImageLabel") then
-					g.ImageTransparency = 0.3
-				end
-			end
+		local path = table.create(#st.points)
+		for i, q in st.points do
+			path[i] = { x = q.X, y = q.Y }
 		end
-		groove(last, p, strong)
+		Ui.clear(preview)
+		Widgets.drawCut(preview, { path = path }, if strong then 0.3 else 0.7)
 		if #st.points > MAX_RAW then
 			-- Thin to every other point (keeping both ends); the sent path is resampled anyway.
 			local thin = {}
@@ -361,7 +355,6 @@ function Cut.new(ctx: any, container: Frame)
 			length = 0,
 			outside = nil,
 			closed = false,
-			strong = false,
 		}
 		local point = toStation(input.Position)
 		lastPoint = point
