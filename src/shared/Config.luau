@@ -98,8 +98,9 @@ Config.Cut = {
 	-- Most points one cut's path may carry. The client resamples the drag to this many.
 	maxPoints = 48,
 	-- Widest distance (cut units) of the path inside the crust from its best-fit line that
-	-- still counts as straight, and where straightness reaches zero. At 1920x1080 the pizza's
-	-- radius is about 400 px (0.04 = 16 px, 0.2 = 80 px); on a 667x375 phone about 150 px.
+	-- still counts as straight, and where straightness reaches zero. One cut unit is the pizza
+	-- frame's radius, measured in Studio: 372 px at 1920x1080 (0.04 = 15 px, 0.2 = 74 px) and
+	-- 86.5 px on a 667x375 phone (0.04 = 3.5 px, 0.2 = 17 px).
 	straightPerfect = 0.04,
 	straightZero = 0.2,
 	-- Share of the fitted line's chord across the crust the path covers: full credit from

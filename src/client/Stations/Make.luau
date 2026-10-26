@@ -850,8 +850,13 @@ function Make.new(ctx: any, container: Frame)
 			if #m.strokes == 0 and not ctx.learned["Make.roll"] then
 				return { target = ball, text = "Drag across the dough to roll it out", from = "below" }
 			end
-			if MakeDough.canFinish(m) and G.meanRadius(MakeDough.shape(m)) >= 0.95 and not ctx.learned["Make.next"] then
-				return { target = nextButton.frame, text = "Round and full size: tap Next", from = if compact then "aboveLeft" else "left" }
+			if MakeDough.canFinish(m) and not ctx.learned["Make.next"] then
+				if G.meanRadius(MakeDough.shape(m)) >= Config.Make.sizeFullLow then
+					return { target = nextButton.frame, text = "Round and full size: tap Next", from = if compact then "aboveLeft" else "left" }
+				end
+				-- Between the first roll and full size Next already works, so the first shift
+				-- says what full size looks like before pointing at it.
+				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = "below" }
 			end
 		end
 		return nil
