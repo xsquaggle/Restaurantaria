@@ -137,6 +137,33 @@ for i = 1, 1000 do
 	stuffed["k" .. i] = i
 end
 refused("list stuffed with extra keys", stuffed, "cut path missing")
+-- The count is bounded: the same stuffed list, iterated through a counting __iter, is walked
+-- at most three steps (two entries and one past). 734f244 walked all 1,002 keys.
+local steps = 0
+local counted: any = table.clone(stuffed)
+setmetatable(counted, {
+	__iter = function(t)
+		return function(_, k)
+			local nk, v = next(t, k)
+			if nk ~= nil then
+				steps += 1
+			end
+			return nk, v
+		end, t, nil
+	end,
+})
+refused("stuffed list, counted", counted, "cut path missing")
+check("stuffed list: key counting stops one past the length", steps <= 3, true)
+-- A 49-point list (one over the cap) stuffed with extra keys is refused on its length before
+-- any key is counted ("cut path too long"; 734f244 counted first and said "cut path missing").
+local stuffedLong: any = {}
+for i = 1, cfg.maxPoints + 1 do
+	stuffedLong[i] = P(-1.05 + 2.1 * (i - 1) / cfg.maxPoints, 0)
+end
+for i = 1, 1000 do
+	stuffedLong["k" .. i] = i
+end
+refused("49 points stuffed with extra keys", stuffedLong, "cut path too long")
 local many = {}
 for i = 1, cfg.maxPoints + 1 do
 	table.insert(many, P(-1.05 + 2.1 * (i - 1) / cfg.maxPoints, 0))

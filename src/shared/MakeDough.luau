@@ -25,6 +25,18 @@ local function finite(v: any, limit: number): boolean
 	return type(v) == "number" and v == v and v >= -limit and v <= limit
 end
 
+-- The board's edge in pizza-local units (the mat is the pizza frame / 0.9).
+MakeDough.BOARD_EDGE = 1 / 0.9
+-- Slack on the flour reach, shared by the client's filter and the server's check, so a stamp
+-- pulled back exactly onto the reach is never refused for float error.
+MakeDough.REACH_SLACK = 1e-6
+
+-- A dust stamp centre the server accepts: within the flour reach (plus the slack).
+function MakeDough.onBoard(p: Vec): boolean
+	local r = Config.Make.flourReach + MakeDough.REACH_SLACK
+	return p.x * p.x + p.y * p.y <= r * r
+end
+
 function MakeDough.new(): Make
 	return { step = "dough", flour = {}, placed = false, strokes = {} }
 end
@@ -109,10 +121,8 @@ function MakeDough.validateFlour(make: Make, points: any): ({ Vec }?, string?)
 	local clean = {}
 	for i = 1, #points do
 		local p = points[i]
-		if type(p) ~= "table" or not finite(p.x, cfg.flourReach) or not finite(p.y, cfg.flourReach) then
-			return nil, "flour off the board"
-		end
-		if p.x * p.x + p.y * p.y > cfg.flourReach * cfg.flourReach then
+		local limit = cfg.flourReach + MakeDough.REACH_SLACK
+		if type(p) ~= "table" or not finite(p.x, limit) or not finite(p.y, limit) or not MakeDough.onBoard(p) then
 			return nil, "flour off the board"
 		end
 		local prev = clean[#clean]
@@ -125,6 +135,68 @@ function MakeDough.validateFlour(make: Make, points: any): ({ Vec }?, string?)
 		return nil, "too much flour"
 	end
 	return clean, nil
+end
+
+-- One held flour drag, split into the batches the client sends. move(p, room) takes the next
+-- pointer sample (pizza-local) and the stamps the pizza has room for, not counting the open
+-- batch; it returns the batches it closed. Past the board's edge the scoop drops nothing: the
+-- open batch closes, and the dusting starts afresh where the drag comes back. Between the
+-- reach and the edge the pointer is pulled back onto the reach. A batch closes at
+-- flourMaxPerStroke and the sampler carries on, so the next batch continues the same line
+-- (each batch's first stamp has no predecessor to be checked against). close() ends the drag
+-- and returns the open batch, if any. points is the open batch, drawn while the drag is held.
+export type FlourDrag = {
+	points: { Vec },
+	move: (p: Vec, room: number) -> { { Vec } },
+	close: () -> { Vec }?,
+}
+
+function MakeDough.flourDrag(): FlourDrag
+	local cfg = Config.Make
+	local sampler: Sampler? = nil
+	local drag = {} :: FlourDrag
+	drag.points = {}
+	local function close(): { Vec }?
+		if #drag.points == 0 then
+			return nil
+		end
+		local batch = drag.points
+		drag.points = {}
+		return batch
+	end
+	function drag.move(p: Vec, room: number): { { Vec } }
+		local closed = {}
+		local r = math.sqrt(p.x * p.x + p.y * p.y)
+		if r ~= r or r > MakeDough.BOARD_EDGE then
+			local batch = close()
+			if batch then
+				table.insert(closed, batch)
+			end
+			sampler = nil
+			return closed
+		end
+		if r > cfg.flourReach then
+			p = { x = p.x * cfg.flourReach / r, y = p.y * cfg.flourReach / r }
+		end
+		local s = sampler or MakeDough.flourSampler()
+		sampler = s
+		local left = room - #drag.points
+		for _, stamp in s.feed(p) do
+			if left <= 0 then
+				break
+			end
+			if MakeDough.onBoard(stamp) then
+				table.insert(drag.points, stamp)
+				left -= 1
+				if #drag.points >= cfg.flourMaxPerStroke then
+					table.insert(closed, close() :: { Vec })
+				end
+			end
+		end
+		return closed
+	end
+	drag.close = close
+	return drag
 end
 
 -- Frozen sample of the unit disc: the centre and rings of 6, 12, 18 and 24 points at the radii
@@ -204,6 +276,30 @@ end
 -- it says nothing about quality.
 function MakeDough.canFinish(make: Make): boolean
 	return make.step == "dough" and make.placed and #make.strokes > 0
+end
+
+-- What the first shift's pointer says once the dough is rolled, checked in this order:
+-- "uneven" when the long side is already full size and the dough is not round enough (roll
+-- along the short side), "small" (keep rolling), "big" (past full size: Undo), "uneven" for any
+-- other oval, else "ready" (full marks for size and roundness). nil before the first roll.
+function MakeDough.rollAdvice(make: Make): string?
+	local cfg = Config.Make
+	if not MakeDough.canFinish(make) then
+		return nil
+	end
+	local e = G.axes(MakeDough.shape(make))
+	local mean = (e.major + e.minor) / 2
+	local round = e.minor / e.major >= cfg.roundFull
+	if not round and e.major >= cfg.sizeFullLow then
+		return "uneven"
+	elseif mean < cfg.sizeFullLow then
+		return "small"
+	elseif mean > cfg.sizeFullHigh then
+		return "big"
+	elseif not round then
+		return "uneven"
+	end
+	return "ready"
 end
 
 local function ramp(v: number, zero: number, full: number): number

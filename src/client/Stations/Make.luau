@@ -11,8 +11,14 @@
 -- so the rim thins with the body) and the rolling pin (P5). Every input is drawn at once and
 -- sent to the server, which checks and keeps it (MakeDough); a refusal snaps the view back.
 -- Actions for one pizza go out one at a time, so a reply can never land on a later one.
+--
+-- Studio play tests only: RestaurantariaMakeButton2 = true on the local player (set from the
+-- Client command bar) lets a driver whose injected primary button arrives as MouseButton2
+-- (swapped buttons) make real-mouse drags, as Cut's RestaurantariaCutButton2 does.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -54,8 +60,15 @@ local SNAP = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out
 
 local STEP_NAMES = { flour = "Flour", dough = "Dough", roll = "Roll", sauce = "Sauce", cheese = "Cheese", toppings = "Toppings" }
 
+local IS_STUDIO = RunService:IsStudio()
+
+local function isMouseButton(input: InputObject): boolean
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or (IS_STUDIO and Players.LocalPlayer:GetAttribute("RestaurantariaMakeButton2") == true and input.UserInputType == Enum.UserInputType.MouseButton2)
+end
+
 local function isPress(input: InputObject): boolean
-	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+	return isMouseButton(input) or input.UserInputType == Enum.UserInputType.Touch
 end
 
 -- The steps this ticket goes through, in order: Toppings only when it asks for some.
@@ -332,7 +345,8 @@ function Make.new(ctx: any, container: Frame)
 
 	local current: any = nil
 	local queues: { [number]: { inFlight: any?, waiting: { any } } } = {}
-	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball", input, ... }
+	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball", input, mouse, button, ... }
+	local finishing: number? = nil -- the pizza whose Next is on its way
 
 	local function queueOf(id: number)
 		local q = queues[id]
@@ -357,6 +371,19 @@ function Make.new(ctx: any, container: Frame)
 		return m
 	end
 
+	-- An action that will never land: if it was Next, its button stops saying "Adding...".
+	local function dropped(id: number, op: any)
+		if op.action == "finishDough" and finishing == id then
+			finishing = nil
+		end
+	end
+	local function dropWaiting(id: number, q: any)
+		for _, op in q.waiting do
+			dropped(id, op)
+		end
+		q.waiting = {}
+	end
+
 	local pump: (number) -> ()
 	pump = function(id: number)
 		local q = queueOf(id)
@@ -370,7 +397,7 @@ function Make.new(ctx: any, container: Frame)
 			end
 		end
 		if not pizza or pizza.stage ~= "topping" then
-			q.waiting = {}
+			dropWaiting(id, q)
 			return
 		end
 		local op = table.remove(q.waiting, 1)
@@ -380,7 +407,8 @@ function Make.new(ctx: any, container: Frame)
 			q.inFlight = nil
 			if not ok then
 				-- Everything queued after a refused action was built on it.
-				q.waiting = {}
+				dropped(id, op)
+				dropWaiting(id, q)
 			end
 			pump(id)
 			ctx.refresh()
@@ -506,7 +534,7 @@ function Make.new(ctx: any, container: Frame)
 		if live and live.kind == "roll" and live.moved then
 			S = G.roll(S, live.from, live.to) or S
 		end
-		drawFlour(m, if live and live.kind == "flour" then live.points else nil)
+		drawFlour(m, if live and live.kind == "flour" then live.drag.points else nil)
 		drawDough(m, S)
 		tubBall.Visible = not m.placed and not (live and live.kind == "ball")
 	end
@@ -526,48 +554,22 @@ function Make.new(ctx: any, container: Frame)
 		return not m.placed and MakeDough.stampCount(m) < Config.Make.flourMaxStamps
 	end
 
-	-- Flour: the drag drops stamps while it is over the board. Leaving the board, or a stroke
-	-- reaching its stamp limit, sends what was dusted so far and starts a fresh stroke.
-	local function flushFlour()
-		if live and live.kind == "flour" and #live.points > 0 then
-			push("flour", { points = live.points })
-			live.points = {}
+	-- Flour: MakeDough.flourDrag turns the held drag into batches (it closes one when the drag
+	-- leaves the board or a batch is full). Each batch is checked here as the server will check
+	-- it, so a batch that would be refused is dropped instead of clearing the queue behind it.
+	local function sendFlour(points: { any })
+		if current and MakeDough.validateFlour(shown(current), points) then
+			push("flour", { points = points })
 		end
 	end
 	local function flourAt(p: Vector2)
 		local st = live
-		if not st or st.kind ~= "flour" then
+		if not st or st.kind ~= "flour" or not current then
 			return
 		end
-		local reach = Config.Make.flourReach
-		-- Off the board the scoop drops nothing; over the board's rim the dust is pulled back
-		-- inside, so it never lands off the board.
-		if p.Magnitude > 1 / 0.9 then
-			flushFlour()
-			st.sampler = nil
-			return
-		end
-		if p.Magnitude > reach then
-			p = p.Unit * reach
-		end
-		if not st.sampler then
-			st.sampler = MakeDough.flourSampler()
-		end
-		local m = shown(current)
-		local budget = Config.Make.flourMaxStamps - MakeDough.stampCount(m) - #st.points
-		for _, s in st.sampler.feed({ x = p.X, y = p.Y }) do
-			if budget <= 0 then
-				break
-			end
-			if s.x * s.x + s.y * s.y <= reach * reach + 1e-9 then
-				table.insert(st.points, s)
-				budget -= 1
-				if #st.points >= Config.Make.flourMaxPerStroke then
-					flushFlour()
-					st.sampler = MakeDough.flourSampler()
-					st.sampler.feed({ x = s.x, y = s.y })
-				end
-			end
+		local room = Config.Make.flourMaxStamps - MakeDough.stampCount(shown(current))
+		for _, batch in st.drag.move({ x = p.X, y = p.Y }, room) do
+			sendFlour(batch)
 		end
 	end
 
@@ -579,8 +581,13 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
+	local function hold(kind: string, input: InputObject): any
+		return { kind = kind, input = input, mouse = isMouseButton(input), button = input.UserInputType, began = os.clock() }
+	end
+
 	local function beginFlour(input: InputObject)
-		live = { kind = "flour", input = input, points = {}, sampler = nil }
+		live = hold("flour", input)
+		live.drag = MakeDough.flourDrag()
 		showScoop(input.Position)
 		flourAt(toLocal(input.Position))
 		redraw()
@@ -602,10 +609,9 @@ function Make.new(ctx: any, container: Frame)
 		pin.Visible = false
 		carried.Visible = false
 		if st.kind == "flour" then
-			if commit then
-				if #st.points > 0 then
-					push("flour", { points = st.points })
-				end
+			local batch = st.drag.close()
+			if commit and batch then
+				sendFlour(batch)
 			end
 		elseif st.kind == "roll" then
 			if commit and st.moved and current then
@@ -647,8 +653,45 @@ function Make.new(ctx: any, container: Frame)
 		redraw()
 	end
 
+	-- A held drag whose release never arrived (focus lost, window switched) would block every
+	-- new press, Undo and Next until a ticket or station change. Cut's rule: a new press of the
+	-- drag's own mouse button means its release was lost (the button can't be pressed again
+	-- without being released, and Roblox may hand the new press the same InputObject, so its
+	-- identity can't tell); a finger's drag is stale once its touch ended. With no input, a
+	-- button was clicked: that click is a new press of mouse button 1. A stale flour drag keeps
+	-- the dust it laid; a stale roll or dough carry is dropped.
+	local function stale(st: any, input: InputObject?): boolean
+		if st.mouse then
+			if input then
+				return isMouseButton(input) and input.UserInputType == st.button
+			end
+			return st.button == Enum.UserInputType.MouseButton1
+		end
+		local state = st.input.UserInputState
+		return state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel
+	end
+	local function dropStale(input: InputObject?)
+		local st = live
+		if st and stale(st, input) then
+			endLive(st.kind == "flour")
+		end
+	end
+	-- Any new press, wherever it lands (a button, the tab bar), drops a stale drag before its
+	-- release could be taken for the drag's own. A drag begun by this same press (its handler
+	-- may run first) is under 0.1 s old; a mouse can't release and press again that fast.
+	ctx.connect(UserInputService.InputBegan, function(input: InputObject)
+		local st = live
+		if st and isPress(input) and os.clock() - st.began > 0.1 then
+			dropStale(input)
+		end
+	end)
+
 	pad.InputBegan:Connect(function(input: InputObject)
-		if not isPress(input) or live or not current then
+		if not isPress(input) or not current then
+			return
+		end
+		dropStale(input)
+		if live then
 			return
 		end
 		local p = toLocal(input.Position)
@@ -661,20 +704,29 @@ function Make.new(ctx: any, container: Frame)
 				beginFlour(input)
 			end
 		elseif phase == "roll" then
-			live = { kind = "roll", input = input, from = p, to = p, moved = false }
+			live = hold("roll", input)
+			live.from, live.to, live.moved = p, p, false
 			rollAt(input.Position)
 		end
 	end)
 	crock.InputBegan:Connect(function(input: InputObject)
+		if isPress(input) then
+			dropStale(input)
+		end
 		if isPress(input) and not live and flourAllowed() then
 			-- The scoop comes out of the crock; dust lands once it is over the board.
-			live = { kind = "flour", input = input, points = {}, sampler = nil }
+			live = hold("flour", input)
+			live.drag = MakeDough.flourDrag()
 			showScoop(input.Position)
 		end
 	end)
 	tub.InputBegan:Connect(function(input: InputObject)
+		if isPress(input) then
+			dropStale(input)
+		end
 		if isPress(input) and not live and phaseOf() == "dough" then
-			live = { kind = "ball", input = input, start = input.Position, dragged = false }
+			live = hold("ball", input)
+			live.start, live.dragged = input.Position, false
 		end
 	end)
 
@@ -683,8 +735,10 @@ function Make.new(ctx: any, container: Frame)
 		if not st then
 			return false
 		end
-		local isMouse = input.UserInputType == Enum.UserInputType.MouseMovement
-		return input == st.input or (isMouse and st.input.UserInputType == Enum.UserInputType.MouseButton1)
+		if st.mouse then
+			return input.UserInputType == Enum.UserInputType.MouseMovement
+		end
+		return input == st.input
 	end
 	ctx.connect(UserInputService.InputChanged, function(input: InputObject)
 		local st = live
@@ -715,14 +769,15 @@ function Make.new(ctx: any, container: Frame)
 		if not st or not isPress(input) then
 			return
 		end
-		if input ~= st.input and input.UserInputType ~= st.input.UserInputType then
+		if (st.mouse and input.UserInputType ~= st.button) or (not st.mouse and input ~= st.input) then
 			return
 		end
 		endLive(true, input)
 	end)
 
-	-- Undo, inside the dough step only: the last roll, then the ball, then the last flour stroke.
+	-- Undo, inside the dough step only: the last roll, then the ball, then the last flour batch.
 	local function doUndo()
+		dropStale()
 		if live or not current or current.make.step ~= "dough" then
 			return
 		end
@@ -745,8 +800,8 @@ function Make.new(ctx: any, container: Frame)
 	end
 	-- Rail action for the dough step: on to sauce and cheese (added for the player until they are
 	-- hands-on steps). Shares the Make action slot with Topping's Send to oven.
-	local finishing: number? = nil
 	local nextButton = Widgets.button("Next: sauce & cheese", function()
+		dropStale()
 		if live or not current or finishing == current.id then
 			return
 		end
@@ -793,7 +848,7 @@ function Make.new(ctx: any, container: Frame)
 			renderSteps(list, stepName)
 		end
 		if inDough and m then
-			undo:setEnabled(not live and (#m.flour > 0 or m.placed))
+			undo:setEnabled(#m.flour > 0 or m.placed)
 			local busy = finishing ~= nil
 			nextButton:setEnabled(not busy and MakeDough.canFinish(m))
 			nextButton:setLabel(if busy then "Adding..." elseif compact then "Next" else "Next: sauce & cheese")
@@ -850,13 +905,18 @@ function Make.new(ctx: any, container: Frame)
 			if #m.strokes == 0 and not ctx.learned["Make.roll"] then
 				return { target = ball, text = "Drag across the dough to roll it out", from = "below" }
 			end
-			if MakeDough.canFinish(m) and not ctx.learned["Make.next"] then
-				if G.meanRadius(MakeDough.shape(m)) >= Config.Make.sizeFullLow then
-					return { target = nextButton.frame, text = "Round and full size: tap Next", from = if compact then "aboveLeft" else "left" }
-				end
-				-- Between the first roll and full size Next already works, so the first shift
-				-- says what full size looks like before pointing at it.
-				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = if compact then "left" else "below" }
+			-- Next works from the first roll, so until the first Next the pointer says what the
+			-- dough still needs and points at Next only when size and roundness get full marks.
+			local advice = if ctx.learned["Make.next"] then nil else MakeDough.rollAdvice(m)
+			local side = if compact then "left" else "below"
+			if advice == "ready" then
+				return { target = nextButton.frame, text = "Round and full size: tap Next", from = if compact then "aboveLeft" else "left" }
+			elseif advice == "small" then
+				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = side }
+			elseif advice == "uneven" then
+				return { target = pad, text = "Roll along the short side to even it out", from = side }
+			elseif advice == "big" then
+				return { target = undo.frame, text = "Too big and thin: tap Undo", from = "below" }
 			end
 		end
 		return nil
