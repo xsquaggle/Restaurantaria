@@ -194,7 +194,7 @@ function Cut.new(ctx: any, container: Frame)
 	-- stroke that begins just off the crust still counts. One stroke at a time: it belongs to
 	-- the input that started it (the mouse, or that one finger) and to the pizza it started on;
 	-- other fingers are ignored and a ticket or station change cancels it without cutting.
-	local RANGE = 1.6 -- the server's accepted coordinate range
+	local RANGE = 1.599 -- just inside the server's accepted range (+-1.6), so a clipped end never rounds past it
 	type Stroke = { input: InputObject, mouse: boolean, button: Enum.UserInputType, pizzaId: number, start: Vector2 }
 	local stroke: Stroke? = nil
 
