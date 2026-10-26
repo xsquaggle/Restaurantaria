@@ -105,6 +105,52 @@ do
 	note(string.format("bake 45 deg oval: drawn angle %.2f deg, not 45", math.deg(e.angle)))
 end
 
+-- 2b. Food transform (Astra r13 item 2). Expected offsets are worked by hand from
+-- screen = (F / 2) D S (q / 0.95), never from the helpers under test. The doubled map Astra found
+-- gave (114.95, 0) and (0, 11.6375) for the first two.
+do
+	local function at(label, S, flatten, q, wx, wy)
+		local o = G.screenOf(S, 190, flatten, q)
+		near(label .. " x", o.x, wx, 1e-9)
+		near(label .. " y", o.y, wy, 1e-9)
+	end
+	local oval = G.mat(1.1, 0, 0, 0.35)
+	at("diag(1.1, .35) Prep q=(.95,0)", oval, 1, { x = 0.95, y = 0 }, 104.5, 0)
+	at("diag(1.1, .35) Prep q=(0,.95)", oval, 1, { x = 0, y = 0.95 }, 0, 33.25)
+	at("diag(1.1, .35) Bake q=(0,.95)", oval, 0.58, { x = 0, y = 0.95 }, 0, 19.285)
+	-- Turned 45 degrees: S = [.725 .375; .375 .725] (mean .725, half-difference .375).
+	local turned = G.mat(0.725, 0.375, 0.375, 0.725)
+	local fromShape = G.shape(1.1, 0.35, R45)
+	near("shape(1.1, .35, 45) = [.725 .375; .375 .725]", math.abs(fromShape.a - 0.725) + math.abs(fromShape.b - 0.375) + math.abs(fromShape.d - 0.725), 0, 1e-12)
+	at("turned Prep q=(.95,0)", turned, 1, { x = 0.95, y = 0 }, 68.875, 35.625)
+	at("turned Prep q=(0,.95)", turned, 1, { x = 0, y = 0.95 }, 35.625, 68.875)
+	at("turned Prep q=(.3,-.5)", turned, 1, { x = 0.3, y = -0.5 }, 3, -25)
+	at("turned Bake q=(.95,0)", turned, 0.58, { x = 0.95, y = 0 }, 68.875, 20.6625)
+	at("turned Bake q=(.3,-.5)", turned, 0.58, { x = 0.3, y = -0.5 }, 3, -14.5)
+	-- Food on the outline sits on the drawn body: dough-local radius 0.95 lands on K's ellipse.
+	local e = G.ellipseOf(G.viewMatrix(turned, 190, 0.58))
+	local worst = 0
+	for k = 0, 71 do
+		local a = math.rad(k * 5)
+		local o = G.screenOf(turned, 190, 0.58, { x = 0.95 * math.cos(a), y = 0.95 * math.sin(a) })
+		local c, sn = math.cos(-e.angle), math.sin(-e.angle)
+		local u, v = c * o.x - sn * o.y, sn * o.x + c * o.y
+		worst = math.max(worst, math.abs((u / e.major) ^ 2 + (v / e.minor) ^ 2 - 1))
+	end
+	near("turned Bake: food at q-radius .95 lies on the drawn outline", worst, 0, 1e-9)
+	-- Local stretch is the derivative of screenOf: a small step in q moves J times that step.
+	local J = G.localStretch(turned, 190, 0.58)
+	local o0 = G.screenOf(turned, 190, 0.58, { x = 0.1, y = 0.2 })
+	local o1 = G.screenOf(turned, 190, 0.58, { x = 0.1 + 1e-3, y = 0.2 })
+	near("localStretch matches screenOf (x step, x)", (o1.x - o0.x) / 1e-3, J.a, 1e-6)
+	near("localStretch matches screenOf (x step, y)", (o1.y - o0.y) / 1e-3, J.c, 1e-6)
+	near("turned Bake J.a = 95 x .725 / .95", J.a, 72.5, 1e-9)
+	-- Fully rolled S = .95 I: a radius-.17 pinch is 2 x .17 x 95 = 32.3 px ACROSS (diameter).
+	local fit = G.spriteFit(G.localStretch(G.shape(0.95, 0.95, 0), 190, 1), 2 * F.PINCH_RADIUS, 2 * F.PINCH_RADIUS, 0)
+	near("pinch diameter at F=190, full round", fit.width, 32.3, 1e-9)
+	near("pinch round on a round dough", fit.height, 32.3, 1e-9)
+end
+
 -- 3. Registered bodies. P3 and P4 state 1 on the same 0.35 ball show the same body, and a
 -- measured centre offset is moved back onto the pivot.
 for _, frame in { 663, 190 } do
@@ -324,7 +370,18 @@ do
 	local s1, _, spread1 = F.cheeseScore({ { x = 0.2, y = 0.2 } })
 	local s2, _, spread2 = F.cheeseScore({ { x = 0.2, y = 0.2 }, { x = 0.2, y = 0.2 } })
 	check("overlap credit capped per cell", spread2 <= spread1 * 2 + 1e-12 and spread2 >= spread1, true)
-	note(string.format("one pinch at (0.2, 0.2): cheese %d (plan's whole-cell figure 4), spread %.3f; the same pinch twice: %d", s1, spread1, s2))
+	-- Units: the cheese COMPONENT SCORE is out of 100; occupied cells are a count. One pinch at
+	-- (0.2, 0.2) touches two cells and scores 6/100 (it does not cover six cells; Astra r13).
+	local touched = 0
+	for _, a in area do
+		if a > 0 then
+			touched += 1
+		end
+	end
+	check("one pinch at (0.2, 0.2) touches two cells", touched, 2)
+	check("one pinch at (0.2, 0.2): cheese score 6/100", s1, 6)
+	near("one pinch at (0.2, 0.2): spread credit 1/12", spread1, 1 / 12, 1e-9)
+	note(string.format("one pinch at (0.2, 0.2): touches %d cells, cheese score %d/100, spread %.4f (= 1/12); the same pinch twice: %d/100", touched, s1, spread1, s2))
 	local edgeArea = total(F.footprint({ { x = 0.84, y = 0 } }))
 	note(string.format("pinch centred on the 0.84 sauce edge: %.0f %% of its footprint counts in sauce cells", 100 * edgeArea / F.PINCH_AREA))
 	check("edge pinch counts in part", edgeArea > 0 and edgeArea < F.PINCH_AREA, true)
@@ -332,7 +389,7 @@ end
 
 -- 11. Outbox against a model of the server's cheese actions.
 local function server()
-	local self = { pizzas = {}, log = {}, biggest = 0 }
+	local self = { pizzas = {}, log = {}, biggest = 0, refusals = {} }
 	function self.receive(m)
 		local id = m.args.pizzaId
 		local p = self.pizzas[id] or { strokes = {}, step = "cheese" }
@@ -342,7 +399,14 @@ local function server()
 			return false
 		end
 		if m.action == "addCheese" then
-			if m.args.newStroke or #p.strokes == 0 then
+			-- Validate the whole candidate first; commit only if it passes (Astra r13 item 3).
+			local newStroke = m.args.newStroke or #p.strokes == 0
+			local ok, why = F.validateCheeseBatch(p.strokes, m.args.points, newStroke)
+			if not ok then
+				table.insert(self.refusals, why)
+				return false
+			end
+			if newStroke then
 				table.insert(p.strokes, {})
 			end
 			local s = p.strokes[#p.strokes]
@@ -350,9 +414,7 @@ local function server()
 			for _, pt in m.args.points do
 				table.insert(s, pt)
 			end
-			if not F.strokeSpacingOk(s) then
-				return false
-			end
+			p.batches = (p.batches or 0) + 1
 		elseif m.action == "undoCheese" then
 			table.remove(p.strokes)
 		elseif m.action == "advancePrep" then
@@ -533,6 +595,55 @@ do
 	end
 	check("i: cap 48 in all", #box.visible(1), 48)
 	check("i: batches never exceed 8", srv.biggest <= 8, true)
+end
+
+-- 12. A refused cheese batch changes nothing (Astra r13 item 3).
+do
+	local srv = server()
+	local function send(points, newStroke)
+		return srv.receive({ action = "addCheese", args = { pizzaId = 1, points = points, newStroke = newStroke } })
+	end
+	check("j: first batch accepted", send({ { x = 0, y = 0 }, { x = 0.2, y = 0 } }, true), true)
+	local function snapshot()
+		local p = srv.pizzas[1]
+		local flat = {}
+		for si, st in p.strokes do
+			for _, pt in st do
+				table.insert(flat, string.format("%d:%.6f,%.6f", si, pt.x, pt.y))
+			end
+		end
+		return table.concat(flat, ";") .. "|strokes=" .. #p.strokes .. "|batches=" .. tostring(p.batches)
+	end
+	local before = snapshot()
+	-- A batch whose own points are fine but whose join with the held stroke jumps 0.4.
+	check("j: join jump refused", send({ { x = 0.6, y = 0 }, { x = 0.7, y = 0 } }, false), false)
+	check("j: join jump: state unchanged", snapshot(), before)
+	-- A batch that would pass the old append-then-check fixture's first points then fails late.
+	check("j: late spacing failure refused", send({ { x = 0.3, y = 0 }, { x = 0.4, y = 0 }, { x = 0.9, y = 0 } }, false), false)
+	check("j: late failure: state unchanged", snapshot(), before)
+	check("j: NaN refused", send({ { x = 0 / 0, y = 0 } }, false), false)
+	check("j: infinite refused", send({ { x = math.huge, y = 0 } }, true), false)
+	check("j: out of reach refused", send({ { x = 2, y = 0 } }, true), false)
+	check("j: empty refused", send({}, false), false)
+	check("j: all refusals left state unchanged", snapshot(), before)
+	check("j: refusal reasons", table.concat(srv.refusals, ","), "spacing,spacing,finite,finite,bounds,empty")
+	-- A refused batch at the cap leaves the count where it was.
+	local cap = {}
+	for i = 1, F.MAX_PINCHES do
+		table.insert(cap, { x = 0, y = 0 })
+	end
+	check("j: over the cap refused", send(cap, true), false)
+	check("j: cap refusal: state unchanged", snapshot(), before)
+	-- The next good batch continues the same stroke in sequence.
+	check("j: good batch after refusals accepted", send({ { x = 0.3, y = 0 } }, false), true)
+	check("j: appended in order", srv.pizzas[1].strokes[1][3].x, 0.3)
+	check("j: batches counted once", srv.pizzas[1].batches, 2)
+	-- The old fixture (append, then check) would have kept the refused points: proven here.
+	local old = { { x = 0, y = 0 }, { x = 0.2, y = 0 } }
+	for _, pt in { { x = 0.6, y = 0 } } do
+		table.insert(old, pt)
+	end
+	check("j: old order kept a refused point (the defect)", F.strokeSpacingOk(old) == false and #old == 3, true)
 end
 
 for _, l in report do

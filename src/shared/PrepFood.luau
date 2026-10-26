@@ -24,6 +24,7 @@ PrepFood.PINCH_STEP = 0.25 -- one pinch per 0.25 of travel (proposal)
 PrepFood.PINCH_RADIUS = 0.17 -- footprint disc (plan rev 6)
 PrepFood.TARGET_PINCHES = 24
 PrepFood.MAX_PINCHES = 48
+PrepFood.PINCH_REACH = 1.5 -- dough-local radius past which a pinch is refused (proposal)
 
 export type Vec = { x: number, y: number }
 
@@ -220,6 +221,50 @@ function PrepFood.strokeSpacingOk(points: { Vec }): boolean
 		end
 	end
 	return true
+end
+
+-- Validates one batch of cheese pinches against a pizza's committed strokes WITHOUT changing
+-- them (Astra r13 item 3): the whole candidate is checked first and the caller commits only on
+-- success, so a refused batch leaves points, counts and sequencing exactly as they were. The
+-- server's cheese handler must call this before it touches state. Checks: a non-empty list of
+-- finite points within PINCH_REACH (spill past the outline lands on the board and scores as
+-- crust or nothing), the pizza's pinch cap, and the spacing rule across the
+-- join with the held stroke's last pinch. The chord rule is necessary for reversals, not proof
+-- of travelled distance; ownership, step, sequence and rate are the handler's own checks.
+function PrepFood.validateCheeseBatch(strokes: { { Vec } }, points: { Vec }, newStroke: boolean): (boolean, string?)
+	if type(points) ~= "table" or #points == 0 then
+		return false, "empty"
+	end
+	local held = 0
+	for _, st in strokes do
+		held += #st
+	end
+	if held + #points > PrepFood.MAX_PINCHES then
+		return false, "cap"
+	end
+	for _, pt in points do
+		if type(pt) ~= "table" or type(pt.x) ~= "number" or type(pt.y) ~= "number" then
+			return false, "type"
+		end
+		if pt.x ~= pt.x or pt.y ~= pt.y or math.abs(pt.x) == math.huge or math.abs(pt.y) == math.huge then
+			return false, "finite"
+		end
+		if pt.x * pt.x + pt.y * pt.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH then
+			return false, "bounds"
+		end
+	end
+	local candidate = {}
+	local current = strokes[#strokes]
+	if not newStroke and current and #current > 0 then
+		table.insert(candidate, current[#current])
+	end
+	for _, pt in points do
+		table.insert(candidate, pt)
+	end
+	if not PrepFood.strokeSpacingOk(candidate) then
+		return false, "spacing"
+	end
+	return true, nil
 end
 
 -- Frozen 37-point footprint sample of a pinch disc: the centre, then rings of 6, 12 and 18 at

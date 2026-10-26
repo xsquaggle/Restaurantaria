@@ -105,8 +105,10 @@ function PrepGeometry.visibleHalf(S: Mat2, q: Vec): string
 	return if PrepGeometry.toPizza(S, q).x < 0 then "left" else "right"
 end
 
--- The view's screen matrix: pizza-local p to px offsets from the view centre. flatten scales y
--- (0.58 in Bake, 1 elsewhere).
+-- The view's screen matrix K = (F / 2) D S: the unit circle's point to px offsets from the view
+-- centre, so K applied to the unit circle is the drawn dough outline. It already includes the
+-- dough S; apply it to q / 0.95, not to a pizza-local p. D's flatten scales y (0.58 in Bake, 1
+-- elsewhere).
 function PrepGeometry.viewMatrix(S: Mat2, frame: number, flatten: number?): Mat2
 	local k = frame / 2
 	local f = flatten or 1
@@ -121,9 +123,11 @@ function PrepGeometry.ellipseOf(K: Mat2): Ellipse
 	return { major = math.sqrt(math.max(l1, 0)), minor = math.sqrt(math.max(l2, 0)), angle = angle }
 end
 
--- Screen offset (px from the view centre) of a stored dough-local point in a view.
+-- Screen offset (px from the view centre) of a stored dough-local point in a view. The view
+-- matrix already holds S, so it takes q / 0.95 (the unit-circle point), never toPizza(S, q),
+-- which would apply S a second time (Astra r13 item 2).
 function PrepGeometry.screenOf(S: Mat2, frame: number, flatten: number?, q: Vec): Vec
-	return PrepGeometry.apply(PrepGeometry.viewMatrix(S, frame, flatten), PrepGeometry.toPizza(S, q))
+	return PrepGeometry.apply(PrepGeometry.viewMatrix(S, frame, flatten), { x = q.x / PrepGeometry.CRUST, y = q.y / PrepGeometry.CRUST })
 end
 
 -- How to draw a registered full-canvas body image (P3, P4, P13) so its measured body lands on
@@ -169,10 +173,11 @@ function PrepGeometry.spriteFit(J: Mat2, w: number, h: number, theta: number): S
 	return { width = 2 * e.major, height = 2 * e.minor, rotation = math.deg(e.angle), shear = math.abs(90 - math.deg(math.acos(math.clamp(cosA, -1, 1)))) }
 end
 
--- The local stretch of dough-local units on screen: J = K S / 0.95.
+-- The local stretch of dough-local units on screen: J = K / 0.95, the derivative of screenOf
+-- (K already holds S once).
 function PrepGeometry.localStretch(S: Mat2, frame: number, flatten: number?): Mat2
-	local J = PrepGeometry.mul(PrepGeometry.viewMatrix(S, frame, flatten), S)
-	return mat(J.a / PrepGeometry.CRUST, J.b / PrepGeometry.CRUST, J.c / PrepGeometry.CRUST, J.d / PrepGeometry.CRUST)
+	local K = PrepGeometry.viewMatrix(S, frame, flatten)
+	return mat(K.a / PrepGeometry.CRUST, K.b / PrepGeometry.CRUST, K.c / PrepGeometry.CRUST, K.d / PrepGeometry.CRUST)
 end
 
 -- Roll model (provisional, plan 3.1). A stroke p1 -> p2 must cross the dough. It stretches the
