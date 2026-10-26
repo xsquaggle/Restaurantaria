@@ -638,12 +638,12 @@ do
 	check("j: good batch after refusals accepted", send({ { x = 0.3, y = 0 } }, false), true)
 	check("j: appended in order", srv.pizzas[1].strokes[1][3].x, 0.3)
 	check("j: batches counted once", srv.pizzas[1].batches, 2)
-	-- The old fixture (append, then check) would have kept the refused points: proven here.
+	-- Simulates the old order (append, then check) on a plain list; it does not run the old fixture.
 	local old = { { x = 0, y = 0 }, { x = 0.2, y = 0 } }
 	for _, pt in { { x = 0.6, y = 0 } } do
 		table.insert(old, pt)
 	end
-	check("j: old order kept a refused point (the defect)", F.strokeSpacingOk(old) == false and #old == 3, true)
+	check("j: append-then-check order keeps a refused point (simulated, not the old code)", F.strokeSpacingOk(old) == false and #old == 3, true)
 end
 
 for _, l in report do
