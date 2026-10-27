@@ -32,10 +32,12 @@ local SAUCE_SHARE = 0.87890625 -- food_sauce_raw: full soft footprint / canvas
 local DOLLOP_SHARE = 0.87890625 -- food_sauce_dollop alpha width / canvas
 local CHEESE_SHARE = 0.95 -- food_cheese_raw: shared footprint canvas share
 -- Proposals (looks, not grading): the drawn stamp's diameter (dough-local), the stamps that
--- overlap a point of an even layer (to split the wanted opacity between them), the opacity of a
--- layer at full credit, the deep-red tint of a thick layer, the dollop's size.
+-- overlap a point of an even layer (to split the wanted opacity between them), each stamp's fixed
+-- jitter, the opacity of a layer at full credit, the deep-red tint of a thick layer, the dollop's
+-- size.
 local STAMP = 0.4
 local OVERLAP = 8
+local JITTER = 0.06 -- dough-local spread of each stamp's fixed offset
 local FULL_OPACITY = 0.92
 local DEEP = Color3.fromRGB(190, 150, 150)
 local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
@@ -113,7 +115,12 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 							end
 						end
 					end
-					local s = screen({ x = MakeSauce.xs[centre], y = MakeSauce.ys[centre] })
+					-- A fixed small offset and turn per stamp, so the regular grid does not show
+					-- through as a lattice.
+					local n = #stamps + 1
+					local jx = (((n * 0.6180339887) % 1) - 0.5) * JITTER
+					local jy = (((n * 0.7548776662) % 1) - 0.5) * JITTER
+					local s = screen({ x = MakeSauce.xs[centre] + jx, y = MakeSauce.ys[centre] + jy })
 					local img = Ui.new("ImageLabel", {
 						BackgroundTransparency = 1,
 						AnchorPoint = Vector2.new(0.5, 0.5),
@@ -123,7 +130,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 						ZIndex = zIndex,
 						Parent = sauceLayer,
 					})
-					fit(img, STAMP, SAUCE_SHARE, 0)
+					fit(img, STAMP, SAUCE_SHARE, (n * 137.5) % 360)
 					Art.apply(img, "food_sauce_raw")
 					table.insert(stamps, { image = img, cells = cells, shown = 0, tint = 0 })
 				end
