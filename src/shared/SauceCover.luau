@@ -16,6 +16,8 @@
 --    into one rim with shallow scallops, not a row of beads or a staircase;
 --  * "speck": a cell with no covered neighbour is a disc whose area is its credit (AREA), a
 --    little off the grid (JITTER), so a thin trace reads as scattered specks, not a dot grid.
+-- No disc reaches more than EDGE_TOL (2 reference HD px) onto a cell drawn bare, so the drawn
+-- edge never invents coverage or fills a hole; a disc that would is narrowed.
 --
 -- Material span (decided in slice 2, recorded in the hand-off): the 1024 px material maps cover
 -- the dough-local square -1..1 (radius 1.0) in every view; the dough's edge is 0.95 and no disc
@@ -51,6 +53,11 @@ SauceCover.STEP = 0.05
 -- A speck sits off its cell centre by a fixed amount up to JITTER cells each way (from the
 -- cell's index); it still samples the map at its own drawn place.
 SauceCover.JITTER = 0.35
+-- How far drawn sauce may reach onto a cell drawn bare (under BARE credit), in cells: Astra's
+-- edge rule allows at most 2 reference HD px, and a cell is 16.5 px at the HD Make size
+-- (F = 661), so 0.12 cell = 1.98 px. Holds for every disc at every size (a disc's size is
+-- dough-local); MakeLayers' pinhole guard keeps to it too.
+SauceCover.EDGE_TOL = 0.12
 
 -- The material cells (drawn on the dough), each one's four grid neighbours (0 past the field's
 -- extent or off the dough, which count as bare) and its 5x5 block (for the deep-red tint, read
@@ -92,7 +99,36 @@ function SauceCover.credit(t: number): number
 	return math.min(1, math.max(t, 0) / MakeSauce.HALF)
 end
 
-export type Disc = { cell: number, kind: string, x: number, y: number, w: number, h: number, credit: number, deep: number }
+export type Disc = {
+	cell: number,
+	kind: string,
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	credit: number,
+	deep: number,
+	-- The widest radius this disc may be drawn at from its centre (EDGE_TOL onto the nearest
+	-- bare cell), and whether it was narrowed to it.
+	limit: number,
+	clamped: boolean,
+}
+
+-- The widest radius a disc centred at (x, y) for material cell i may have: the distance to the
+-- nearest cell of its 5x5 block drawn bare (under BARE credit), plus EDGE_TOL.
+local function reachLimit(field: { number }, i: number, x: number, y: number): number
+	local most = math.huge
+	local half = CELL / 2
+	for _, j in blocks[i] do
+		if SauceCover.credit(field[j]) < SauceCover.BARE then
+			local dx = math.max(math.abs(x - xs[j]) - half, 0)
+			local dy = math.max(math.abs(y - ys[j]) - half, 0)
+			most = math.min(most, math.sqrt(dx * dx + dy * dy) + SauceCover.EDGE_TOL * CELL)
+		end
+	end
+	return most
+end
+SauceCover.reachLimit = reachLimit
 
 local function round(scale: number): number
 	return math.max(SauceCover.STEP, math.floor(scale / SauceCover.STEP + 0.5) * SauceCover.STEP)
@@ -145,13 +181,29 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 		y += (((i * 0.7548776662) % 1) - 0.5) * a
 	end
 	-- Never past the dough's edge (sauce off the dough shows only as the smear).
-	local reach = w / 2
-	local r = math.sqrt(x * x + y * y)
-	local limit = SauceCover.DOUGH - reach
-	if r > limit then
-		x, y = x * limit / r, y * limit / r
+	local function inDough()
+		local r = math.sqrt(x * x + y * y)
+		local limit = SauceCover.DOUGH - w / 2
+		if r > limit then
+			x, y = x * limit / r, y * limit / r
+		end
 	end
-	return { cell = i, kind = kind, x = x, y = y, w = w, h = h, credit = c, deep = deep }
+	inDough()
+	-- Never more than EDGE_TOL onto a cell drawn bare: a speck that would goes back to its
+	-- cell's centre first; any disc still too wide is made narrower (it may then show less
+	-- than its credit, never more).
+	local most = reachLimit(field, i, x, y)
+	if w / 2 > most and kind == "speck" then
+		x, y = xs[i], ys[i]
+		inDough()
+		most = reachLimit(field, i, x, y)
+	end
+	local clamped = false
+	if w / 2 > most then
+		w, h = 2 * most, 2 * most
+		clamped = true
+	end
+	return { cell = i, kind = kind, x = x, y = y, w = w, h = h, credit = c, deep = deep, limit = most, clamped = clamped }
 end
 
 -- Every disc of a field, in the fixed cell order.

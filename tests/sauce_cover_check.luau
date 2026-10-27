@@ -89,6 +89,7 @@ check("proposal: solid", SauceCover.SOLID, 0.5)
 near("proposal: area disc", SauceCover.AREA, 2 / math.sqrt(math.pi), 1e-12)
 check("proposal: full disc", SauceCover.FULL, 1.6)
 check("proposal: full disc closes a patch (>= sqrt 2)", SauceCover.FULL >= math.sqrt(2), true)
+check("proposal: edge tolerance (2 HD px)", SauceCover.EDGE_TOL * 661 / 2 * MakeSauce.CELL <= 2, true)
 check("proposal: spill sectors / min / full", string.format("%d/%g/%g", SauceCover.SECTORS, SauceCover.SPILL_MIN, SauceCover.SPILL_FULL), "12/0.01/0.15")
 check("default renderer", Config.FoodArt.sauce, "material")
 check("default cheese family", Config.FoodArt.cheese, "v2")
@@ -105,6 +106,31 @@ do
 		end
 	end
 	check("material cells", #SauceCover.cells, n)
+end
+
+-- How far a disc reaches onto cells drawn bare (under BARE credit), measured independently
+-- over every field cell its square could touch: the largest radius minus distance to the cell's
+-- square (negative: it stops short). Astra's edge rule: at most 2 reference HD px.
+local HD_CELL_PX = 661 / 2 * MakeSauce.CELL -- a cell at the HD Make size (F = 661): 16.525 px
+local function bareReach(field: { number }, d: any): number
+	local worst = -math.huge
+	local r = d.w / 2
+	local half = MakeSauce.CELL / 2
+	local g0x = math.floor((d.x - r) / MakeSauce.CELL) - 1
+	local g1x = math.ceil((d.x + r) / MakeSauce.CELL) + 1
+	local g0y = math.floor((d.y - r) / MakeSauce.CELL) - 1
+	local g1y = math.ceil((d.y + r) / MakeSauce.CELL) + 1
+	for gx = g0x, g1x do
+		for gy = g0y, g1y do
+			local j = MakeSauce.cellAt(gx, gy)
+			if j and SauceCover.credit(field[j]) < SauceCover.BARE then
+				local dx = math.max(math.abs(d.x - MakeSauce.xs[j]) - half, 0)
+				local dy = math.max(math.abs(d.y - MakeSauce.ys[j]) - half, 0)
+				worst = math.max(worst, r - math.sqrt(dx * dx + dy * dy))
+			end
+		end
+	end
+	return worst
 end
 
 -- 2. The comparison set (Astra r14): the same actions the Studio A/B draws.
@@ -126,7 +152,7 @@ local records = {
 	{ "unmoved dollops", sauceOf(tri, {}) },
 }
 local area = MakeSauce.CELL * MakeSauce.CELL
-table.insert(report, "record                               pours  mass   coverage  grade  discs (full/edge/speck)  drawn/edible  deepest  spills (ladles)")
+table.insert(report, "record                               pours  mass   coverage  grade  discs (full/edge/speck, narrowed)  onto bare (HD px)  drawn/edible  deepest  spills (ladles)")
 for _, rec in records do
 	local name, sauce = rec[1], rec[2]
 	local before = MakeSauce.grade(sauce)
@@ -146,6 +172,7 @@ for _, rec in records do
 	-- Every disc keeps the contract.
 	local drawn, offDough, outside, badUv, onBare, badArea, badKind, maxDeep = 0, 0, 0, 0, 0, 0, 0, 0
 	local kinds = { full = 0, edge = 0, speck = 0 }
+	local clamped, badClamp, worstBare = 0, 0, -math.huge
 	local area1 = MakeSauce.CELL * MakeSauce.CELL
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
@@ -179,7 +206,20 @@ for _, rec in records do
 			onBare += 1
 		end
 		kinds[d.kind] += 1
-		if d.kind == "full" then
+		-- The edge rule, measured over every cell drawn bare.
+		local reach = bareReach(field, d)
+		worstBare = math.max(worstBare, reach)
+		if reach > SauceCover.EDGE_TOL * MakeSauce.CELL + 1e-9 then
+			badClamp += 1
+		end
+		if d.clamped then
+			-- Narrowed to its limit: it shows less than its credit there, never more.
+			clamped += 1
+			if math.abs(d.w / 2 - d.limit) > 1e-9 then
+				badClamp += 1
+			end
+			drawn += math.min(math.pi * (d.w / MakeSauce.CELL / 2) ^ 2, d.credit) * area1
+		elseif d.kind == "full" then
 			-- A covered cell inside a covered patch.
 			if d.credit < SauceCover.SOLID or math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 then
 				badKind += 1
@@ -212,6 +252,7 @@ for _, rec in records do
 	check(name .. ": no disc on a bare cell", onBare, 0)
 	check(name .. ": edge reach and speck area = credit", badArea, 0)
 	check(name .. ": full and edge discs keep their sizes", badKind, 0)
+	check(name .. ": no disc more than EDGE_TOL onto a bare cell", badClamp, 0)
 	-- Every material cell with credit is drawn, and only those.
 	local credited = 0
 	for _, i in SauceCover.cells do
@@ -237,7 +278,7 @@ for _, rec in records do
 		check(name .. ": clean board, no smear", #spills, 0)
 	end
 	check(name .. ": smear never stands for more than the spill", shown <= off + 1e-9, true)
-	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d (%d/%d/%d)  %.3f   %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, kinds.full, kinds.edge, kinds.speck, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
+	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d (%d/%d/%d, %d)  %5.2f   %.3f   %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, kinds.full, kinds.edge, kinds.speck, clamped, math.max(worstBare, 0) * HD_CELL_PX, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
 	if name == "excess mound" then
 		check("excess mound: thick sauce drawn deeper", maxDeep > 0, true)
 	elseif name == "even adequate" then
@@ -262,6 +303,30 @@ do
 	end
 	check("even: some patch closed up", closed > 0, true)
 	check("even: closed discs are covered cells", closed <= full, true)
+end
+
+-- 5. A one-cell hole in a covered patch stays open: every cell of the even layer, one cell
+-- emptied; no disc reaches more than EDGE_TOL onto it, so at least (1 - 2 EDGE_TOL)^2 of the
+-- cell's square shows bare dough at any size.
+do
+	local field = table.create(MakeSauce.COUNT, 0)
+	for _, i in SauceCover.cells do
+		field[i] = MakeSauce.EVEN
+	end
+	local hole = MakeSauce.cellAt(4, 3) :: number
+	field[hole] = 0
+	local worst = -math.huge
+	local touching = 0
+	for _, d in SauceCover.discs(field) do
+		local reach = bareReach(field, d)
+		worst = math.max(worst, reach)
+		if reach > 0 then
+			touching += 1
+		end
+	end
+	check("one-cell hole: no disc more than EDGE_TOL onto it", worst <= SauceCover.EDGE_TOL * MakeSauce.CELL + 1e-9, true)
+	check("one-cell hole: the hole cell draws nothing", SauceCover.disc(field, hole), nil)
+	table.insert(report, string.format("one-cell hole in an even layer: %d discs touch it, deepest %.2f HD px (limit %.2f)", touching, worst * HD_CELL_PX, SauceCover.EDGE_TOL * HD_CELL_PX))
 end
 
 -- 4. Undo: the before/after pair are two records; the renderer draws each from its own field.

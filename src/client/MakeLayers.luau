@@ -269,11 +269,15 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	end
 	local function drawDisc(img: ImageLabel, disc: SauceCover.Disc)
 		local p = screen(disc) - sauceOrigin
-		-- A disc closing a patch keeps at least CLOSE_PX past the corner it must cover, so pixel
-		-- rounding and edge smoothing at phone size never open pinholes between four discs (it
-		-- grows inward only: its neighbours are covered).
+		-- Pinhole guard: a disc closing a patch is drawn at least CLOSE_PX (screen px, along the
+		-- view's shorter axis) past the corner it shares with its diagonal neighbour, so pixel
+		-- rounding never opens pinholes between four covered discs. It applies wherever that
+		-- disc is small on screen (the phone views, and the flattened oven view at HD too), and
+		-- never past the disc's own limit (SauceCover.EDGE_TOL onto a cell drawn bare), so it
+		-- cannot fill or shrink a scored hole.
 		if disc.kind == "full" then
 			local least = MakeSauce.CELL * math.sqrt(2) + 2 * CLOSE_PX / math.min(tileA, tileB)
+			least = math.min(least, 2 * disc.limit)
 			if disc.w < least then
 				disc = table.clone(disc)
 				disc.w, disc.h = least, least
@@ -545,7 +549,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 					tile.cooked = newDisc("sauce_material_cooked_v2", sauceCooked)
 					tile.key = ""
 				end
-				local key = string.format("%.4f,%.4f,%.4f,%.4f,%.2f", disc.x, disc.y, disc.w, disc.h, disc.deep)
+				local key = string.format("%.4f,%.4f,%.4f,%.4f,%.2f,%.4f", disc.x, disc.y, disc.w, disc.h, disc.deep, math.min(disc.limit, 1))
 				if tile.key ~= key then
 					tile.key = key
 					drawDisc(tile.raw, disc)
