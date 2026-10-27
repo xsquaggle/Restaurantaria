@@ -310,7 +310,10 @@ end
 -- Shows the model's final values. The hook for motion: a count-up sets view.coins from 0 to
 -- model.coins, an XP fill moves view.fillClip from bar.fromXp to bar.toXp (both are within
 -- the same rank unless bar.rankUp). Whatever runs here must finish on these values and must
--- never decide when the action is available: that comes from model.action alone.
+-- never decide when the action is available: that comes from model.action alone. With
+-- GuiService.ReducedMotionEnabled, set the final values at once (what this does today). The
+-- card is rebuilt when the save result arrives, so motion must only play for a new shift
+-- (the caller already fades the scrim only once per shift) and never pays or repeats.
 function SummaryCard.present(view: View, model: any)
 	view.coins.Text = string.format("%d coin%s", model.coins, if model.coins == 1 then "" else "s")
 	view.xpEarned.Text = string.format("+%d XP", model.xpEarned)
