@@ -1187,7 +1187,7 @@ function ctx.showResult(ticketId: number)
 	-- line is cut off. (A fixed-height label drops the lines that do not fit.)
 	local baseHeight = toast.Size.Y.Offset
 	local function fitNotes()
-		local need = noteTop + math.ceil(noteLabel.AbsoluteSize.Y) + (if ctx.compact then 8 else 10)
+		local need = noteTop + math.ceil(noteLabel.AbsoluteSize.Y) + (if ctx.compact then 14 else 16)
 		toast.Size = UDim2.new(1, 0, 0, math.max(baseHeight, need))
 	end
 	noteLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitNotes)
