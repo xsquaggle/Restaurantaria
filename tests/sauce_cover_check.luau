@@ -111,7 +111,8 @@ end
 -- How far a disc reaches onto cells drawn bare (under BARE credit), measured independently
 -- over every field cell its square could touch: the largest radius minus distance to the cell's
 -- square (negative: it stops short). Astra's edge rule: at most 2 reference HD px.
-local HD_CELL_PX = 661 / 2 * MakeSauce.CELL -- a cell at the HD Make size (F = 661): 16.525 px
+local HD_PX = 661 / 2 -- HD px per dough-local unit at the HD Make size (F = 661)
+local HD_CELL_PX = HD_PX * MakeSauce.CELL -- a cell at that size: 16.525 px
 local function bareReach(field: { number }, d: any, only: number?): number
 	local worst = -math.huge
 	local r = d.w / 2
@@ -278,7 +279,7 @@ for _, rec in records do
 		check(name .. ": clean board, no smear", #spills, 0)
 	end
 	check(name .. ": smear never stands for more than the spill", shown <= off + 1e-9, true)
-	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d (%d/%d/%d, %d)  %5.2f   %.3f   %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, kinds.full, kinds.edge, kinds.speck, clamped, math.max(worstBare, 0) * HD_CELL_PX, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
+	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d (%d/%d/%d, %d)  %5.2f   %.3f   %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, kinds.full, kinds.edge, kinds.speck, clamped, math.max(worstBare, 0) * HD_PX, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
 	if name == "excess mound" then
 		check("excess mound: thick sauce drawn deeper", maxDeep > 0, true)
 	elseif name == "even adequate" then
@@ -326,7 +327,7 @@ do
 	end
 	check("one-cell hole: no disc more than EDGE_TOL onto it", worst <= SauceCover.EDGE_TOL * MakeSauce.CELL + 1e-9, true)
 	check("one-cell hole: the hole cell draws nothing", SauceCover.disc(field, hole), nil)
-	table.insert(report, string.format("one-cell hole in an even layer: %d discs touch it, deepest %.2f HD px (limit %.2f)", touching, worst * HD_CELL_PX, SauceCover.EDGE_TOL * HD_CELL_PX))
+	table.insert(report, string.format("one-cell hole in an even layer: %d discs touch it, deepest %.2f HD px (limit %.2f)", touching, worst * HD_PX, SauceCover.EDGE_TOL * HD_CELL_PX))
 end
 
 -- 4. Undo: the before/after pair are two records; the renderer draws each from its own field.
