@@ -231,6 +231,15 @@ local Assets = {
 	food_cheese_melted = "rbxassetid://74313384211353",
 	food_cheese_golden = "rbxassetid://118860189516118",
 	food_cheese_burnt = "rbxassetid://135522129771732",
+	-- Astra response 14 corrective exports, uploaded 2026-10-27 byte-exact from the delivered ZIP
+	-- (sha256 = her manifest; repo copy art/astra-r14). The r13 ids above stay for the A/B
+	-- (Config.FoodArt).
+	sauce_material_raw_v2 = "rbxassetid://111641343441596",
+	sauce_material_cooked_v2 = "rbxassetid://113678180420157",
+	sauce_board_spill_v2 = "rbxassetid://96751259776466",
+	food_cheese_melted_v2 = "rbxassetid://108326023513776",
+	food_cheese_golden_v2 = "rbxassetid://131417289791457",
+	food_cheese_burnt_v2 = "rbxassetid://99315935289797",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",

@@ -239,6 +239,16 @@ Config.Rewards = {
 	tutorialGuarantee = 4,
 }
 
+-- How the player's own sauce and cheese are drawn (slice 2, Astra r14). "material": one thick
+-- marinara material through the scored coverage (SauceCover), raw and cooked maps blended under
+-- one mask; "stamps": the r13 soft translucent stamps, kept only for the same-input A/B. The
+-- cooked cheese family: "v2" Astra's r14 denser exports on the shared alpha, "v1" the r13 ones.
+-- MakeLayers.new can override both for a comparison view.
+Config.FoodArt = {
+	sauce = "material",
+	cheese = "v2",
+}
+
 Config.Dev = {
 	-- Development and test only: orders draw on every recipe, as in the mixed proof shift,
 	-- instead of the save's unlocked recipes. Off for real play, where a new save gets cheese

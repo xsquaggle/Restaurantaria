@@ -1276,7 +1276,9 @@ function Make.new(ctx: any, container: Frame)
 					return { target = pad, text = string.format("Pour %d ladles in all, spread apart", Config.Sauce.targetPours), from = side }
 				elseif not spreadMet then
 					return { target = pad, text = "Drag across the sauce to spread it", from = side }
-				elseif off > Config.Sauce.spillAbove or crust > Config.Sauce.crustAbove then
+				elseif off > Config.Sauce.spillAbove then
+					return { target = undo.frame, text = "Sauce on the board: tap Undo", from = "below" }
+				elseif crust > Config.Sauce.crustAbove then
 					return { target = undo.frame, text = "Sauce on the crust: tap Undo", from = "below" }
 				elseif coverage < Config.Sauce.bareBelow then
 					return { target = pad, text = "Spread it out to the crust, covering the bare spots", from = side }
