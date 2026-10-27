@@ -213,10 +213,10 @@ end
 -- Grades a sent raw list on the dough S. Assist off: Scoring.cutPath of the raw list. Assist on:
 -- the raw list is graded first and refused exactly when assist off would refuse it; the
 -- assisted path is then kept only when it is accepted, its path credit (Scoring.cutQuality,
--- with the raw stroke's own completeness) is at least the raw path's, and it does
--- not miss the centre where the raw path did not. Otherwise the raw cut is kept (assisted =
--- false). So the assist never refuses a stroke, never lowers a stroke's credit and never makes
--- a cut miss the centre. A kept assisted cut also carries the raw cut's line and credit, so the
+-- with the raw stroke's own completeness) is at least the raw path's, its widest wobble is no
+-- wider, and it does not miss the centre where the raw path did not. Otherwise the raw cut is kept (assisted =
+-- false). So the assist never refuses a stroke, never lowers a stroke's credit, never widens its
+-- wobble and never makes a cut miss the centre. A kept assisted cut also carries the raw cut's line and credit, so the
 -- pizza's Cut grade can never fall below the raw grade (CutStroke.pizzaGrade).
 function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local rawCut, reason = Scoring.cutPath(raw, S)
@@ -236,7 +236,7 @@ function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 		c.completeness = r.completeness
 		local tolerance = Config.Cut.centreTolerance
 		local centred = Scoring.cutOffset(c, S) <= tolerance or Scoring.cutOffset(r, S) > tolerance
-		if Scoring.cutQuality(c) >= Scoring.cutQuality(r) and centred then
+		if Scoring.cutQuality(c) >= Scoring.cutQuality(r) and c.deviation <= r.deviation and centred then
 			c.raw = r.path
 			c.assisted = true
 			c.rawLine = { x1 = r.x1, y1 = r.y1, x2 = r.x2, y2 = r.y2 }

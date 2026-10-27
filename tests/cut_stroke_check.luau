@@ -566,7 +566,7 @@ local function withLeadIn(pts: { any }): { any }
 end
 local SHAPES = { { name = "wobble", bow = 0, wobble = 0.014 }, { name = "bow", bow = 0.05, wobble = 0 }, { name = "bow+wobble", bow = 0.035, wobble = 0.01 } }
 local sweep = { strokes = 0, accepted = 0, refusedBoth = 0, mismatch = 0, lower = 0, centre = 0, gradeLower = 0, keptRaw = 0, latched = 0,
-	gain = 0, gradeGain = 0, addedDev = 0, leadAddedDev = 0, outside = 0 }
+	gain = 0, gradeGain = 0, addedDev = -math.huge, leadAddedDev = -math.huge, outside = 0 }
 local tol = cfg.centreTolerance
 for _, d in DOUGHS do
 	for k = 0, 11 do
@@ -635,7 +635,9 @@ check("sweep: the assist never lowers a one-cut Cut grade", sweep.gradeLower, 0)
 check("sweep: no groove piece has a corner off the dough", sweep.outside, 0)
 note(string.format("sweep: %d strokes, %d accepted alike, %d refused alike, 0 refused only with the assist; credit never lower (largest gain %.3f), Cut grade never lower (largest gain %d points), never off-centre; the guard kept the raw path for %d; the gates switched the assist off in %d",
 	sweep.strokes, sweep.accepted, sweep.refusedBoth, sweep.gain, sweep.gradeGain, sweep.keptRaw, sweep.latched))
-note(string.format("sweep: where the assisted path was kept, it widened the widest wobble by at most %.4f cut units (%.1f px at 1920x1080); strokes with a worktop lead-in: at most %.4f (%.1f px). Never enough to lower the credit (the guard).",
+check("sweep: a kept assisted path never widens the wobble", sweep.addedDev <= 0, true)
+check("sweep: nor after a worktop lead-in", sweep.leadAddedDev <= 0, true)
+note(string.format("sweep: a kept assisted path narrowed the widest wobble or left it (largest change %+.4f cut units, %+.1f px at 1920x1080; after a worktop lead-in %+.4f, %+.1f px)",
 	sweep.addedDev, sweep.addedDev * 372, sweep.leadAddedDev, sweep.leadAddedDev * 372))
 
 do
