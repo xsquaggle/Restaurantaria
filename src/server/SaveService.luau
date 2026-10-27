@@ -32,7 +32,7 @@ export type Data = {
 export type Profile = { status: string, data: Data, message: string?, store: any? }
 -- One finished shift's rewards, fixed when it ends and committed unchanged on every attempt.
 -- store: the store of the profile the shift began on.
-export type Receipt = { shiftId: string, tips: number, xp: number, tutorialBonus: number?, store: any? }
+export type Receipt = { shiftId: string, tips: number, xp: number, tutorialBonus: number?, store: any?, completedShiftDay: number? }
 -- bonusPaid is what the save paid this shift as its tutorial bonus; nil when unknown (retry).
 export type Outcome = { state: string, bonusPaid: number?, message: string? }
 

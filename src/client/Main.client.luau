@@ -15,6 +15,7 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Scoring = require(Shared.Scoring)
 local Remote = require(script.Parent.Remote)
+local SummaryCard = require(script.Parent.SummaryCard)
 local SummaryLines = require(script.Parent.SummaryLines)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
@@ -565,13 +566,11 @@ local function buildLayout()
 		Parent = rail,
 	})
 	Art.apply(clipRail, "ui_ticket_clip_rail")
-	-- With no open ticket, a short cream note says what to do next, right above the action
-	-- (QA-006): 88% of the rail's inner width, over the footer, which stays put. The frames
-	-- sit 11 / 8 px apart so the drawn paper and button art (both have transparent margins)
-	-- end up 12-16 px apart, measured at the paper's lowest tooth.
-	local railNote = Widgets.railNote(math.round((railW - pad * 2) * 0.88), compact, if compact then 104 else 160)
-	railNote.frame.AnchorPoint = Vector2.new(0.5, 1)
-	railNote.frame.Position = UDim2.fromOffset(railW / 2, railH - pad - actionH - (if compact then 11 else 8))
+	-- With no open ticket, one cream note says what happens next (QA-006, V25-05). It hangs
+	-- where the active ticket hangs, in the clip rail at the top, the ticket's full width, so
+	-- the rail keeps its footprint and the action stays below.
+	local railNote = Widgets.railNote(railW - pad * 2, compact, if compact then 104 else 160)
+	railNote.frame.Position = UDim2.fromOffset(pad, pad + drop)
 	railNote.frame.Visible = false
 	railNote.frame.Parent = rail
 	local tabList = Ui.new("Frame", {
@@ -788,6 +787,7 @@ local function buildLayout()
 		toastHolder = toastHolder,
 		summary = summary,
 		summaryShift = nil,
+		summaryShiftId = nil,
 	}
 	ctx.switchTo(ctx.station, true)
 end
@@ -886,21 +886,25 @@ local function refreshRail(snap: any)
 	shown = shown or open[1]
 	ui.ticket:set(shown)
 	ui.ticket.frame.Visible = shown ~= nil
-	ui.clipRail.Visible = shown ~= nil
-	-- The empty rail's note: on Order, take an order (or nobody is waiting); elsewhere, what
-	-- comes first. Exactly one instruction shows, so the hint strip stays empty meanwhile.
+	-- The clip rail holds the ticket, or the empty-state note in its place.
+	ui.clipRail.Visible = true
+	-- The empty rail's note: on Order, who is ready to order (or why nobody is); elsewhere,
+	-- what comes first. Exactly one instruction shows, so the hint strip stays empty
+	-- meanwhile. Wording is a proposal (open "empty-state wording" item).
 	ctx.railEmpty = shown == nil
 	ui.railNote.frame.Visible = ctx.railEmpty
 	if ctx.railEmpty then
-		local waiting = 0
+		local waiting = {}
 		for _, customer in snap.customers do
 			if customer.status == "waiting" then
-				waiting += 1
+				table.insert(waiting, customer)
 			end
 		end
 		if ctx.station == "Order" then
-			if waiting > 0 then
-				ui.railNote:set("Take an order", "Tap the button below.")
+			if #waiting == 1 then
+				ui.railNote:set("Ready to order", string.format("%s is waiting", waiting[1].label or waiting[1].name or "A customer"))
+			elseif #waiting > 1 then
+				ui.railNote:set("Ready to order", string.format("%d customers are waiting", #waiting))
 			elseif #snap.customers < snap.customerCount then
 				ui.railNote:set("No one waiting", "Next customer on the way")
 			else
@@ -937,7 +941,10 @@ end
 
 local function refreshHud(snap: any)
 	local profile = snap.profile or {}
-	ui.day.Text = string.format("Day %d", (profile.shiftsCompleted or 0) + 1)
+	-- While the summary is open the HUD keeps the day just completed (QA-013): the save
+	-- counting the shift must not move it to the next day before the next shift starts.
+	local day = if snap.finished and snap.day then snap.day else (profile.shiftsCompleted or 0) + 1
+	ui.day.Text = string.format("Day %d", day)
 	-- The tutorial bonus is counted with the shift's coins until the save records both.
 	local total = (profile.tips or 0) + (if snap.recorded then 0 else snap.tips + (snap.tutorialBonus or 0))
 	ui.coins.Text = if ctx.compact then tostring(total) else string.format("%d coins", total)
@@ -987,103 +994,26 @@ local function refreshSummary(snap: any)
 		Parent = summary,
 	})
 	Art.apply(scrim, "ui_scrim")
-	TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
-	local cardW = math.min(if ctx.compact then 420 else 560, area.X - 24)
-	local cardH = math.min(if ctx.compact then 300 else 400, area.Y - 24)
-	local card = Ui.new("ImageLabel", {
-		Name = "Card",
-		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Slice,
-		-- 80 px margins so the slices clear the drawn corners, scaled by the smaller axis (the
-		-- manifest's correction, Assets.Meta.panelSummary).
-		SliceCenter = Assets.Meta.panelSummary.slice,
-		SliceScale = math.min(cardW / Assets.Meta.panelSummary.width, cardH / Assets.Meta.panelSummary.height),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(cardW, cardH),
-		ZIndex = 21,
-		Parent = summary,
-	})
-	Art.apply(card, "ui_panel_summary")
-	-- Reward first and largest; rank and the save line are secondary. The shift's reward is
-	-- shown as coins, the same currency as the HUD balance (snap.tips is that total; there is
-	-- no separate tip component).
-	Ui.text({
-		Text = string.format("Earned: %d coin%s", snap.tips, if snap.tips == 1 then "" else "s"),
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 30 else 44,
-		TextColor3 = C.tomato,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.new(1, 0, 0, if ctx.compact then 36 else 52),
-		Position = UDim2.fromOffset(0, if ctx.compact then 50 else 72),
-		ZIndex = 22,
-		Parent = card,
-	})
-	-- The one-time tutorial bonus gets its own line under the earned coins (never added to
-	-- them) and pushes the rest down; it is shown only when it pays something.
-	local bonus = snap.tutorialBonus or 0
-	local bonusH = if bonus > 0 then (if ctx.compact then 26 else 32) else 0
-	if bonus > 0 then
-		Ui.text({
-			Name = "TutorialBonus",
-			Text = string.format("Tutorial bonus: +%d coin%s", bonus, if bonus == 1 then "" else "s"),
-			FontFace = Theme.Font.display,
-			TextSize = if ctx.compact then 18 else 24,
-			TextColor3 = C.tomato,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Size = UDim2.new(1, 0, 0, if ctx.compact then 22 else 28),
-			Position = UDim2.fromOffset(0, if ctx.compact then 88 else 126),
-			ZIndex = 22,
-			Parent = card,
-		})
+	-- The scrim fades in once per shift; a rebuild for the save result keeps it as it is.
+	if ui.summaryShiftId == snap.shiftId then
+		scrim.ImageTransparency = 0.55
+	else
+		ui.summaryShiftId = snap.shiftId
+		TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
 	end
-	local lines = SummaryLines.build(snap)
-	Ui.text({
-		Text = "Shift complete",
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 28 else 40,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.new(1, 0, 0, 56),
-		Position = UDim2.fromOffset(0, 12),
-		ZIndex = 22,
-		Parent = card,
-	})
-	Ui.text({
-		Text = table.concat(lines, "\n"),
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 18 else 22,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.new(0, 24, 0, (if ctx.compact then 92 else 132) + bonusH),
-		Size = UDim2.new(1, -48, 0, if ctx.compact then 80 else 100),
-		ZIndex = 22,
-		Parent = card,
-	})
-	-- The server starts the next shift only once this one's rewards are settled; the button
-	-- says so: a standby "Saving..." while the save runs, "Retry save" after a failed one.
-	local settled = SummaryLines.settled(snap)
-	local again = Widgets.button("Next shift", function()
+	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
+	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
+	local model = SummaryLines.model(snap, Config.Rewards.xpPerRank)
+	local view = SummaryCard.build(summary, area, ctx.compact, model, function()
+		-- The server starts the next shift only once this one's rewards are settled; the
+		-- button is a standby while the save runs and "Retry save" after a failed one.
 		if snap.settlement == "retry" then
 			ctx.send("retrySave", {})
-		elseif settled then
+		elseif SummaryLines.settled(snap) then
 			ctx.send("newShift", {})
 		end
 	end)
-	if snap.settlement == "retry" then
-		again:setLabel("Retry save")
-	elseif not settled then
-		again:setLabel("Saving...")
-		again:setStandby(true)
-	end
-	again.frame.AnchorPoint = Vector2.new(0.5, 1)
-	again.frame.Position = UDim2.new(0.5, 0, 1, -16)
-	again.frame.Size = UDim2.fromOffset(if ctx.compact then 200 else 260, if ctx.compact then 56 else 72)
-	again.frame.ZIndex = 22
-	for _, d in again.frame:GetDescendants() do
-		if d:IsA("GuiObject") then
-			d.ZIndex = 22 + d.ZIndex
-		end
-	end
-	again.frame.Parent = card
+	SummaryCard.present(view, model)
 end
 
 function ctx.showResult(ticketId: number)

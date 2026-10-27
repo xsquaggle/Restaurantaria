@@ -143,6 +143,13 @@ local Assets = {
 	ui_ring_fill_cooking = "rbxassetid://116438937854594",
 	ui_ring_fill_ready = "rbxassetid://75035447328555",
 	ui_scrim = "rbxassetid://81442375649859",
+	-- Shift summary pieces (Astra, pizzeria-shift-feedback-v1 = astra-response-7), uploaded
+	-- 2026-10-27 from byte-exact originals (the signed copies' C2PA chunk removed; sha256 as
+	-- in her manifest).
+	icon_shift_complete = "rbxassetid://80363246997143",
+	icon_xp_star = "rbxassetid://95841601277453",
+	ui_xp_track = "rbxassetid://132100199672261",
+	ui_xp_fill = "rbxassetid://136312048271102",
 	ui_ticket_clip_rail = "rbxassetid://81682398993051",
 	ui_ticket_divider = "rbxassetid://77501679237130",
 	ui_ticket_tab_idle = "rbxassetid://75739257591420",
@@ -273,6 +280,11 @@ Assets.Meta = {
 	tutorialArrow = { tip = Vector2.new(0.49609, 0.0625) },
 	-- Summary panel (840x600): the manifest's corrected slice, scaled by the smaller axis.
 	panelSummary = { slice = Rect.new(80, 80, 760, 520), width = 840, height = 600 },
+	-- XP track (1024x128) and fill (1024x104), from Astra's manifest: SliceScale = shown height
+	-- over source height; the fill sits in the track's interior (40 px in from each side, 30 px
+	-- from top and bottom) and is revealed by clipping, never squeezed.
+	xpTrack = { slice = Rect.new(88, 60, 936, 68), height = 128, insetX = 40, insetY = 30 },
+	xpFill = { slice = Rect.new(64, 48, 960, 56), height = 104 },
 	-- Hint chip (512x128, body 8-504 x 8-120) and the dialogue bubble (512x256, body 8-504 x
 	-- 8-248), both scaled by min(width / source width, height / source height). The tail
 	-- (128x64) is its own image: it scales with the bubble and overlaps its bottom by 26 px.

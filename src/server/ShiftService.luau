@@ -61,6 +61,9 @@ type Shift = {
 	ovens: { [number]: number | false },
 	tips: number,
 	xp: number,
+	-- The day this shift is (the save's completed shifts + 1 when it began). The summary names
+	-- it as the completed day and the HUD keeps it until the next shift starts (QA-013).
+	day: number,
 	-- The save's first shift. Its first served order may earn the one-time tutorial bonus,
 	-- kept apart from tips.
 	tutorial: boolean,
@@ -147,6 +150,7 @@ function ShiftService.newShift(player: Player): Shift
 		ovens = { false, false },
 		tips = 0,
 		xp = 0,
+		day = (if profile then profile.data.shiftsCompleted else 0) + 1,
 		tutorial = isTutorial(player),
 		tutorialBonus = nil,
 		finished = false,
@@ -628,7 +632,7 @@ local function finishIfDone(session: Session)
 		end
 	end
 	shift.finished = true
-	shift.receipt = table.freeze({ shiftId = shift.id, tips = shift.tips, xp = shift.xp, tutorialBonus = shift.tutorialBonus, store = shift.store })
+	shift.receipt = table.freeze({ shiftId = shift.id, tips = shift.tips, xp = shift.xp, tutorialBonus = shift.tutorialBonus, store = shift.store, completedShiftDay = shift.day })
 	settle(session, shift)
 end
 -- For tests.
@@ -877,6 +881,9 @@ function ShiftService.snapshot(player: Player): any
 		-- Shown on its own line; never part of tips.
 		tutorialBonus = shift.tutorialBonus or 0,
 		xp = shift.xp,
+		day = shift.day,
+		-- From the receipt: set once the shift has finished, never moved by the save result.
+		completedShiftDay = if shift.receipt then shift.receipt.completedShiftDay else nil,
 		finished = shift.finished,
 		settlement = shift.settlement,
 		-- True once this shift's tips are inside profile.tips (saved, or kept in memory after
