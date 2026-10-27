@@ -87,6 +87,11 @@ local function mass(field: { number }): number
 end
 
 local cfg = Config.Sauce
+-- This file checks slice 2 as it was built: the ceilings hold only Make, no completeness
+-- ceilings, the four-part average. The grade split's defaults are checked in grade_check.luau;
+-- they are put back at the end of this file.
+local gradeDefaults = table.clone(Config.Grade)
+Config.Grade.join, Config.Grade.ceilingsOn, Config.Grade.completeness = "average", "make", false
 -- The proposed constants this file's values assume.
 check("proposal: cell", cfg.cell, 0.05)
 check("proposal: extent", cfg.extent, 1.2)
@@ -627,6 +632,10 @@ end
 check("notes: heavy sauce + clustered cheese gives only the weaker step's notes", table.concat(gHeavyBunch.notes, "|"), table.concat(wantNotes, "|"))
 check("notes: clean make has none", #gClean.notes, 0)
 note(string.format("notes: heavy sauce %d + clustered cheese %d -> %s", 68, cheeseGrades.clustered.score, table.concat(gHeavyBunch.notes, " / ")))
+
+for k, v in gradeDefaults do
+	Config.Grade[k] = v
+end
 
 for _, l in report do
 	print("  " .. l)

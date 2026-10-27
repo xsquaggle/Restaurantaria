@@ -428,10 +428,26 @@ for i = 1, 8 do
 end
 local tops = Scoring.toppings(pep, pieces).score
 check("make: pepperoni toppings perfect", tops, 100)
+-- Slice 2's setting (the ceilings hold only Make, no completeness ceilings): held to 35.
+local saved = table.clone(Config.Grade)
+Config.Grade.ceilingsOn, Config.Grade.completeness = "make", false
 local gp = Scoring.make(pep, onceFloured, pieces)
 check("make: pepperoni order mean of four", gp.detail.mean, 36)
 check("make: pepperoni order held by the sauce ceiling", gp.score, 35)
 check("make: pepperoni hold noted", gp.notes[1], "Most of the pizza has no sauce: Make held to 35")
+-- The grade split's default (ceilings on the order grade): Make stays the mean, and the lowest
+-- ceiling (the empty sauce's 35, first on a tie) is handed to Scoring.order.
+for k, v in saved do
+	Config.Grade[k] = v
+end
+local go = Scoring.make(pep, onceFloured, pieces)
+check("make (order ceilings): Make is the mean", go.score, 36)
+check("make (order ceilings): lowest ceiling is the sauce coverage", go.detail.ceilings[1].name .. "=" .. go.detail.ceilings[1].value, "sauceCover=35")
+local anyHeld = false
+for _, n in go.notes do
+	anyHeld = anyHeld or n:find("held") ~= nil
+end
+check("make (order ceilings): no hold note on Make", anyHeld, false)
 
 -- 8. Server actions: the dough step through ShiftService.apply; refusals change nothing.
 local pizza = { id = 9, ticketId = 1, stage = "topping", make = MakeDough.new(), toppings = {}, cuts = {} }

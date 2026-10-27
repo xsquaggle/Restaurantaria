@@ -178,6 +178,26 @@ Config.Wait = {
 	floorScore = 40,
 }
 
+-- How the parts join the order grade (grade split, 2026-10-27). Every value and switch is a
+-- proposal, not a balance decision: Lawson's 50 / 30 / 20 are his provisional playtest weights
+-- (2026-10-21); the rest follows cooking plan rev 6, 5.1 to 5.3 (rev 7 amendment).
+Config.Grade = {
+	-- "split": Grade = Make 50 / Bake 30 / Cut 20 and Service joins the pay once (plan 5.2);
+	-- "average": the earlier join, the plain mean of Wait, Make, Bake and Cut.
+	join = "split",
+	weights = { make = 0.5, bake = 0.3, cut = 0.2 },
+	-- Where the Make ceilings (coverage, and completeness when on) hold: "order" the whole grade
+	-- (plan 5.3), "make" only the Make part (as slice 2 built it).
+	ceilingsOn = "order",
+	-- Completeness ceilings (plan 5.3c): sauce pours on the dough / Config.Sauce.targetPours,
+	-- cheese pinches on the dough / 24, dough area a x b / 0.95^2. Same ramp as coverage.
+	completeness = true,
+	doughCompleteness = true,
+	-- Split join only: Paid = Grade x (1 - serviceShare + serviceShare x Service / 100); coins
+	-- and XP as below (XP from the Grade, not the service).
+	serviceShare = 0.25,
+}
+
 Config.Rewards = {
 	baseTip = 12, -- tip at a 100% grade, scaled by grade
 	xpPerOrder = 10,

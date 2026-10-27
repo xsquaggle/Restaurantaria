@@ -23,6 +23,7 @@ DEFAULT_CHECKS = [
     "tests/cut_check.luau",
     "tests/make_check.luau",
     "tests/sauce_cheese_check.luau",
+    "tests/grade_check.luau",
 ]
 
 

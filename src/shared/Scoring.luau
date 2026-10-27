@@ -112,11 +112,63 @@ end
 
 -- The Make part of the order grade (proposal, 2026-10-27): the mean of its graded steps, Dough
 -- (flour inside it), Sauce, Cheese and, only when the ticket asks for toppings, Toppings. A
--- cheese order has no Toppings part: no free score. Then the severe-coverage safeguard (plan
--- rev 6, 5.3d) on sauce and on cheese: a mostly bare pizza holds the Make score to the ceiling of
--- its coverage (35 at a quarter or less, none from three quarters). The step scores themselves
--- are never changed. The order grade stays the four-part average with Make in Topping's place;
--- the plan puts the ceilings on the whole order grade, which comes with the grade split.
+-- cheese order has no Toppings part: no free score. The step scores themselves are never changed.
+-- Make also gathers the safeguard ceilings of its steps (plan rev 6, 5.3c and 5.3d): coverage of
+-- the edible area for sauce and cheese, and, when Config.Grade.completeness is on, how much of
+-- each was put on (pours / 3, pinches on the dough / 24, and the dough's area / the full round's
+-- with doughCompleteness). Each is 35 at a quarter or less, none from three quarters. Where the
+-- lowest one holds is Config.Grade.ceilingsOn: "order" the whole grade (Scoring.order), "make"
+-- only this Make score (slice 2). detail.ceilings lists every ceiling under 100, lowest first.
+export type Ceiling = { name: string, value: number, note: string }
+
+local CEILING_WORDS = {
+	sauceCover = "Most of the pizza has no sauce",
+	cheeseCover = "Cheese bunched or missing",
+	sauceAmount = "Not enough sauce poured",
+	cheeseAmount = "Not enough cheese on the dough",
+	dough = "Dough covers too little of the pan",
+}
+-- The order of the ceilings on a tie: the defect a player sees first.
+local CEILING_ORDER = { "sauceCover", "cheeseCover", "sauceAmount", "cheeseAmount", "dough" }
+
+function Scoring.makeCeilings(make: MakeDough.Make, dough: Grade, sauce: Grade, cheese: Grade): { Ceiling }
+	local cfg = Config.Grade
+	local values: { [string]: number } = {
+		sauceCover = sauce.detail.ceiling,
+		cheeseCover = cheese.detail.ceiling,
+	}
+	if cfg.completeness then
+		-- Pours whose point is on the dough (dough-local radius 0.95), against the target.
+		local pours = 0
+		for _, a in (make.sauce or { actions = {} }).actions do
+			if a.kind == "pour" and a.x * a.x + a.y * a.y <= 0.95 * 0.95 + 1e-9 then
+				pours += 1
+			end
+		end
+		values.sauceAmount = MakeSauce.ceiling(math.min(1, pours / Config.Sauce.targetPours))
+		-- Pinches on the dough: on the sauce area and on the crust band together.
+		values.cheeseAmount = MakeSauce.ceiling(math.min(1, (cheese.detail.inside + cheese.detail.crust) / 24))
+		if cfg.doughCompleteness and dough.detail.completeness then
+			values.dough = MakeSauce.ceiling(math.min(1, dough.detail.completeness))
+		end
+	end
+	local list: { Ceiling } = {}
+	for _, name in CEILING_ORDER do
+		local v = values[name]
+		if v and v < 100 then
+			table.insert(list, { name = name, value = v, note = CEILING_WORDS[name] })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.value ~= b.value then
+			return a.value < b.value
+		end
+		local ia, ib = table.find(CEILING_ORDER, a.name) :: number, table.find(CEILING_ORDER, b.name) :: number
+		return ia < ib
+	end)
+	return list
+end
+
 function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Piece }): Grade
 	local dough = MakeDough.grade(make)
 	local sauce = MakeSauce.grade(make.sauce or { actions = {} })
@@ -136,18 +188,13 @@ function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Pi
 	end
 	local mean = math.floor(sum / #parts + 0.5 + 1e-9)
 	local score = mean
-	-- The lower ceiling sets the score; its note goes first, naming the defect.
-	local held: string? = nil
-	local sauceCap, cheeseCap = sauce.detail.ceiling, cheese.detail.ceiling
-	if sauceCap < score and sauceCap <= cheeseCap then
-		score = sauceCap
-		held = string.format("Most of the pizza has no sauce: Make held to %d", sauceCap)
-	elseif cheeseCap < score then
-		score = cheeseCap
-		held = string.format("Cheese bunched or missing: Make held to %d", cheeseCap)
-	end
-	if held then
-		table.insert(notes, held)
+	local ceilings = Scoring.makeCeilings(make, dough, sauce, cheese)
+	-- "make": the lowest ceiling holds this score and its note goes first, naming the defect.
+	-- "order": the score stays the mean; Scoring.order applies the ceiling to the grade.
+	local low = ceilings[1]
+	if Config.Grade.ceilingsOn == "make" and low and low.value < score then
+		score = low.value
+		table.insert(notes, string.format("%s: Make held to %d", low.note, low.value))
 	end
 	-- Then only the weakest step's notes (plan rev 6, 5): the lowest-scoring step that has any,
 	-- the earlier step on a tie, so Make does not crowd Bake and Cut out of the result.
@@ -161,7 +208,51 @@ function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Pi
 		table.insert(notes, n)
 	end
 	detail.mean = mean
+	detail.ceilings = ceilings
 	return { score = score, notes = notes, detail = detail }
+end
+
+-- The order grade and its rewards (proposal, 2026-10-27; plan rev 6, 5.1 to 5.3 with the rev 7
+-- amendment). Config.Grade.join:
+--   "split":   Weighted = 0.5 Make + 0.3 Bake + 0.2 Cut (Lawson's provisional playtest weights);
+--              Grade = Weighted held by the lowest Make ceiling (ceilingsOn "order"); Service (the
+--              wait score) is not in the grade and joins the pay once:
+--              Paid = Grade x (0.75 + 0.25 x Service / 100); coins = 12 x Paid / 100;
+--              XP = 10 x Grade / 100.
+--   "average": Grade = the mean of Wait, Make, Bake and Cut (the earlier join), held the same
+--              way; coins 12 x Grade / 100 and XP 10 x Grade / 100, as before.
+-- Every part's score and notes are kept; `held` is the ceiling that set the grade (nil when none)
+-- and its note leads the result's notes.
+export type Order = { join: string, weighted: number, grade: number, paid: number, coins: number, xp: number, held: Ceiling?, service: number }
+
+local function whole(x: number): number
+	return math.floor(x + 0.5 + 1e-9)
+end
+
+function Scoring.order(wait: Grade, make: Grade, bake: Grade, cut: Grade): Order
+	local cfg = Config.Grade
+	local split = cfg.join == "split"
+	local weighted = if split
+		then whole(cfg.weights.make * make.score + cfg.weights.bake * bake.score + cfg.weights.cut * cut.score)
+		else whole((wait.score + make.score + bake.score + cut.score) / 4)
+	local grade = weighted
+	local held: Ceiling? = nil
+	local low = make.detail and make.detail.ceilings and make.detail.ceilings[1]
+	if cfg.ceilingsOn == "order" and low and low.value < grade then
+		grade = low.value
+		held = low
+	end
+	local paid = if split then whole(grade * (1 - cfg.serviceShare + cfg.serviceShare * wait.score / 100)) else grade
+	return {
+		join = cfg.join,
+		weighted = weighted,
+		grade = grade,
+		paid = paid,
+		coins = whole(Config.Rewards.baseTip * paid / 100),
+		xp = whole(Config.Rewards.xpPerOrder * grade / 100),
+		held = held,
+		service = wait.score,
+	}
 end
 
 function Scoring.bakeState(target: number, seconds: number): string

@@ -720,8 +720,13 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local make = Scoring.make(recipe, pizza.make, pizza.toppings)
 	local bake = Scoring.bake(order.bake, pizza.bakeSeconds :: number)
 	local cut = Scoring.cut(order.slices, pizza.cuts)
-	local overall = math.floor((wait.score + make.score + bake.score + cut.score) / 4 + 0.5)
-	local tip = math.floor(Config.Rewards.baseTip * overall / 100 + 0.5)
+	-- The join (Config.Grade): the grade, its ceiling, the pay and the XP, all from the parts.
+	local order_ = Scoring.order(wait, make, bake, cut)
+	local overall = order_.grade
+	if order_.held then
+		table.insert(make.notes, 1, string.format("%s: grade held to %d", order_.held.note, order_.held.value))
+	end
+	local tip = order_.coins
 	if session.devForcedTip and RunService:IsStudio() and SaveService.kindOf(shift.store) ~= "production" then
 		tip = session.devForcedTip :: number
 	end
@@ -735,9 +740,22 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 
 	pizza.stage = "served"
 	customer.status = "served"
-	customer.result = { wait = wait, make = make, bake = bake, cut = cut, overall = overall, tip = tip, tutorialBonus = tutorialBonus }
+	customer.result = {
+		wait = wait,
+		make = make,
+		bake = bake,
+		cut = cut,
+		overall = overall,
+		join = order_.join,
+		weighted = order_.weighted,
+		paid = order_.paid,
+		held = order_.held,
+		xp = order_.xp,
+		tip = tip,
+		tutorialBonus = tutorialBonus,
+	}
 	shift.tips += tip
-	shift.xp += math.floor(Config.Rewards.xpPerOrder * overall / 100 + 0.5)
+	shift.xp += order_.xp
 	finishIfDone(session)
 	return true, nil
 end

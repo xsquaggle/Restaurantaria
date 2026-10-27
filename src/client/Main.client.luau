@@ -1135,7 +1135,11 @@ function ctx.showResult(ticketId: number)
 		Parent = toast,
 	})
 	Ui.text({
-		Text = string.format("Wait %d · Make %d · Bake %d · Cut %d", r.wait.score, r.make.score, r.bake.score, r.cut.score),
+		-- The split join keeps service out of the grade (it moves the coins only), so it is named
+		-- last as Service; the earlier average join shows Wait first, as before.
+		Text = if r.join == "split"
+			then string.format("Make %d · Bake %d · Cut %d · Service %d", r.make.score, r.bake.score, r.cut.score, r.wait.score)
+			else string.format("Wait %d · Make %d · Bake %d · Cut %d", r.wait.score, r.make.score, r.bake.score, r.cut.score),
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if ctx.compact then 14 else 18,
 		Position = UDim2.fromOffset(12, if ctx.compact then 36 else 40),

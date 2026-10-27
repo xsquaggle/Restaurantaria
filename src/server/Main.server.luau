@@ -184,7 +184,7 @@ if RunService:IsStudio() then
 			for _, c in session.shift.customers do
 				local r = c.result
 				table.insert(lines, string.format("customer %d %s %s/%s/%d pizza=%s%s", c.id, c.status, c.order.recipe, c.order.bake, c.order.slices, tostring(c.pizzaId),
-					if r then string.format(" grade=%d (wait %d make %d bake %d cut %d) tip=%d", r.overall, r.wait.score, r.make.score, r.bake.score, r.cut.score, r.tip) else ""))
+					if r then string.format(" grade=%d %s weighted=%s held=%s (wait %d make %d bake %d cut %d) paid=%s tip=%d xp=%s", r.overall, tostring(r.join), tostring(r.weighted), if r.held then r.held.name .. ":" .. r.held.value else "-", r.wait.score, r.make.score, r.bake.score, r.cut.score, tostring(r.paid), r.tip, tostring(r.xp)) else ""))
 			end
 			for id, pz in session.shift.pizzas do
 				local mk = pz.make
