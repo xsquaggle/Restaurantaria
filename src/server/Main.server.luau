@@ -110,7 +110,7 @@ local function cleanDough(act: (string, any) -> (), pizzaId: number)
 end
 
 -- A clean sauce step: three ladles in a triangle at radius 0.4, spread in circles at radius 0.3,
--- 0.5 and 0.7 (Sauce 97 in make_check), then on to the cheese.
+-- 0.5 and 0.7 (Sauce 97 in sauce_cheese_check), then on to the cheese.
 local function cleanSauce(act: (string, any) -> (), pizzaId: number)
 	for k = 0, 2 do
 		local a = math.pi / 2 + k * 2 * math.pi / 3
@@ -190,6 +190,9 @@ if RunService:IsStudio() then
 				local mk = pz.make
 				local pours, spreads = MakeSauce.counts(mk.sauce)
 				table.insert(lines, string.format("pizza %d ticket=%d stage=%s make=%s flour=%d placed=%s rolls=%d pours=%d spreads=%d cheese=%d/%d toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, mk.step, MakeDough.stampCount(mk), tostring(mk.placed), #mk.strokes, pours, spreads, MakeCheese.count(mk.cheese), #mk.cheese.strokes, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
+				-- The step grades as the server would score them now (evidence for captures).
+				local sg, cg = MakeSauce.grade(mk.sauce), MakeCheese.grade(mk.cheese)
+				table.insert(lines, string.format("  grades: dough %d sauce %d (coverage %.3f crust %.3f off %.3f ceiling %d: %s) cheese %d (inside %d spread %.3f ceiling %d: %s)", MakeDough.grade(mk).score, sg.score, sg.detail.coverage, sg.detail.crust, sg.detail.off, sg.detail.ceiling, table.concat(sg.notes, "/"), cg.score, cg.detail.inside, cg.detail.spread, cg.detail.ceiling, table.concat(cg.notes, "/")))
 			end
 			local profile = SaveService.profiles[player]
 			if profile then

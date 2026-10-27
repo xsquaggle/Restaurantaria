@@ -34,8 +34,8 @@ local CHEESE_SHARE = 0.95 -- food_cheese_raw: shared footprint canvas share
 -- Proposals (looks, not grading): the drawn stamp's diameter (dough-local), the stamps that
 -- overlap a point of an even layer (to split the wanted opacity between them), the opacity of a
 -- layer at full credit, the deep-red tint of a thick layer, the dollop's size.
-local STAMP = 0.28
-local OVERLAP = 4
+local STAMP = 0.4
+local OVERLAP = 8
 local FULL_OPACITY = 0.92
 local DEEP = Color3.fromRGB(190, 150, 150)
 local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
@@ -55,12 +55,12 @@ local function key(S: any, F: number): string
 end
 
 -- Composite opacity wanted at thickness t: full credit (half an even layer) shows nearly opaque;
--- thinner shows thinner.
+-- thinner shows proportionally thinner (linear, so a patch graded thin never looks full).
 local function opacity(t: number): number
 	if t <= 0 then
 		return 0
 	end
-	return FULL_OPACITY * math.min(1, t / MakeSauce.HALF) ^ 0.75
+	return FULL_OPACITY * math.min(1, t / MakeSauce.HALF)
 end
 
 function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
@@ -213,7 +213,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 					t += field[i]
 				end
 				t = if #cells > 0 then t / #cells else 0
-				local strength = math.clamp((t / fresh - 0.55) / 0.45, 0, 1)
+				local strength = math.clamp((t / fresh - 0.7) / 0.3, 0, 1)
 				n += 1
 				local img = dollops[n]
 				if not img then
