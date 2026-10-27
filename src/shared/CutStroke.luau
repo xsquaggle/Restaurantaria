@@ -419,7 +419,8 @@ end
 -- How far to pull the groove's end at the dough's edge (point e, the run heading inward along
 -- unit d) so both corners of a groove of half-width `half` (cut units) lie on the dough. The
 -- visible stroke ends inside the crust; the geometry and the grade are unchanged. 0 when the
--- corners are already inside; the run's own length caps it.
+-- corners are already inside. maxInset caps it and must not pass the point where the run could
+-- leave the dough again (half the run when both its ends are on the edge).
 function CutStroke.endInset(S: Mat2, ex: number, ey: number, dx: number, dy: number, half: number, maxInset: number): number
 	local Si = PrepGeometry.inverse(S)
 	local nx, ny = -dy * half, dx * half

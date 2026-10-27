@@ -1189,8 +1189,9 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?, dough: 
 				local span = (t1 - t0) * len
 				-- An end on the dough's edge pulls in until the groove's corners are on the dough;
 				-- an end at a join reaches a hair past it.
-				local s0 = if t0 > 0 then CutStroke.endInset(S, ax, ay, ux, uy, GROOVE_HALF, span) else if i > 2 then -GROOVE_JOIN else 0
-				local s1 = if t1 < 1 then CutStroke.endInset(S, bx, by, -ux, -uy, GROOVE_HALF, span) else if i < #keys then -GROOVE_JOIN else 0
+				local reach = if t0 > 0 and t1 < 1 then span / 2 else span
+				local s0 = if t0 > 0 then CutStroke.endInset(S, ax, ay, ux, uy, GROOVE_HALF, reach) else if i > 2 then -GROOVE_JOIN else 0
+				local s1 = if t1 < 1 then CutStroke.endInset(S, bx, by, -ux, -uy, GROOVE_HALF, reach) else if i < #keys then -GROOVE_JOIN else 0
 				if s0 + s1 < span then
 					groovePiece(layer, ax + ux * s0, ay + uy * s0, bx - ux * s1, by - uy * s1, transparency)
 				end
