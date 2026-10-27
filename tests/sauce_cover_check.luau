@@ -146,7 +146,11 @@ for _, rec in records do
 	local drawn, offDough, outside, badUv, onBare, badArea, maxDeep = 0, 0, 0, 0, 0, 0, 0
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
-		if r > SauceCover.DOUGH + 1e-9 then
+		local home = math.sqrt((d.x - MakeSauce.xs[d.cell]) ^ 2 + (d.y - MakeSauce.ys[d.cell]) ^ 2)
+		if home > SauceCover.JITTER * MakeSauce.CELL * math.sqrt(2) + 1e-9 then
+			offDough += 1
+		end
+		if MakeSauce.rs[d.cell] > SauceCover.DOUGH + 1e-9 then
 			offDough += 1
 		end
 		if r + d.d / 2 > SauceCover.SPAN + 1e-9 then
@@ -170,7 +174,7 @@ for _, rec in records do
 		drawn += math.pi * (math.min(scale, SauceCover.AREA) / 2) ^ 2 * area
 		maxDeep = math.max(maxDeep, d.deep)
 	end
-	check(name .. ": no disc off the dough", offDough, 0)
+	check(name .. ": every disc on a dough cell, near its centre", offDough, 0)
 	check(name .. ": no disc past the material span", outside, 0)
 	check(name .. ": every disc samples its own place", badUv, 0)
 	check(name .. ": no disc on a bare cell", onBare, 0)

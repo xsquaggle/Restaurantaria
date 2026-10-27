@@ -6,7 +6,8 @@
 -- Astra r14 (art-integration.md): one thick marinara material drawn through the coverage the
 -- field already holds, never a translucent stamp. Each field cell on the dough that carries
 -- sauce shows a disc of the material map, sampled at the cell's own dough-local place, so
--- neighbouring discs show one continuous material. The disc's area is the cell's coverage
+-- neighbouring discs show one continuous material (each samples the map at its drawn place). The
+-- disc's area is the cell's coverage
 -- credit (MakeSauce.measure: min(1, thickness / half an even layer)), so a thin trace shows as
 -- sparse specks with the board or dough between them and a covered patch reads solid: amount is
 -- never drawn as transparency. A fully credited cell inside a covered patch is drawn a little
@@ -39,11 +40,17 @@ SauceCover.DEEP_FROM = 1.3
 SauceCover.DEEP_SPAN = 1.7
 -- Diameters are rounded to this share of a cell (fewer resizes).
 SauceCover.STEP = 0.05
+-- A boundary disc sits off its cell centre by a fixed amount up to JITTER cells each way (from
+-- the cell's index), so a thin edge does not print as a regular dot grid; it still samples the
+-- map at its own drawn place.
+SauceCover.JITTER = 0.35
 
--- The material cells (drawn on the dough), and each one's four grid neighbours (nil past the
--- field's extent or off the dough, which count as bare).
+-- The material cells (drawn on the dough), each one's four grid neighbours (0 past the field's
+-- extent or off the dough, which count as bare) and its 3x3 block (for the deep-red tint, read
+-- from the block's mean so the tint changes smoothly instead of cell by cell).
 local cells: { number } = {}
 local neighbours: { [number]: { number } } = {}
+local blocks: { [number]: { number } } = {}
 do
 	local N = MakeSauce.GRID
 	for gx = -N, N do
@@ -57,6 +64,16 @@ do
 					table.insert(list, if j and rs[j] <= SauceCover.DOUGH + 1e-9 then j else 0)
 				end
 				neighbours[i] = list
+				local block = {}
+				for dx = -1, 1 do
+					for dy = -1, 1 do
+						local j = MakeSauce.cellAt(gx + dx, gy + dy)
+						if j then
+							table.insert(block, j)
+						end
+					end
+				end
+				blocks[i] = block
 			end
 		end
 	end
@@ -91,9 +108,26 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 		end
 	end
 	scale = math.max(SauceCover.STEP, math.floor(scale / SauceCover.STEP + 0.5) * SauceCover.STEP)
-	local deep = math.clamp((field[i] / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
+	local mean = 0
+	for _, j in blocks[i] do
+		mean += field[j]
+	end
+	mean /= #blocks[i]
+	local deep = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
 	deep = math.floor(deep * 20 + 0.5) / 20
-	return { cell = i, x = xs[i], y = ys[i], d = scale * CELL, credit = c, deep = deep }
+	local x, y = xs[i], ys[i]
+	if scale < SauceCover.FULL then
+		local a = SauceCover.JITTER * CELL * 2
+		x += (((i * 0.6180339887) % 1) - 0.5) * a
+		y += (((i * 0.7548776662) % 1) - 0.5) * a
+		-- Never past the material's span.
+		local r = math.sqrt(x * x + y * y)
+		local limit = SauceCover.SPAN - scale * CELL / 2
+		if r > limit then
+			x, y = x * limit / r, y * limit / r
+		end
+	end
+	return { cell = i, x = x, y = y, d = scale * CELL, credit = c, deep = deep }
 end
 
 -- Every disc of a field, in the fixed cell order.
