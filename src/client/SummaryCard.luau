@@ -51,7 +51,7 @@ local function size(name: string, compact: boolean): number
 	return SIZE[name][if compact then 2 else 1]
 end
 
-local function row(parent: Instance, name: string, height: number, order: number, align: Enum.HorizontalAlignment?): Frame
+local function row(parent: Instance, name: string, height: number, order: number, align: Enum.HorizontalAlignment?, gap: number?): Frame
 	return Ui.new("Frame", {
 		Name = name,
 		BackgroundTransparency = 1,
@@ -63,7 +63,7 @@ local function row(parent: Instance, name: string, height: number, order: number
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = align or Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 10),
+			Padding = UDim.new(0, gap or 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -185,9 +185,8 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	})
 	local xpRowH = if compact then 24 else 30
 	local xpRow = Ui.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, xpRowH), LayoutOrder = 1, Parent = xpBlock })
-	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left)
+	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left, 6)
 	left.Size = UDim2.fromScale(0.5, 1)
-	(left:FindFirstChildOfClass("UIListLayout") :: UIListLayout).Padding = UDim.new(0, 6)
 	icon(left, "icon_xp_star", xpRowH, 1)
 	local xpEarned = line(left, "Earned", Theme.Font.display, size("xp", compact), C.ink, 2)
 	local rank = Ui.text({
