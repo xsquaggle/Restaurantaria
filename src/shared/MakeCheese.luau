@@ -121,7 +121,7 @@ function MakeCheese.grade(cheese: Cheese): Grade
 		table.insert(notes, "Too much cheese")
 	end
 	if #pinches > 0 and spread < cfg.bunchedBelow then
-		table.insert(notes, "Cheese bunched on one side")
+		table.insert(notes, "Cheese patchy, with bare parts")
 	end
 	if crust > 0 then
 		table.insert(notes, "Cheese on the crust")

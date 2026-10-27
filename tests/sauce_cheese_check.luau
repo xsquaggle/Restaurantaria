@@ -320,7 +320,7 @@ end
 -- 9. Cheese grades. Clean: one pinch on each of the 24 sauce-cell centroids. Sparse: the 8 inner
 -- centroids (count 1 - 16 / 24 = 1/3; "Not enough cheese"). Clustered: 24 pinches on a 6 x 4 grid
 -- in one quarter (x 0.15..0.6, y 0.15..0.51, all inside 0.84): the count is full but the spread
--- is short ("Cheese bunched on one side"), and the ceiling follows the spread on the sauce's
+-- is short ("Cheese patchy, with bare parts"), and the ceiling follows the spread on the sauce's
 -- ramp. Scores are PrepFood.cheeseScore's, read.
 local function oneEach(list: { any }): any
 	local strokes = {}
@@ -351,8 +351,9 @@ check("cheese clean: no notes", #cheeseGrades.clean.notes, 0)
 check("cheese clean: no ceiling", cheeseGrades.clean.detail.ceiling, 100)
 check("cheese sparse: 8 inside", cheeseGrades.sparse.detail.inside, 8)
 check("cheese sparse: noted", has(cheeseGrades.sparse.notes, "Not enough cheese"), true)
+check("cheese sparse: patchy too (only the inner ring covered)", has(cheeseGrades.sparse.notes, "Cheese patchy, with bare parts"), true)
 check("cheese clustered: 24 inside", cheeseGrades.clustered.detail.inside, 24)
-check("cheese clustered: bunched", has(cheeseGrades.clustered.notes, "Cheese bunched on one side"), true)
+check("cheese clustered: bunched", has(cheeseGrades.clustered.notes, "Cheese patchy, with bare parts"), true)
 check("cheese clustered: held under 100", cheeseGrades.clustered.detail.ceiling < 100, true)
 check("cheese: clean beats clustered and sparse", cheeseGrades.clean.score > cheeseGrades.clustered.score and cheeseGrades.clean.score > cheeseGrades.sparse.score, true)
 local noCheese = MakeCheese.grade({ strokes = {} })

@@ -35,8 +35,8 @@ local CHEESE_SHARE = 0.95 -- food_cheese_raw: shared footprint canvas share
 -- overlap a point of an even layer (to split the wanted opacity between them), each stamp's fixed
 -- jitter, the opacity of a layer at full credit, the deep-red tint of a thick layer, the dollop's
 -- size.
-local STAMP = 0.4
-local OVERLAP = 8
+local STAMP = 0.34
+local OVERLAP = 6
 local JITTER = 0.06 -- dough-local spread of each stamp's fixed offset
 local FULL_OPACITY = 0.92
 local DEEP = Color3.fromRGB(190, 150, 150)
