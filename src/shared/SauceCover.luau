@@ -9,9 +9,11 @@
 -- neighbouring discs show one continuous material. The disc's area is the cell's coverage
 -- credit (MakeSauce.measure: min(1, thickness / half an even layer)), so a thin trace shows as
 -- sparse specks with the board or dough between them and a covered patch reads solid: amount is
--- never drawn as transparency. A fully credited cell inside a covered patch is drawn a little
--- larger (FULL) so the discs close up with no gaps; at a boundary every disc keeps the area of
--- its credit (AREA), which keeps the drawn edge on the scored edge (within a third of a cell).
+-- never drawn as transparency. A covered cell (at least SOLID credit) whose four neighbours are
+-- covered too is drawn a little larger (FULL) so the discs close up with no gaps; every other
+-- disc keeps the area of its credit (AREA), which keeps the drawn edge on the scored edge
+-- (within a third of a cell), and one under SOLID credit (thin sauce) sits a little off the grid
+-- (JITTER) so thin sauce reads as specks, not as a printed dot grid.
 --
 -- Material span (decided in slice 2, recorded in the hand-off): the 1024 px material maps cover
 -- the dough-local square -1..1 (radius 1.0) in every view; the dough's edge is 0.95. Sauce off
@@ -28,20 +30,23 @@ local xs, ys, rs = MakeSauce.xs, MakeSauce.ys, MakeSauce.rs
 
 SauceCover.SPAN = 1.0 -- the material maps' half width, dough-local
 SauceCover.DOUGH = 0.95 -- cells out to here are drawn as material
--- Proposals (looks, not grading): a cell under BARE credit is drawn bare; disc diameters as
+-- Proposals (looks, not grading): a cell under BARE credit is drawn bare; one at SOLID credit
+-- or more counts as covered for closing a patch (a patch of cells at half credit or more reads
+-- as covered sauce; thinner sauce as specks); disc diameters as
 -- multiples of the cell: AREA keeps a disc's area equal to its credit (2 / sqrt(pi)), FULL closes
 -- a fully covered patch (at least sqrt 2, so four neighbours leave no hole); the deep-red tint of
 -- a thick layer starts at DEEP_FROM even layers and is full DEEP_SPAN later.
 SauceCover.BARE = 0.03
+SauceCover.SOLID = 0.5
 SauceCover.AREA = 2 / math.sqrt(math.pi)
 SauceCover.FULL = 1.5
 SauceCover.DEEP_FROM = 1.3
 SauceCover.DEEP_SPAN = 1.7
 -- Diameters are rounded to this share of a cell (fewer resizes).
 SauceCover.STEP = 0.05
--- A boundary disc sits off its cell centre by a fixed amount up to JITTER cells each way (from
--- the cell's index), so a thin edge does not print as a regular dot grid; it still samples the
--- map at its own drawn place.
+-- A thin disc (under SOLID) sits off its cell centre by a fixed amount up to JITTER cells each
+-- way (from the cell's index), so thin sauce does not print as a regular dot grid; it still
+-- samples the map at its own drawn place.
 SauceCover.JITTER = 0.35
 
 -- The material cells (drawn on the dough), each one's four grid neighbours (0 past the field's
@@ -94,10 +99,10 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 		return nil
 	end
 	local scale = SauceCover.AREA * math.sqrt(c)
-	if c >= 1 then
+	if c >= SauceCover.SOLID then
 		local inside = true
 		for _, j in neighbours[i] do
-			if j == 0 or SauceCover.credit(field[j]) < 1 then
+			if j == 0 or SauceCover.credit(field[j]) < SauceCover.SOLID then
 				inside = false
 				break
 			end
@@ -115,7 +120,7 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 	local deep = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
 	deep = math.floor(deep * 20 + 0.5) / 20
 	local x, y = xs[i], ys[i]
-	if scale < SauceCover.FULL then
+	if c < SauceCover.SOLID then
 		local a = SauceCover.JITTER * CELL * 2
 		x += (((i * 0.6180339887) % 1) - 0.5) * a
 		y += (((i * 0.7548776662) % 1) - 0.5) * a

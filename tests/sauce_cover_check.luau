@@ -85,6 +85,7 @@ end
 check("proposal: span", SauceCover.SPAN, 1.0)
 check("proposal: dough edge", SauceCover.DOUGH, 0.95)
 check("proposal: bare", SauceCover.BARE, 0.03)
+check("proposal: solid", SauceCover.SOLID, 0.5)
 near("proposal: area disc", SauceCover.AREA, 2 / math.sqrt(math.pi), 1e-12)
 check("proposal: full disc", SauceCover.FULL, 1.5)
 check("proposal: full disc closes a patch (>= sqrt 2)", SauceCover.FULL >= math.sqrt(2), true)
@@ -214,8 +215,8 @@ for _, rec in records do
 	end
 end
 
--- 3. A covered patch closes up: in the even record, every fully credited cell whose four
--- neighbours are fully credited is drawn FULL (no hole between four discs).
+-- 3. A covered patch closes up: in the even record, every cell at SOLID credit or more whose
+-- four neighbours are too is drawn FULL (no hole between four discs), and only those.
 do
 	local field = MakeSauce.replay(even)
 	local full, closed = 0, 0
@@ -223,12 +224,12 @@ do
 		if d.d / MakeSauce.CELL >= SauceCover.FULL - 1e-9 then
 			closed += 1
 		end
-		if d.credit >= 1 then
+		if d.credit >= SauceCover.SOLID then
 			full += 1
 		end
 	end
 	check("even: some patch closed up", closed > 0, true)
-	check("even: closed discs are fully credited", closed <= full, true)
+	check("even: closed discs are covered cells", closed <= full, true)
 end
 
 -- 4. Undo: the before/after pair are two records; the renderer draws each from its own field.
