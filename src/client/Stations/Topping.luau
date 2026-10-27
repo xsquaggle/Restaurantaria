@@ -113,7 +113,8 @@ function Topping.new(ctx: any, container: Frame)
 	-- oval dough they can land past its edge: the oval is not carried into toppings yet.
 	view.base.Visible = false
 	local food = MakeLayers.new(view.frame, 1)
-	local foodKey = ""	local empty = Ui.text({
+	local foodKey = ""
+	local empty = Ui.text({
 		Text = "Take an order to start a pizza",
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 15 else 24,
@@ -514,7 +515,7 @@ function Topping.new(ctx: any, container: Frame)
 				foodKey = k
 				food:place(pizzaD / 2, pizzaD / 2, pizzaD, MakeDough.shape(m))
 				food:dough(true)
-				food:sauce((MakeSauce.field(m.sauce)), m.sauce.actions)
+				food:sauce((MakeSauce.replay(m.sauce)), m.sauce.actions)
 				food:cheese(MakeCheese.pinches(m.cheese))
 			end
 		end

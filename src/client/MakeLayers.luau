@@ -8,7 +8,9 @@
 --
 -- Sauce: one soft stamp on every second grid point of the field (0.1 dough-local apart), its
 -- opacity from the field's thickness there, so a bare or thin patch stays visibly bare or thin
--- and overlapping stamps never add coverage the grade does not give. A thick layer (past an even
+-- and overlapping stamps never add coverage the grade does not give. No stamp reaches past the
+-- sauce the grade sees: each shrinks to stop short of the nearest unsauced cell, so the drawn
+-- sauce ends where the scored sauce ends (the kit's rule) instead of haloing past it. A thick layer (past an even
 -- layer of the target pours) is drawn deeper red. A pour still mostly in place shows the dollop.
 -- Cheese: one pinch sprite per pinch, on the kit's shared canvas (footprint radius 0.17 dough-
 -- local = 0.95 of the canvas), each with a fixed turn.
@@ -39,6 +41,8 @@ local STAMP = 0.34
 local OVERLAP = 6
 local JITTER = 0.06 -- dough-local spread of each stamp's fixed offset
 local FULL_OPACITY = 0.92
+local BARE = 0.03 -- a cell under this share of full-credit thickness counts as unsauced for the stamp edge
+local SIZE_STEP = 0.02 -- stamp diameters are rounded to this (fewer resizes)
 local DEEP = Color3.fromRGB(190, 150, 150)
 local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
 local DOUGH_BODY = { alphaX = 0.94921875, alphaY = 0.94921875, centreX = 0, centreY = 0 }
@@ -82,10 +86,14 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 	local cx, cy, F = 0, 0, 1
 	local S: any = G.shape(0.95, 0.95, 0)
 	-- Sauce stamps: one per drawn grid point, with the fine cells it averages.
-	type Stamp = { image: ImageLabel, cells: { number }, shown: number, tint: number }
+	-- near: the cells within the stamp's reach, nearest first, with their distances (for the edge).
+	type Stamp = { image: ImageLabel, cells: { number }, near: { { number } }, turn: number, size: number, shown: number, tint: number }
 	local stamps: { Stamp } = {}
 	local dollops: { ImageLabel } = {}
 	local pinches: { ImageLabel } = {}
+	-- The field last drawn: a replay memo's field is never changed, so the same table again
+	-- (a frame with no new action) needs no redraw.
+	local drawn: { number }? = nil
 
 	local function screen(q: any): Vector2
 		local o = G.screenOf(S, F, 1, q)
@@ -99,6 +107,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 	end
 
 	local function build()
+		drawn = nil
 		Ui.clear(sauceLayer)
 		table.clear(stamps)
 		local N = MakeSauce.GRID
@@ -120,7 +129,15 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 					local n = #stamps + 1
 					local jx = (((n * 0.6180339887) % 1) - 0.5) * JITTER
 					local jy = (((n * 0.7548776662) % 1) - 0.5) * JITTER
-					local s = screen({ x = MakeSauce.xs[centre] + jx, y = MakeSauce.ys[centre] + jy })
+					local px, py = MakeSauce.xs[centre] + jx, MakeSauce.ys[centre] + jy
+					local near = {}
+					for _, i in MakeSauce.cellsNear(px, py, STAMP / 2 + MakeSauce.CELL) do
+						table.insert(near, { i, math.sqrt((MakeSauce.xs[i] - px) ^ 2 + (MakeSauce.ys[i] - py) ^ 2) })
+					end
+					table.sort(near, function(a, b)
+						return a[2] < b[2]
+					end)
+					local s = screen({ x = px, y = py })
 					local img = Ui.new("ImageLabel", {
 						BackgroundTransparency = 1,
 						AnchorPoint = Vector2.new(0.5, 0.5),
@@ -130,9 +147,10 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 						ZIndex = zIndex,
 						Parent = sauceLayer,
 					})
-					fit(img, STAMP, SAUCE_SHARE, (n * 137.5) % 360)
+					local turn = (n * 137.5) % 360
+					fit(img, STAMP, SAUCE_SHARE, turn)
 					Art.apply(img, "food_sauce_raw")
-					table.insert(stamps, { image = img, cells = cells, shown = 0, tint = 0 })
+					table.insert(stamps, { image = img, cells = cells, near = near, turn = turn, size = STAMP, shown = 0, tint = 0 })
 				end
 			end
 		end
@@ -186,13 +204,33 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 
 	-- The sauce field (nil: none) and the pours that made it (for the dollops).
 	function layers.sauce(_self: Layers, field: { number }?, actions: { any }?)
+		if field ~= nil and rawequal(field, drawn) then
+			return
+		end
+		drawn = field
+		local bare = BARE * MakeSauce.HALF
 		for _, st in stamps do
 			local t = 0
+			local size = STAMP
 			if field then
 				for _, i in st.cells do
 					t += field[i]
 				end
 				t /= #st.cells
+				-- The stamp's edge stops half a cell short of the nearest unsauced cell.
+				for _, c in st.near do
+					if field[c[1]] < bare then
+						size = math.clamp(2 * (c[2] - MakeSauce.CELL / 2), 0, STAMP)
+						break
+					end
+				end
+				size = math.floor(size / SIZE_STEP) * SIZE_STEP
+			end
+			if size <= 0 then
+				t = 0
+			elseif math.abs(size - st.size) > 1e-6 then
+				st.size = size
+				fit(st.image, size, SAUCE_SHARE, st.turn)
 			end
 			-- Split the wanted opacity between the stamps that overlap one point.
 			local a = 1 - (1 - opacity(t)) ^ (1 / OVERLAP)

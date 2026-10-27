@@ -1094,13 +1094,24 @@ function ctx.showResult(ticketId: number)
 	end
 	local r = customer.result
 	Ui.clear(ui.toastHolder)
+	-- Up to three notes, one part at a time (each part's first note, then its second...), so
+	-- a Make with several notes never hides "Burnt" or a cut note.
 	local notes = {}
-	for _, part in { r.make, r.bake, r.cut, r.wait } do
-		for _, n in part.notes do
-			if #notes < 3 then
+	local parts = { r.make, r.bake, r.cut, r.wait }
+	local round = 1
+	while #notes < 3 do
+		local added = false
+		for _, part in parts do
+			local n = part.notes[round]
+			if n and #notes < 3 then
 				table.insert(notes, n)
+				added = true
 			end
 		end
+		if not added then
+			break
+		end
+		round += 1
 	end
 	local compact = ctx.compact
 	local toast = Ui.new("ImageLabel", {

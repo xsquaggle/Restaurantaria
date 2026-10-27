@@ -591,24 +591,10 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- The sauce field of a record, replayed once per change of its actions.
-	local fieldKey, fieldCache = nil :: string?, nil :: { number }?
+	-- The sauce field of a record (MakeSauce's replay memo: a frame with no new action replays
+	-- nothing). Shared: read it, never change it.
 	local function sauceField(m: any): { number }
-		local parts = { tostring(current and current.id) }
-		for _, a in m.sauce.actions do
-			if a.kind == "pour" then
-				table.insert(parts, string.format("p%.4f,%.4f", a.x, a.y))
-			else
-				local first, last = a.points[1], a.points[#a.points]
-				table.insert(parts, string.format("s%d:%.4f,%.4f:%.4f,%.4f", #a.points, first.x, first.y, last.x, last.y))
-			end
-		end
-		local k = table.concat(parts, "|")
-		if k ~= fieldKey or not fieldCache then
-			fieldKey = k
-			fieldCache = (MakeSauce.field(m.sauce))
-		end
-		return fieldCache :: { number }
+		return (MakeSauce.replay(m.sauce))
 	end
 
 	-- The record to draw (server + this client's actions) and the live drag's preview.
@@ -1282,7 +1268,7 @@ function Make.new(ctx: any, container: Frame)
 			-- Until the step's first Next: what the sauce or cheese still needs, then Next.
 			local m = shown(current)
 			if m.step == "sauce" and not ctx.learned["Make.sauceNext"] then
-				local field, pours, spreadMet = MakeSauce.field(m.sauce)
+				local field, pours, spreadMet = MakeSauce.replay(m.sauce)
 				local coverage, crust, off = MakeSauce.measure(field)
 				if pours == 0 then
 					return { target = pad, text = "Tap the dough to pour a ladle of sauce", from = side }

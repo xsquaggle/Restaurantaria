@@ -24,7 +24,10 @@
 -- Stored on a pizza as make.sauce = { actions }, in order:
 --   { kind = "pour", x, y }               one ladle at dough-local (x, y)
 --   { kind = "spread", points = { {x, y} } }  one spread stroke's dragged path
--- The field is replayed from the actions, so Undo just removes the last one.
+-- The field is replayed from the actions, so Undo just removes the last one. Replays are
+-- memoised (MakeSauce.replay): a record whose actions extend or cut back a recent one replays
+-- only from the nearest saved snapshot, so per-frame reads and the server's per-spread check do
+-- not redo the whole record.
 
 local Config = require(script.Parent.Config)
 
@@ -153,7 +156,9 @@ function MakeSauce.spread(field: Field, points: { Vec }): (boolean, number)
 			local mass = 0
 			for _, i in cells do
 				mass += field[i]
-				if field[i] >= cfg.occupied then
+				-- Only sauce on the dough counts (plan rev 6, 3.2 clips to the dough): a stroke
+				-- beside the pizza over sauce spilled on the board does not.
+				if field[i] >= cfg.occupied and rs[i] <= CRUST then
 					crossed = true
 				end
 			end
@@ -179,24 +184,131 @@ function MakeSauce.spread(field: Field, points: { Vec }): (boolean, number)
 	return crossed, moved
 end
 
--- Replays stored actions: the field, the pour count, and whether a spread moved sauce (the
--- step's minimum, D7).
-function MakeSauce.field(sauce: Sauce): (Field, number, boolean)
-	local field = MakeSauce.empty()
-	local pours, spreadMet = 0, false
-	for _, a in sauce.actions do
-		if a.kind == "pour" then
-			if MakeSauce.pour(field, { x = a.x :: number, y = a.y :: number }) then
-				pours += 1
-			end
-		else
-			local crossed, moved = MakeSauce.spread(field, a.points :: { Vec })
-			if crossed and moved > 0 then
-				spreadMet = true
-			end
+-- Applies one stored action: the pours and spread-met state after it.
+local function apply(field: Field, a: Action, pours: number, spreadMet: boolean): (number, boolean)
+	if a.kind == "pour" then
+		if MakeSauce.pour(field, { x = a.x :: number, y = a.y :: number }) then
+			pours += 1
+		end
+	else
+		local crossed, moved = MakeSauce.spread(field, a.points :: { Vec })
+		if crossed and moved > 0 then
+			spreadMet = true
 		end
 	end
-	return field, pours, spreadMet
+	return pours, spreadMet
+end
+
+-- Two stored actions with the same values (a record copied to the client is new tables with the
+-- same contents, so the memo compares values, every point of a spread).
+local function sameAction(a: Action, b: Action): boolean
+	if rawequal(a, b) then
+		return true
+	end
+	if a.kind ~= b.kind or a.x ~= b.x or a.y ~= b.y then
+		return false
+	end
+	local pa, pb = a.points, b.points
+	if pa == nil or pb == nil then
+		return pa == pb
+	end
+	if #pa ~= #pb then
+		return false
+	end
+	for i = 1, #pa do
+		if pa[i].x ~= pb[i].x or pa[i].y ~= pb[i].y then
+			return false
+		end
+	end
+	return true
+end
+
+-- The replay memo: up to MEMO recent histories, each the actions it replayed and snapshots of
+-- the state after every SNAP-th action and after its last (snapshot fields are never changed).
+type Snap = { field: Field, pours: number, met: boolean }
+type Memo = { actions: { Action }, snaps: { [number]: Snap } }
+local MEMO, SNAP = 16, 4
+local memos: { Memo } = {}
+local EMPTY: Snap = { field = MakeSauce.empty(), pours = 0, met = false }
+
+-- Replays stored actions: the field (shared: read it, never change it), the pour count, and
+-- whether a spread moved sauce (the step's minimum, D7).
+function MakeSauce.replay(sauce: Sauce): (Field, number, boolean)
+	local actions = sauce.actions
+	local n = #actions
+	if n == 0 then
+		return EMPTY.field, 0, false
+	end
+	-- The recent history sharing the longest prefix with this record.
+	local best, bestAt, shared = nil :: Memo?, 0, 0
+	for at, memo in memos do
+		local k, limit = 0, math.min(n, #memo.actions)
+		while k < limit and sameAction(memo.actions[k + 1], actions[k + 1]) do
+			k += 1
+		end
+		if best == nil or k > shared then
+			best, bestAt, shared = memo, at, k
+		end
+	end
+	if best and shared == n and best.snaps[n] then
+		local s = best.snaps[n]
+		table.remove(memos, bestAt)
+		table.insert(memos, 1, best)
+		return s.field, s.pours, s.met
+	end
+	-- Start from the latest snapshot inside the shared prefix; a history that shares nothing
+	-- gets a memo of its own, one that diverged (Undo, then something new) replaces its old one.
+	local memo: Memo
+	local base, start = EMPTY, 0
+	if best and shared > 0 then
+		memo = best
+		table.remove(memos, bestAt)
+		for j = shared, 1, -1 do
+			if memo.snaps[j] then
+				base, start = memo.snaps[j], j
+				break
+			end
+		end
+		for j in memo.snaps do
+			if j > shared then
+				memo.snaps[j] = nil
+			end
+		end
+	else
+		memo = { actions = {}, snaps = {} }
+	end
+	memo.actions = table.move(actions, 1, n, 1, table.create(n))
+	local field = table.clone(base.field)
+	local pours, met = base.pours, base.met
+	for i = start + 1, n do
+		pours, met = apply(field, actions[i], pours, met)
+		if i == n then
+			memo.snaps[i] = { field = field, pours = pours, met = met }
+		elseif i % SNAP == 0 then
+			memo.snaps[i] = { field = table.clone(field), pours = pours, met = met }
+		end
+	end
+	table.insert(memos, 1, memo)
+	if #memos > MEMO then
+		table.remove(memos)
+	end
+	return field, pours, met
+end
+
+-- As replay, but the caller's own copy of the field (free to change).
+function MakeSauce.field(sauce: Sauce): (Field, number, boolean)
+	local field, pours, spreadMet = MakeSauce.replay(sauce)
+	return table.clone(field), pours, spreadMet
+end
+
+-- The same replay without the memo (the tests' reference).
+function MakeSauce.replayUncached(sauce: Sauce): (Field, number, boolean)
+	local field = MakeSauce.empty()
+	local pours, met = 0, false
+	for _, a in sauce.actions do
+		pours, met = apply(field, a, pours, met)
+	end
+	return field, pours, met
 end
 
 function MakeSauce.counts(sauce: Sauce): (number, number)
@@ -282,7 +394,8 @@ function MakeSauce.validateSpread(sauce: Sauce, args: any): (Action?, string?)
 	elseif length > cfg.maxSpread then
 		return nil, "spread too long"
 	end
-	-- It must cross sauce (rev 6): a stroke over bare dough or the board alone is refused.
+	-- It must cross sauce on the dough (rev 6): a stroke over bare dough or the board alone is
+	-- refused. The record's field comes from the memo, so this replays one spread, not the record.
 	local field = MakeSauce.field(sauce)
 	local crossed = MakeSauce.spread(field, points)
 	if not crossed then
@@ -293,7 +406,7 @@ end
 
 -- The step's minimum (D7): a pour and a spread that moved sauce.
 function MakeSauce.canFinish(sauce: Sauce): boolean
-	local _, pours, spreadMet = MakeSauce.field(sauce)
+	local _, pours, spreadMet = MakeSauce.replay(sauce)
 	return pours > 0 and spreadMet
 end
 
@@ -331,7 +444,7 @@ end
 
 function MakeSauce.grade(sauce: Sauce): Grade
 	local cfg = Config.Sauce
-	local field, pours = MakeSauce.field(sauce)
+	local field, pours = MakeSauce.replay(sauce)
 	local coverage, crust, off = MakeSauce.measure(field)
 	local amount = math.clamp(1 - math.abs(pours - cfg.targetPours) / cfg.targetPours, 0, 1)
 	-- No sauce earns no clean credit either: an empty step scores 0.

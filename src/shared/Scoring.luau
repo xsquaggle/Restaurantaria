@@ -149,10 +149,16 @@ function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Pi
 	if held then
 		table.insert(notes, held)
 	end
-	for _, list in { dough.notes, sauce.notes, cheese.notes, if toppings then toppings.notes else {} } do
-		for _, n in list do
-			table.insert(notes, n)
+	-- Then only the weakest step's notes (plan rev 6, 5): the lowest-scoring step that has any,
+	-- the earlier step on a tie, so Make does not crowd Bake and Cut out of the result.
+	local weakest: Grade? = nil
+	for _, step in { dough, sauce, cheese, toppings } do
+		if step and #step.notes > 0 and (weakest == nil or step.score < weakest.score) then
+			weakest = step
 		end
+	end
+	for _, n in if weakest then weakest.notes else {} do
+		table.insert(notes, n)
 	end
 	detail.mean = mean
 	return { score = score, notes = notes, detail = detail }

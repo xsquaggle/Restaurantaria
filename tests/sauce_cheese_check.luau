@@ -510,6 +510,124 @@ check("server: at the toppings", pizza.make.step, "toppings")
 refused("cheese after", "addCheese", { points = { P(0, 0) }, newStroke = true }, "cheese is done")
 check("server: cheese order goes to the oven", (act("sendToOven", {})), true)
 
+-- 12. Audit fixes (2026-10-27).
+-- 12a. The replay memo gives exactly the uncached replay: grow a record action by action, Undo,
+-- diverge, and read deep copies (a record copied to the client is new tables, same values).
+local function deepCopy(sauce: any): any
+	local out = {}
+	for i, a in sauce.actions do
+		if a.kind == "pour" then
+			out[i] = { kind = "pour", x = a.x, y = a.y }
+		else
+			local pts = {}
+			for k, q in a.points do
+				pts[k] = P(q.x, q.y)
+			end
+			out[i] = { kind = "spread", points = pts }
+		end
+	end
+	return { actions = out }
+end
+local function sameField(a: { number }, b: { number }): boolean
+	if #a ~= #b then
+		return false
+	end
+	for i = 1, #a do
+		if a[i] ~= b[i] then
+			return false
+		end
+	end
+	return true
+end
+local history = {
+	{ kind = "pour", x = 0.3, y = 0.1 },
+	{ kind = "pour", x = -0.3, y = 0.2 },
+	{ kind = "spread", points = circle(0.3) },
+	{ kind = "pour", x = 0, y = -0.4 },
+	{ kind = "spread", points = circle(0.5) },
+	{ kind = "spread", points = arc(0.7, -80, 80) },
+	{ kind = "spread", points = circle(0.6) },
+	{ kind = "pour", x = 0.1, y = 0.1 },
+	{ kind = "spread", points = circle(0.8) },
+	{ kind = "spread", points = arc(0.4, 0, 180) },
+}
+local memoOk, memoSteps = true, 0
+local grow = { actions = {} }
+local function agree(label: string, sauce: any)
+	memoSteps += 1
+	local f1, p1, m1 = MakeSauce.replay(sauce)
+	local f2, p2, m2 = MakeSauce.replayUncached(sauce)
+	local f3 = MakeSauce.replay(deepCopy(sauce))
+	if not (sameField(f1, f2) and p1 == p2 and m1 == m2 and rawequal(f1, f3)) then
+		memoOk = false
+		table.insert(failures, "memo disagrees at " .. label)
+	end
+end
+for i, a in history do
+	table.insert(grow.actions, a)
+	agree("grow " .. i, grow)
+end
+for i = 1, 3 do
+	table.remove(grow.actions)
+	agree("undo " .. i, grow)
+end
+table.insert(grow.actions, { kind = "spread", points = arc(0.5, 90, 270) })
+agree("diverge", grow)
+-- Another record in between (its own memo) and back again.
+local other = sauceOf({ P(0, 0) }, { circle(0.2) })
+agree("other", other)
+agree("back", grow)
+check("memo: equals the uncached replay at every step (" .. memoSteps .. " reads)", memoOk, true)
+local fA = MakeSauce.replay(grow)
+check("memo: a second read with no new action replays nothing (same field)", rawequal(MakeSauce.replay(grow), fA), true)
+local own = MakeSauce.field(grow)
+check("memo: field() is the caller's own copy", rawequal(own, fA), false)
+own[1] = 99
+check("memo: changing that copy leaves the memo alone", fA[1] ~= 99 and sameField(MakeSauce.replay(grow), (MakeSauce.replayUncached(grow))), true)
+check("memo: validateSpread leaves the memo alone", (function()
+	MakeSauce.validateSpread(grow, { points = { P(-0.5, 0), P(0.5, 0) } })
+	return sameField(MakeSauce.replay(grow), (MakeSauce.replayUncached(grow)))
+end)(), true)
+-- The six graded cases still grade the same through the memo, read twice.
+for _, name in { "clean", "sparse", "half", "heavy", "spilled", "unspread" } do
+	check("memo: " .. name .. " grades the same twice", MakeSauce.grade(cases[name]).score, MakeSauce.grade(deepCopy(cases[name])).score)
+end
+
+-- 12b. "Must cross sauce" counts only sauce on the dough (within 0.95). A pour at the edge,
+-- (0.9, 0), lays sauce out to 1.2 on the board. A straight stroke at x = 1.19 (its ladle disc
+-- reaches 1.01, all past the dough) touches only that board sauce: refused. The same stroke at
+-- x = 1.0 reaches 0.82 and crosses the sauce on the dough: allowed.
+local edge = sauceOf({ P(0.9, 0) }, {})
+local besideField = MakeSauce.replay(edge)
+local boardSauce = false
+for i = 1, MakeSauce.COUNT do
+	if MakeSauce.rs[i] > 1.0 and math.abs(MakeSauce.ys[i]) < 0.1 and besideField[i] >= cfg.occupied then
+		boardSauce = true
+	end
+end
+check("cross: the edge pour leaves sauce on the board", boardSauce, true)
+check("cross: a stroke beside the pizza over board sauce is refused", select(2, MakeSauce.validateSpread(edge, { points = { P(1.19, -0.3), P(1.19, 0.3) } })), "spread missed the sauce")
+check("cross: the same stroke reaching the dough is allowed", (MakeSauce.validateSpread(edge, { points = { P(1.0, -0.3), P(1.0, 0.3) } })) ~= nil, true)
+local besideOnly = sauceOf({ P(0.9, 0) }, { { P(1.19, -0.3), P(1.19, 0.3) } })
+check("cross: a stored stroke beside the pizza does not meet the step's minimum", MakeSauce.canFinish(besideOnly), false)
+
+-- 12c. Make's notes: the hold note, then only the weakest step's notes (plan rev 6, 5), so the
+-- result toast keeps room for Bake and Cut. Sparse sauce (51) is the weakest step under clean
+-- dough (100) and clean cheese (C).
+check("notes: sparse sauce gives the hold and the sauce notes only", table.concat(gSparse.notes, "|"), "Most of the pizza has no sauce: Make held to 59|" .. table.concat(MakeSauce.grade(cases.sparse).notes, "|"))
+local gHeavyBunch = Scoring.make(cheeseOrder, makeWith(cases.heavy, clusteredCheese), {})
+local weakest = if cheeseGrades.clustered.score < 68 then cheeseGrades.clustered.notes else MakeSauce.grade(cases.heavy).notes
+local wantNotes = {}
+if gHeavyBunch.score < gHeavyBunch.detail.mean then
+	table.insert(wantNotes, gHeavyBunch.notes[1])
+end
+for _, n in weakest do
+	table.insert(wantNotes, n)
+end
+check("notes: heavy sauce + clustered cheese gives only the weaker step's notes", table.concat(gHeavyBunch.notes, "|"), table.concat(wantNotes, "|"))
+check("notes: clean make has none", #gClean.notes, 0)
+note(string.format("notes: heavy sauce %d + clustered cheese %d -> %s", 68, cheeseGrades.clustered.score, table.concat(gHeavyBunch.notes, " / ")))
+
 for _, l in report do
 	print("  " .. l)
 end
