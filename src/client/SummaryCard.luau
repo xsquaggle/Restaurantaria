@@ -271,6 +271,8 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local buttonH = if compact then 56 else 72
 	local holder = Ui.new("Frame", { Name = "Action", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, buttonH), LayoutOrder = 6, Parent = content })
 	local button = Widgets.button(model.action.label, onAction)
+	-- One stable path whatever the label says (Root.Summary.Card.Content.Action.ActionButton).
+	button.frame.Name = "ActionButton"
 	button.frame.AnchorPoint = Vector2.new(0.5, 0)
 	button.frame.Position = UDim2.fromScale(0.5, 0)
 	button.frame.Size = UDim2.fromOffset(if compact then 200 else 260, buttonH)
