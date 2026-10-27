@@ -206,6 +206,7 @@ function Cut.new(ctx: any, container: Frame)
 		mouse: boolean,
 		button: Enum.UserInputType,
 		pizzaId: number,
+		dough: any, -- the pizza's footprint (Scoring.footprint), fixed for the stroke
 		points: { Vector2 },
 		length: number,
 		outside: Vector2?, -- where the path left the accepted range, while it is outside
@@ -237,12 +238,6 @@ function Cut.new(ctx: any, container: Frame)
 		end
 		return a + d * math.max(t, 0)
 	end
-	-- Distance from the centre to the segment a-b.
-	local function centreDistance(a: Vector2, b: Vector2): number
-		local d = b - a
-		local t = if d.Magnitude < 1e-9 then 0 else math.clamp(-a:Dot(d) / d:Dot(d), 0, 1)
-		return (a + d * t).Magnitude
-	end
 	local function trace(line: string)
 		local log = IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutTrace")
 		if type(log) == "string" and #log < 60000 then
@@ -268,19 +263,29 @@ function Cut.new(ctx: any, container: Frame)
 			st.points = thin
 		end
 	end
-	-- The groove grows behind the cutter: only the part already rolled over is drawn. It is faint
-	-- until the path is long enough to cut, so it never promises a cut the release would drop.
-	-- The whole path is redrawn so straight runs stay single grooves (the groove art squashed
-	-- into many short pieces reads as pale smears).
+	-- The stroke's points as the path the release would send (resampled to the server's cap).
+	local function sendPath(st: Stroke): { any }
+		local raw = table.create(#st.points)
+		for i, p in st.points do
+			raw[i] = { x = p.X, y = p.Y }
+		end
+		return Scoring.resamplePath(raw, Config.Cut.maxPoints)
+	end
+	-- The groove grows behind the cutter: only the part already rolled over is drawn, clipped to
+	-- the dough as the grade clips it. It is faint until the server's own grading would accept
+	-- the path (Scoring.cutPath on the same footprint), so it never promises a cut the release
+	-- would drop. The whole path is redrawn so straight runs stay single grooves (the groove art
+	-- squashed into many short pieces reads as pale smears).
 	local function drawGroove(st: Stroke)
 		st.dirty = false
-		local strong = st.length >= Config.Cut.minDragLength
-		local path = table.create(#st.points)
+		local path = sendPath(st)
+		local strong = Scoring.cutPath(path, st.dough) ~= nil
+		local drawn = table.create(#st.points)
 		for i, q in st.points do
-			path[i] = { x = q.X, y = q.Y }
+			drawn[i] = { x = q.X, y = q.Y }
 		end
 		Ui.clear(preview)
-		Widgets.drawCut(preview, { path = path }, if strong then 0.3 else 0.7)
+		Widgets.drawCut(preview, { path = drawn }, if strong then 0.3 else 0.7, st.dough)
 	end
 	-- Records the pointer's pizza-local position on the stroke's path.
 	local function record(st: Stroke, raw: Vector2, final: boolean?)
@@ -293,9 +298,10 @@ function Cut.new(ctx: any, container: Frame)
 				return
 			end
 			-- Back in range: where it re-entered, unless the jump from where it left would run
-			-- across the pizza, which the wheel never rolled over. Then the path ends where it left.
+			-- across the dough, which the wheel never rolled over. Then the path ends where it left.
 			local entry = rangeExit(raw, st.outside)
-			if centreDistance(st.outside, entry) < Config.Cut.crustRadius then
+			local out = st.outside :: Vector2
+			if Scoring.clipToDough(st.dough, out.X, out.Y, entry.X, entry.Y) ~= nil then
 				st.closed = true
 				return
 			end
@@ -359,6 +365,7 @@ function Cut.new(ctx: any, container: Frame)
 			mouse = isMouse,
 			button = input.UserInputType,
 			pizzaId = current.id,
+			dough = Scoring.footprint(current.make),
 			points = { s },
 			length = 0,
 			outside = nil,
@@ -394,18 +401,21 @@ function Cut.new(ctx: any, container: Frame)
 			trace("dropped: pizza changed")
 			return
 		end
-		local raw = table.create(#st.points)
-		for i, p in st.points do
-			raw[i] = { x = p.X, y = p.Y }
-		end
-		local path = Scoring.resamplePath(raw, Config.Cut.maxPoints)
-		-- The server's own grading, run first so a refusal is explained instead of sent.
-		local cut, reason = Scoring.cutPath(path)
+		local path = sendPath(st)
+		-- The server's own grading on the same footprint, run first so a refusal is explained
+		-- instead of sent.
+		local cut, reason = Scoring.cutPath(path, st.dough)
 		if cut then
 			local first, last = path[1], path[#path]
 			trace(string.format("send %s screen=%.0f,%.0f points=%d raw=%d from=%.3f,%.3f to=%.3f,%.3f length=%.3f angle=%.1f straight=%.3f dev=%.4f complete=%.3f pizza=%d",
 				input.UserInputType.Name, input.Position.X, input.Position.Y, #path, #st.points, first.x, first.y, last.x, last.y, st.length,
 				math.deg(math.atan2(cut.y2 - cut.y1, cut.x2 - cut.x1)), cut.straightness :: number, (cut :: any).deviation, cut.completeness :: number, st.pizzaId))
+			-- The sent path itself, so a recorded stroke can be replayed in the offline checks.
+			local pts = table.create(#path)
+			for i, p in path do
+				pts[i] = string.format("%.4f,%.4f", p.x, p.y)
+			end
+			trace("path " .. table.concat(pts, " "))
 			ctx.send("cut", { pizzaId = st.pizzaId, path = path }, function(ok, why)
 				trace(string.format("reply ok=%s %s", tostring(ok), tostring(why)))
 			end)
@@ -430,7 +440,8 @@ function Cut.new(ctx: any, container: Frame)
 		if current then
 			local customer = ctx.customer(snap, current.ticketId)
 			local cuts = #current.cuts
-			guide.Text = string.format("%d slices\n%d of %d cuts", customer.order.slices, cuts, customer.order.slices // 2)
+			-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
+			guide.Text = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
 			guideCard.Visible = true
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)

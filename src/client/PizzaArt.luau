@@ -10,7 +10,9 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
+local PrepGeometry = require(Shared.PrepGeometry)
 local Recipes = require(Shared.Recipes)
+local Scoring = require(Shared.Scoring)
 local Ui = require(script.Parent.Ui)
 
 local PizzaArt = {}
@@ -244,14 +246,19 @@ function PizzaArt.new(): View
 				end
 			end
 			local landed = false
+			-- Pieces are stored dough-local (slice 1): drawn through the made dough's own transform
+			-- (PrepGeometry.toPizza on Scoring.footprint), the same map as the sauce and cheese, so
+			-- a piece sits on the same food in every view; a flattened frame (the oven) squashes y.
+			local S = Scoring.footprint(pizza.make)
 			for key, piece in wanted do
 				if not shown[key] then
 					local art, rotation = PizzaArt.look(pizza.id, piece.ingredient, order[piece])
 					local info = Recipes.Ingredients[piece.ingredient]
+					local at = PrepGeometry.toPizza(S, piece)
 					local root = Ui.new("Frame", {
 						BackgroundTransparency = 1,
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						Position = UDim2.fromScale(0.5 + piece.x * 0.5, 0.5 + piece.y * 0.5),
+						Position = UDim2.fromScale(0.5 + at.x * 0.5, 0.5 + at.y * 0.5),
 						Size = UDim2.fromScale(info.size, info.size),
 						ZIndex = 2,
 						Parent = layer,

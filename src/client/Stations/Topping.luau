@@ -16,7 +16,9 @@ local Config = require(Shared.Config)
 local MakeCheese = require(Shared.MakeCheese)
 local MakeDough = require(Shared.MakeDough)
 local MakeSauce = require(Shared.MakeSauce)
+local PrepGeometry = require(Shared.PrepGeometry)
 local Recipes = require(Shared.Recipes)
+local Scoring = require(Shared.Scoring)
 local Parent = script.Parent.Parent
 local MakeLayers = require(Parent.MakeLayers)
 local PizzaArt = require(Parent.PizzaArt)
@@ -333,6 +335,14 @@ function Topping.new(ctx: any, container: Frame)
 	send.frame.Size = UDim2.fromScale(1, 1)
 	send.frame.Parent = ctx.actionHost("Topping")
 
+	-- Where a screen position lands on the dough: dough-local (slice 1, 2026-10-27; the stored
+	-- coordinate, PrepGeometry.toDough on the pizza's footprint), as the server validates it.
+	local function doughPoint(position: Vector3): (number, number)
+		local x, y = ctx.toLocal(view.frame, position)
+		local q = PrepGeometry.toDough(Scoring.footprint(if current then current.make else nil), { x = x, y = y })
+		return q.x, q.y
+	end
+
 	local function place(x: number, y: number)
 		if not current or ctx.pending[current.id] or not stocked[chosen] then
 			return
@@ -361,7 +371,7 @@ function Topping.new(ctx: any, container: Frame)
 	local dragging: any = nil
 	view.frame.InputBegan:Connect(function(input: InputObject)
 		if isPress(input) and not dragging then
-			place(ctx.toLocal(view.frame, input.Position))
+			place(doughPoint(input.Position))
 		end
 	end)
 
@@ -404,7 +414,7 @@ function Topping.new(ctx: any, container: Frame)
 			end
 		elseif isMouse and not dragging and current and not ctx.pending[current.id] and stocked[chosen] then
 			-- Mouse only: a faint preview of the next piece under the pointer.
-			local x, y = ctx.toLocal(view.frame, input.Position)
+			local x, y = doughPoint(input.Position)
 			if x * x + y * y <= Config.Topping.placeRadius ^ 2 then
 				local art, rotation = nextLook(chosen)
 				if not hover or hover:GetAttribute("Art") ~= art then
@@ -435,7 +445,7 @@ function Topping.new(ctx: any, container: Frame)
 		if not held then
 			return
 		end
-		local x, y = ctx.toLocal(view.frame, input.Position)
+		local x, y = doughPoint(input.Position)
 		if current and not ctx.pending[current.id] and x * x + y * y <= Config.Topping.placeRadius ^ 2 then
 			held:Destroy()
 			chosen = d.ingredient

@@ -78,7 +78,10 @@ for _, c in bakeCases do
 	local bake, seconds, want = c[1], c[2], c[3]
 	local state = Scoring.bakeState(Config.Oven.targets[bake], seconds)
 	local g = Scoring.bake(bake, seconds)
-	local pass = state == want and (want ~= "perfect" or g.score == 100) and (want ~= "burnt" or g.score == 0)
+	-- Burnt: today's rule scores Bake 0; with the food-state hold (Config.Oven.foodCapOn, slice 1)
+	-- the Bake score stays the distance from the asked doneness and the grade is held to foodCap.
+	local burntOk = if Config.Oven.foodCapOn then g.detail.cap == Config.Oven.foodCap else g.score == 0
+	local pass = state == want and (want ~= "perfect" or g.score == 100) and (want ~= "burnt" or burntOk)
 	if not pass then
 		failed += 1
 	end

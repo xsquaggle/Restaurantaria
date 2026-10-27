@@ -339,6 +339,23 @@ end
 -- Run each check
 
 local failed = 0
+-- Every source compiles, client modules included (the checks only run the shared and server
+-- code). Compile only: nothing is run.
+local compiled, broken = 0, {}
+for path, source in SOURCES do
+	local fn, err = loadstring(source, "=" .. path)
+	if fn then
+		compiled += 1
+	else
+		table.insert(broken, tostring(err))
+	end
+end
+table.sort(broken)
+print(string.format("[%s] compile every source", if #broken == 0 then "PASS" else "FAIL"))
+print(string.format("  %d compiled, %d failed%s", compiled, #broken, if #broken > 0 then "\n  " .. table.concat(broken, "\n  ") else ""))
+if #broken > 0 then
+	failed += 1
+end
 for _, test in TESTS do
 	local done, ok, result = false, false, nil
 	task.spawn(function()

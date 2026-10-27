@@ -33,8 +33,23 @@ Config.Oven = {
 	perfectWindow = 2, -- within +/- this many seconds scores 100
 	zeroAt = 12, -- this far from target scores 0
 	-- Burnt is one absolute time for every order, so the gauge's red zone means the same
-	-- thing on every ticket: past it the pizza is burnt whatever bake was asked for.
+	-- thing on every ticket: past it the pizza is burnt whatever bake was asked for. 36 s is a
+	-- proposal pending Lawson.
 	burntAt = 36,
+	-- The food's own state, apart from the doneness the ticket asked for (slice 1, 2026-10-27;
+	-- Astra r14): raw up to rawUntil, cooked from cookedFrom to scorchFrom, burnt past burntAt.
+	-- Raw or burnt food holds the order grade to foodCap; the hold's approach is continuous, so
+	-- no state boundary makes the grade jump: none from cookedFrom to scorchFrom, falling evenly to
+	-- foodCap at rawUntil and at burntAt, foodCap beyond. scorchFrom is the latest perfect
+	-- window's end (well 30 + 2), so no pizza baked inside its window is ever held. The Bake score
+	-- itself is only the distance from the asked doneness (it no longer drops to 0 past burntAt).
+	-- Every value is a proposal, NOT approved (the 35 cap and the 36 s burn time are Lawson's).
+	-- foodCapOn = false is today's rule (Bake 0 past burntAt, no hold), kept for comparison.
+	foodCapOn = true,
+	foodCap = 35,
+	rawUntil = 8,
+	cookedFrom = 12,
+	scorchFrom = 32,
 }
 
 -- The Make tab's first steps (Lawson, 2026-10-26): flour the board, pull the dough onto it and
@@ -140,7 +155,9 @@ Config.Cheese = {
 
 Config.Topping = {
 	maxPieces = 48,
-	-- Normalized pizza-local radius inside which a piece's centre may sit (1 = crust edge).
+	-- Dough-local radius inside which a piece's centre may sit (slice 1, 2026-10-27: pieces are
+	-- stored dough-local, PrepGeometry.toDough, so 0.95 is the made dough's own edge and 0.84 the
+	-- sauce edge on any oval).
 	placeRadius = 0.84,
 	wrongIngredientPenalty = 8,
 }
@@ -152,11 +169,16 @@ Config.Cut = {
 	-- Angular error (degrees) that still scores full marks, and where it reaches zero.
 	perfectDegrees = 5,
 	zeroDegrees = 30,
-	minDragLength = 0.9, -- normalized; shorter drags are ignored
+	-- A drag shorter than this share of the chord its fitted line crosses on the dough is ignored
+	-- (slice 1, 2026-10-27: 0.9 of the full round's 1.9 chord, as the earlier fixed 0.9 length,
+	-- now relative so a stroke across a thin oval's narrow way counts). Proposal.
+	minDragShare = 0.47,
 	-- Freehand cuts (Lawson, 2026-10-26): the server keeps the dragged path and grades how
 	-- straight and how complete each cut is. The values below are proposals, not balance
-	-- decisions. Cut coordinates are the pizza frame's (frame edge 1), so the drawn crust edge
-	-- is at 0.95.
+	-- decisions. Cut coordinates are the pizza frame's (frame edge 1), so the full round crust
+	-- is at 0.95. Since slice 1 (2026-10-27) cuts are clipped and graded against the made
+	-- pizza's own dough outline (Scoring.footprint); crustRadius is the full round's, kept for
+	-- pizzas with no dough record. centreTolerance is in dough-local units (dough edge 0.95).
 	crustRadius = 0.95,
 	-- Most points one cut's path may carry. The client resamples the drag to this many.
 	maxPoints = 48,
@@ -193,8 +215,18 @@ Config.Grade = {
 	-- cheese pinches on the dough / 24, dough area a x b / 0.95^2. Same ramp as coverage.
 	completeness = true,
 	doughCompleteness = true,
-	-- Split join only: Paid = Grade x (1 - serviceShare + serviceShare x Service / 100); coins
-	-- and XP as below (XP from the Grade, not the service).
+	-- Topping completeness ceiling (slice 1, 2026-10-27; Astra r14 P1): for each ingredient the
+	-- ticket asks for, the right pieces inside the asked region against the count; the lowest
+	-- share sets a ceiling on the same ramp (35 at a quarter or less, none from three quarters).
+	-- Wrong or extra pieces never count toward it. Proposal; false turns it off for comparison.
+	toppingCompleteness = true,
+	-- Split join only: Service is a 0.85-1.00 pay modifier before integer rounding (Service runs
+	-- 40 to 100, so 1 - 0.25 + 0.25 x Service / 100 runs 0.85 to 1.00): Paid = round(Grade x that
+	-- modifier), coins = round(12 x Paid / 100). Service is not in the grade and not in XP (XP from
+	-- the Grade). Because both steps round, the final coin cut can exceed 15 % on small payouts
+	-- (grade 100: 12 -> 10 coins; grade 13: 2 -> 1). Still a proposal pending Lawson, as is
+	-- dropping the intermediate rounding (that would change payouts). The tutorial top-up is
+	-- separate (Config.Rewards.tutorialGuarantee).
 	serviceShare = 0.25,
 }
 

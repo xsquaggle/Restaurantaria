@@ -6,6 +6,7 @@ local Config = require(script.Parent.Config)
 local MakeCheese = require(script.Parent.MakeCheese)
 local MakeDough = require(script.Parent.MakeDough)
 local MakeSauce = require(script.Parent.MakeSauce)
+local PrepGeometry = require(script.Parent.PrepGeometry)
 local Recipes = require(script.Parent.Recipes)
 
 export type Piece = { ingredient: string, x: number, y: number }
@@ -20,6 +21,19 @@ local Scoring = {}
 
 local function clamp01(v: number): number
 	return math.clamp(v, 0, 1)
+end
+
+-- The made pizza's footprint for cutting and toppings: its rolled dough outline S (pizza-local;
+-- the outline is S applied to the unit circle, PrepGeometry), from the made dough record only,
+-- never from the client. A pizza with no dough on the board (old fixtures, test lines) counts as
+-- the full round crust, S = 0.95 I, so its grades are what they were before the footprint.
+Scoring.ROUND = PrepGeometry.shape(PrepGeometry.CRUST, PrepGeometry.CRUST)
+
+function Scoring.footprint(make: any?): PrepGeometry.Mat2
+	if make and make.placed and type(make.strokes) == "table" then
+		return MakeDough.shape(make)
+	end
+	return Scoring.ROUND
 end
 
 local function inRegion(region: string, x: number): boolean
@@ -41,10 +55,24 @@ end
 
 local REGION_WORDS = { left = "the left half", right = "the right half", whole = "the whole pizza" }
 
-function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
+-- Pieces are dough-local (slice 1, 2026-10-27): S is the made pizza's dough (Scoring.footprint;
+-- the full round crust when omitted, where dough-local and pizza-local agree). Halves and spread
+-- sectors are what the player sees: each piece is judged by its physical place, toPizza(S, q)
+-- (PrepGeometry: never by q.x, which a rotated oval can flip). A half split by a line through the
+-- dough's centre is half its area on any oval.
+-- detail.completeness is the lowest share, over the ticket's ingredients, of the right pieces
+-- inside the asked region against the count (capped at 1; wrong and extra pieces never count);
+-- detail.short names that ingredient (Scoring.makeCeilings turns it into a ceiling).
+function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }, S: PrepGeometry.Mat2?): Grade
+	local dough = S or Scoring.ROUND
 	local notes = {}
 	local required: { [string]: boolean } = {}
 	local total, weight = 0, 0
+	local completeness, short = 1, nil
+	local seen: { [Piece]: Point } = {}
+	for _, piece in pieces do
+		seen[piece] = PrepGeometry.toPizza(dough, piece)
+	end
 
 	for _, req in recipe.toppings do
 		required[req.ingredient] = true
@@ -54,9 +82,10 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 		local perSector = table.create(sectors, 0)
 		for _, piece in pieces do
 			if piece.ingredient == req.ingredient then
-				if inRegion(req.region, piece.x) then
+				local p = seen[piece]
+				if inRegion(req.region, p.x) then
 					inside += 1
-					local s = sectorOf(req.region, piece.x, piece.y)
+					local s = sectorOf(req.region, p.x, p.y)
 					perSector[s] += 1
 				else
 					outside += 1
@@ -82,6 +111,11 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 		local outsidePenalty = outside / req.count
 		total += clamp01(countScore * 0.6 + spreadScore * 0.4 - outsidePenalty * 0.5)
 		weight += 1
+		local share = math.min(1, inside / req.count)
+		if share < completeness then
+			completeness = share
+			short = { ingredient = req.ingredient, count = req.count, inside = inside, region = req.region }
+		end
 
 		if inside ~= req.count then
 			table.insert(notes, string.format("Needed %d %s on %s, placed %d", req.count, info.plural, REGION_WORDS[req.region], inside))
@@ -107,7 +141,7 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 	end
 
 	local score = math.clamp(base * 100 - wrong * Config.Topping.wrongIngredientPenalty, 0, 100)
-	return { score = math.floor(score + 0.5), notes = notes }
+	return { score = math.floor(score + 0.5), notes = notes, detail = { completeness = completeness, short = short } }
 end
 
 -- The Make part of the order grade (proposal, 2026-10-27): the mean of its graded steps, Dough
@@ -127,16 +161,28 @@ local CEILING_WORDS = {
 	sauceAmount = "Not enough sauce poured",
 	cheeseAmount = "Not enough cheese on the dough",
 	dough = "Dough covers too little of the pan",
+	toppings = "Toppings missing",
 }
 -- The order of the ceilings on a tie: the defect a player sees first.
-local CEILING_ORDER = { "sauceCover", "cheeseCover", "sauceAmount", "cheeseAmount", "dough" }
+local CEILING_ORDER = { "toppings", "sauceCover", "cheeseCover", "sauceAmount", "cheeseAmount", "dough" }
 
-function Scoring.makeCeilings(make: MakeDough.Make, dough: Grade, sauce: Grade, cheese: Grade): { Ceiling }
+-- toppings (optional) is Scoring.toppings's grade for a ticket with toppings: with
+-- Config.Grade.toppingCompleteness on, its detail.completeness sets the toppings ceiling, whose
+-- note names the food first ("Needed 8 pepperoni on the whole pizza, placed 1").
+function Scoring.makeCeilings(make: MakeDough.Make, dough: Grade, sauce: Grade, cheese: Grade, toppings: Grade?): { Ceiling }
 	local cfg = Config.Grade
 	local values: { [string]: number } = {
 		sauceCover = sauce.detail.ceiling,
 		cheeseCover = cheese.detail.ceiling,
 	}
+	local words = table.clone(CEILING_WORDS)
+	if cfg.toppingCompleteness and toppings and toppings.detail then
+		values.toppings = MakeSauce.ceiling(toppings.detail.completeness)
+		local short = toppings.detail.short
+		if short then
+			words.toppings = string.format("Needed %d %s on %s, placed %d", short.count, Recipes.Ingredients[short.ingredient].plural, REGION_WORDS[short.region], short.inside)
+		end
+	end
 	if cfg.completeness then
 		-- Pours whose point is on the dough (dough-local radius 0.95), against the target.
 		local pours = 0
@@ -156,7 +202,7 @@ function Scoring.makeCeilings(make: MakeDough.Make, dough: Grade, sauce: Grade, 
 	for _, name in CEILING_ORDER do
 		local v = values[name]
 		if v and v < 100 then
-			table.insert(list, { name = name, value = v, note = CEILING_WORDS[name] })
+			table.insert(list, { name = name, value = v, note = words[name] })
 		end
 	end
 	table.sort(list, function(a, b)
@@ -178,7 +224,7 @@ function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Pi
 	local detail: any = { dough = dough, sauce = sauce, cheese = cheese }
 	local toppings = nil
 	if #recipe.toppings > 0 then
-		toppings = Scoring.toppings(recipe, pieces)
+		toppings = Scoring.toppings(recipe, pieces, Scoring.footprint(make))
 		table.insert(parts, toppings.score)
 		detail.toppings = toppings
 	end
@@ -188,7 +234,7 @@ function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Pi
 	end
 	local mean = math.floor(sum / #parts + 0.5 + 1e-9)
 	local score = mean
-	local ceilings = Scoring.makeCeilings(make, dough, sauce, cheese)
+	local ceilings = Scoring.makeCeilings(make, dough, sauce, cheese, toppings)
 	-- "make": the lowest ceiling holds this score and its note goes first, naming the defect.
 	-- "order": the score stays the mean; Scoring.order applies the ceiling to the grade.
 	local low = ceilings[1]
@@ -215,14 +261,16 @@ end
 -- The order grade and its rewards (proposal, 2026-10-27; plan rev 6, 5.1 to 5.3 with the rev 7
 -- amendment). Config.Grade.join:
 --   "split":   Weighted = 0.5 Make + 0.3 Bake + 0.2 Cut (Lawson's provisional playtest weights);
---              Grade = Weighted held by the lowest Make ceiling (ceilingsOn "order"); Service (the
---              wait score) is not in the grade and joins the pay once:
---              Paid = Grade x (0.75 + 0.25 x Service / 100); coins = 12 x Paid / 100;
---              XP = 10 x Grade / 100.
+--              Grade = Weighted held by the lowest Make ceiling (ceilingsOn "order") and by the
+--              food's raw/burnt hold (Bake's detail.cap); Service (the wait score) is not in the
+--              grade and not in XP: it is a 0.85-1.00 pay modifier before integer rounding,
+--              Paid = round(Grade x (0.75 + 0.25 x Service / 100)); coins = round(12 x Paid / 100);
+--              XP = round(10 x Grade / 100). With both roundings the final coin cut can exceed
+--              15 % on small payouts. Still a proposal pending Lawson.
 --   "average": Grade = the mean of Wait, Make, Bake and Cut (the earlier join), held the same
 --              way; coins 12 x Grade / 100 and XP 10 x Grade / 100, as before.
--- Every part's score and notes are kept; `held` is the ceiling that set the grade (nil when none)
--- and its note leads the result's notes.
+-- Every part's score and notes are kept; `held` is the ceiling or hold that set the grade (nil
+-- when none; name "food" for the raw/burnt hold) and its note leads the result's notes.
 export type Order = { join: string, weighted: number, grade: number, paid: number, coins: number, xp: number, held: Ceiling?, service: number }
 
 local function whole(x: number): number
@@ -241,6 +289,12 @@ function Scoring.order(wait: Grade, make: Grade, bake: Grade, cut: Grade): Order
 	if cfg.ceilingsOn == "order" and low and low.value < grade then
 		grade = low.value
 		held = low
+	end
+	-- Raw or burnt food (Scoring.bake's detail.cap, slice 1): holds the whole grade the same way.
+	local food = bake.detail and bake.detail.cap
+	if food and food < grade then
+		grade = food
+		held = { name = "food", value = food, note = bake.notes[1] or "Burnt" }
 	end
 	local paid = if split then whole(grade * (1 - cfg.serviceShare + cfg.serviceShare * wait.score / 100)) else grade
 	return {
@@ -268,13 +322,53 @@ function Scoring.bakeState(target: number, seconds: number): string
 	return "over"
 end
 
+-- The food's own state by bake time, whatever doneness was asked (Config.Oven, slice 1): "raw"
+-- (up to rawUntil), "undercooked" (on the way to cooked), "cooked", "scorching" (past the latest
+-- perfect window, on the way to burnt) or "burnt" (past burntAt).
+function Scoring.foodState(seconds: number): string
+	local cfg = Config.Oven
+	if seconds > cfg.burntAt then
+		return "burnt"
+	elseif seconds > cfg.scorchFrom then
+		return "scorching"
+	elseif seconds >= cfg.cookedFrom then
+		return "cooked"
+	elseif seconds > cfg.rawUntil then
+		return "undercooked"
+	end
+	return "raw"
+end
+
+-- The hold raw or burnt food puts on the order grade: 100 (none) while cooked, falling evenly to
+-- foodCap at rawUntil and at burntAt, foodCap beyond. Continuous and monotonic on each side, so
+-- the grade never jumps at a state boundary. Not rounded here (Scoring.order rounds the grade).
+function Scoring.foodCap(seconds: number): number
+	local cfg = Config.Oven
+	local floor = cfg.foodCap
+	if seconds <= cfg.rawUntil or seconds >= cfg.burntAt then
+		return floor
+	elseif seconds < cfg.cookedFrom then
+		return floor + (100 - floor) * (seconds - cfg.rawUntil) / (cfg.cookedFrom - cfg.rawUntil)
+	elseif seconds > cfg.scorchFrom then
+		return floor + (100 - floor) * (cfg.burntAt - seconds) / (cfg.burntAt - cfg.scorchFrom)
+	end
+	return 100
+end
+
+local FOOD_WORDS = { raw = "Still raw", undercooked = "Undercooked", scorching = "Nearly burnt", burnt = "Burnt" }
+
+-- The Bake score: how close the bake came to the ticket's doneness (100 inside the perfect
+-- window, none at zeroAt away). With Config.Oven.foodCapOn (slice 1) that is all it measures;
+-- the food's own state is detail.food and its hold is detail.cap (Scoring.foodCap, rounded),
+-- which Scoring.order applies to the whole grade. With foodCapOn false it is today's rule:
+-- burnt (past burntAt) scores 0 and nothing is held.
 function Scoring.bake(bakeId: string, seconds: number): Grade
 	local cfg = Config.Oven
 	local target = cfg.targets[bakeId]
 	local state = Scoring.bakeState(target, seconds)
 	local delta = seconds - target
 	local score
-	if state == "burnt" then
+	if state == "burnt" and not cfg.foodCapOn then
 		score = 0
 	elseif state == "perfect" then
 		score = 100
@@ -283,12 +377,24 @@ function Scoring.bake(bakeId: string, seconds: number): Grade
 		score = 100 * clamp01(1 - over / (cfg.zeroAt - cfg.perfectWindow))
 	end
 	local notes = {}
-	if state == "burnt" then
+	local food = Scoring.foodState(seconds)
+	local detail: any = { food = food, cap = 100 }
+	if cfg.foodCapOn then
+		local cap = math.floor(Scoring.foodCap(seconds) + 0.5 + 1e-9)
+		detail.cap = cap
+		-- The food first ("Burnt", "Still raw"), then how far from the asked doneness.
+		if cap < 100 then
+			table.insert(notes, FOOD_WORDS[food])
+		end
+		if food ~= "burnt" and food ~= "raw" and state ~= "perfect" then
+			table.insert(notes, string.format("Baked %.0fs %s %s", math.abs(delta), if delta < 0 then "short of" else "past", bakeId))
+		end
+	elseif state == "burnt" then
 		table.insert(notes, "Burnt")
 	elseif state ~= "perfect" then
 		table.insert(notes, string.format("Baked %.0fs %s %s", math.abs(delta), if delta < 0 then "short of" else "past", bakeId))
 	end
-	return { score = math.floor(score + 0.5), notes = notes }
+	return { score = math.floor(score + 0.5), notes = notes, detail = detail }
 end
 
 local function lineAngleAndOffset(line: Line): (number, number)
@@ -299,14 +405,45 @@ local function lineAngleAndOffset(line: Line): (number, number)
 	return angle, offset
 end
 
+-- The part of segment a-b on the dough S, as parameters along it (nil when none). A linear map
+-- keeps the parameters, so it is the unit-circle clip of the segment mapped by S^-1. The one
+-- clip shared by the grade (Scoring.cutPath), the live groove and the committed groove (Widgets).
+function Scoring.clipToDough(S: PrepGeometry.Mat2, ax: number, ay: number, bx: number, by: number): (number?, number?)
+	local Si = PrepGeometry.inverse(S)
+	local a, b = PrepGeometry.apply(Si, { x = ax, y = ay }), PrepGeometry.apply(Si, { x = bx, y = by })
+	local dx, dy = b.x - a.x, b.y - a.y
+	local A = dx * dx + dy * dy
+	if A < 1e-12 then
+		return nil, nil
+	end
+	local B = 2 * (a.x * dx + a.y * dy)
+	local C = a.x * a.x + a.y * a.y - 1
+	local disc = B * B - 4 * A * C
+	if disc <= 0 then
+		return nil, nil
+	end
+	local r = math.sqrt(disc)
+	local t0, t1 = math.max(0, (-B - r) / (2 * A)), math.min(1, (-B + r) / (2 * A))
+	if t1 - t0 < 1e-6 then
+		return nil, nil
+	end
+	return t0, t1
+end
+
 -- Grades one freehand cut from its dragged path (cut coordinates: the pizza frame, frame edge
--- 1, crust at Config.Cut.crustRadius). Returns the cut to store, or nil and a refusal reason.
--- The server runs this on every cut it accepts; the client runs it to explain a refusal first.
--- Only the part of the path inside the crust is graded, since the wheel cuts nothing off the
--- pizza: the best-fit line (principal axis) of that part gives the chord, the widest distance
--- from it gives straightness, and the share of the chord the path spans gives completeness.
-function Scoring.cutPath(points: any): (Cut?, string?)
+-- 1) against the made pizza's dough footprint S (Scoring.footprint; the full round crust when
+-- omitted). Returns the cut to store, or nil and a refusal reason. The server runs this on every
+-- cut it accepts with the pizza's own S; the client runs it with the same S to explain a refusal
+-- first and to show whether the live stroke would cut. Only the part of the path on the dough is
+-- graded, since the wheel cuts nothing off the food: the best-fit line (principal axis) of that
+-- part gives the chord across the dough, the widest distance from it gives straightness and the
+-- share of the chord the path spans gives completeness. The fit and the wobble are measured in
+-- frame units (the hand's own scale), so a thin oval does not magnify jitter; the chord and the
+-- span are measured on the dough, so a cut across bare board never counts. Shares along one line
+-- are the same in frame and dough units (the map is linear).
+function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 	local cfg = Config.Cut
+	local dough = S or Scoring.ROUND
 	if type(points) ~= "table" then
 		return nil, "cut path missing"
 	end
@@ -339,16 +476,24 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 	for i = 2, n do
 		total += math.sqrt((path[i].x - path[i - 1].x) ^ 2 + (path[i].y - path[i - 1].y) ^ 2)
 	end
-	if total < cfg.minDragLength then
+	if total < 1e-6 then
 		return nil, "cut too short"
 	end
 
-	-- Even samples along the path (at most about 2,000), keeping those inside the crust, plus
-	-- the exact points where the path crosses the crust so a cut that reaches it spans fully.
-	local R = cfg.crustRadius
+	-- Even samples along the path (at most about 2,000), keeping those on the dough, plus the
+	-- exact points where the path crosses the dough's edge so a cut that reaches it spans fully.
+	-- In the dough's unit-circle frame (S^-1 p) the edge is the unit circle.
+	local Si = PrepGeometry.inverse(dough)
+	local function mapped(x: number, y: number): (number, number)
+		return Si.a * x + Si.b * y, Si.c * x + Si.d * y
+	end
+	local function onDough(x: number, y: number): boolean
+		local u, v = mapped(x, y)
+		return u * u + v * v <= 1
+	end
 	local step = math.max(0.01, total / 2000)
-	-- Crust crossings count for span and distance but carry no weight in the fit, so they do
-	-- not bias it towards the path's ends.
+	-- Edge crossings count for span and distance but carry no weight in the fit, so they do not
+	-- bias it towards the path's ends.
 	local xs, ys, ws = {}, {}, {}
 	local function keep(x: number, y: number, w: number)
 		table.insert(xs, x)
@@ -356,7 +501,7 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 		table.insert(ws, w)
 	end
 	local px, py = path[1].x, path[1].y
-	local wasIn = px * px + py * py <= R * R
+	local wasIn = onDough(px, py)
 	if wasIn then
 		keep(px, py, 1)
 	end
@@ -367,15 +512,17 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 		for j = 1, k do
 			local t = j / k
 			local x, y = a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t
-			local isIn = x * x + y * y <= R * R
+			local isIn = onDough(x, y)
 			if isIn ~= wasIn then
-				-- Where the short step from (px, py) to (x, y) meets the crust.
-				local dx, dy = x - px, y - py
-				local A, B, C = dx * dx + dy * dy, 2 * (px * dx + py * dy), px * px + py * py - R * R
+				-- Where the short step from (px, py) to (x, y) meets the dough's edge.
+				local au, av = mapped(px, py)
+				local bu, bv = mapped(x, y)
+				local du, dv = bu - au, bv - av
+				local A, B, C = du * du + dv * dv, 2 * (au * du + av * dv), au * au + av * av - 1
 				local root = math.sqrt(math.max(0, B * B - 4 * A * C))
 				local u = if wasIn then (-B + root) / (2 * A) else (-B - root) / (2 * A)
 				u = math.clamp(u, 0, 1)
-				keep(px + dx * u, py + dy * u, 0)
+				keep(px + (x - px) * u, py + (y - py) * u, 0)
 			end
 			if isIn then
 				keep(x, y, 1)
@@ -387,7 +534,7 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 		return nil, "cut missed the pizza"
 	end
 
-	-- Principal axis of the inside samples.
+	-- Principal axis of the samples on the dough, in frame units.
 	local mx, my, wsum = 0, 0, 0
 	for i = 1, #xs do
 		mx += xs[i] * ws[i]
@@ -412,32 +559,40 @@ function Scoring.cutPath(points: any): (Cut?, string?)
 	if ux * (path[n].x - path[1].x) + uy * (path[n].y - path[1].y) < 0 then
 		ux, uy = -ux, -uy
 	end
-	-- Closest point of the line to the centre, and the chord's half length across the crust.
-	local along = mx * ux + my * uy
-	local cx, cy = mx - ux * along, my - uy * along
-	local d2 = cx * cx + cy * cy
-	if d2 >= R * R then
+	-- Where the line (mx, my) + t (ux, uy) meets the dough's edge: |S^-1 (m + t u)| = 1.
+	local au, av = mapped(mx, my)
+	local eu, ev = mapped(ux, uy)
+	local ee, ae, aa = eu * eu + ev * ev, au * eu + av * ev, au * au + av * av
+	local disc = ae * ae - ee * (aa - 1)
+	if disc <= 1e-12 then
 		return nil, "cut missed the pizza"
 	end
-	local half = math.sqrt(R * R - d2)
+	local root = math.sqrt(disc)
+	local tlo, thi = (-ae - root) / ee, (-ae + root) / ee
+	local chord = thi - tlo
+	-- The drag must be at least minDragShare of the chord it crosses, so a short stroke across
+	-- a thin oval's narrow way counts like a long one across a round pizza.
+	if total < cfg.minDragShare * chord then
+		return nil, "cut too short"
+	end
 	local lo, hi, dev = math.huge, -math.huge, 0
 	for i = 1, #xs do
-		local px, py = xs[i] - cx, ys[i] - cy
-		local t = px * ux + py * uy
+		local qx, qy = xs[i] - mx, ys[i] - my
+		local t = qx * ux + qy * uy
 		lo = math.min(lo, t)
 		hi = math.max(hi, t)
-		dev = math.max(dev, math.abs(px * uy - py * ux))
+		dev = math.max(dev, math.abs(qx * uy - qy * ux))
 	end
-	local completeness = (math.clamp(hi, -half, half) - math.clamp(lo, -half, half)) / (2 * half)
+	local completeness = (math.clamp(hi, tlo, thi) - math.clamp(lo, tlo, thi)) / chord
 	if completeness < cfg.minComplete then
 		return nil, "cut doesn't cross the pizza"
 	end
 	local straightness = clamp01(1 - (dev - cfg.straightPerfect) / (cfg.straightZero - cfg.straightPerfect))
 	return {
-		x1 = cx - ux * half,
-		y1 = cy - uy * half,
-		x2 = cx + ux * half,
-		y2 = cy + uy * half,
+		x1 = mx + ux * tlo,
+		y1 = my + uy * tlo,
+		x2 = mx + ux * thi,
+		y2 = my + uy * thi,
 		path = path,
 		straightness = straightness,
 		completeness = completeness,
@@ -483,8 +638,13 @@ function Scoring.cutQuality(cut: Cut): (number, number, number)
 	return straight * complete, straight, complete
 end
 
-function Scoring.cut(slices: number, lines: { Cut }): Grade
+-- The cut grade against the made pizza's dough S (the full round crust when omitted). Evenness
+-- and the centre are judged in dough-local units (PrepGeometry.toDough): on an oval, equal angles
+-- there are equal-area slices, so a fair layout on a rotated or sheared oval scores like the same
+-- layout on a round pizza.
+function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Grade
 	local cfg = Config.Cut
+	local dough = S or Scoring.ROUND
 	local notes = {}
 	local needed = slices // 2
 	if #lines == 0 then
@@ -494,7 +654,9 @@ function Scoring.cut(slices: number, lines: { Cut }): Grade
 	local angles = {}
 	local offCentre = 0
 	for _, line in lines do
-		local angle, offset = lineAngleAndOffset(line)
+		local a = PrepGeometry.toDough(dough, { x = line.x1, y = line.y1 })
+		local b = PrepGeometry.toDough(dough, { x = line.x2, y = line.y2 })
+		local angle, offset = lineAngleAndOffset({ x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y })
 		table.insert(angles, angle)
 		if offset > cfg.centreTolerance then
 			offCentre += 1
@@ -538,7 +700,8 @@ function Scoring.cut(slices: number, lines: { Cut }): Grade
 	local score = 100 * layout * quality
 	if #lines ~= needed then
 		score = math.min(score, 60)
-		table.insert(notes, string.format("Cut into %d slices instead of %d", #lines * 2, slices))
+		-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
+		table.insert(notes, string.format("Made %d cut%s, the order needed %d", #lines, if #lines == 1 then "" else "s", needed))
 	end
 	if offCentre > 0 then
 		table.insert(notes, string.format("%d cut%s missed the centre", offCentre, if offCentre == 1 then "" else "s"))

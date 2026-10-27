@@ -313,8 +313,8 @@ check("slow: split paid", row("clean, served slowly (Wait 40)").full.o.paid, 85)
 check("slow: split coins", row("clean, served slowly (Wait 40)").full.o.coins, 10)
 check("slow: split XP", row("clean, served slowly (Wait 40)").full.o.xp, 10)
 check("slow: slice 2 XP", row("clean, served slowly (Wait 40)").slice2.o.xp, 9)
--- Burnt: 0.5 x 99 + 0 + 20 = 69.5 -> 70 (slice 2: 75). No bake ceiling is built (plan 5.3a
--- waits on the burnt time, Lawson's call), so burnt food still grades 70.
+-- Burnt: 0.5 x 99 + 0 + 20 = 69.5 -> 70 (slice 2: 75). These rows feed a bare Bake 0 with no
+-- food state, so no food hold applies here; the raw/burnt hold (slice 1) is section 10.
 check("burnt: split grade 70", row("clean, burnt (Bake 0)").full.o.grade, 70)
 check("burnt: slice 2 grade 75", row("clean, burnt (Bake 0)").slice2.o.grade, 75)
 
@@ -383,6 +383,262 @@ check("serve: coins from the paid grade", r.tip, whole(12 * r.paid / 100))
 check("serve: shift coins", session.shift.tips, r.tip)
 check("serve: shift XP from the grade", session.shift.xp, whole(10 * 46 / 100))
 note(string.format("serve: sparse sauce, wait %d -> grade %d (weighted %d, held by %s), paid %d, coins %d, XP %d", r.wait.score, r.overall, r.weighted, r.held.name, r.paid, r.tip, r.xp))
+
+-- 9. Slice 1 (2026-10-27): the topping completeness safeguard (Astra r14 P1). For each
+-- ingredient the ticket asks for, the right pieces inside the asked region against the count
+-- (capped at 1; wrong and extra pieces never count); the lowest share sets a ceiling on the same
+-- ramp as the other completeness ceilings: 35 at a quarter or less, none from three quarters.
+-- Pieces are dough-local; the made pizza is the clean round one (Dough 100, Sauce 97, Cheese 100),
+-- Bake 100, Cut 100, Wait 100. Before = the safeguard off (today's rule), after = on.
+check("defaults: topping completeness on", defaults.toppingCompleteness, true)
+local function ring(ingredient: string, n: number, from: number, to: number, r: number?): { any }
+	local out = {}
+	for k = 0, n - 1 do
+		local a = math.rad(from + (to - from) * (k + 0.5) / n)
+		table.insert(out, { ingredient = ingredient, x = (r or 0.5) * math.cos(a), y = (r or 0.5) * math.sin(a) })
+	end
+	return out
+end
+local function join(...): { any }
+	local out = {}
+	for _, list in { ... } do
+		for _, p in list do
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+-- Left half on screen: x < 0, i.e. angles 90..270 (y down); right: -90..90.
+type TopCase = { name: string, recipe: string, pieces: { any }, e: number }
+local topCases: { TopCase } = {
+	{ name = "pepperoni 0/8", recipe = "pepperoni", pieces = {}, e = 0 },
+	{ name = "pepperoni 1/8", recipe = "pepperoni", pieces = ring("pepperoni", 1, 0, 360), e = 1 / 8 },
+	{ name = "pepperoni 6/8", recipe = "pepperoni", pieces = ring("pepperoni", 6, 0, 360), e = 6 / 8 },
+	{ name = "pepperoni 8/8", recipe = "pepperoni", pieces = ring("pepperoni", 8, 0, 360), e = 1 },
+	{ name = "pepperoni 12/8 (extra)", recipe = "pepperoni", pieces = ring("pepperoni", 12, 0, 360), e = 1 },
+	{ name = "pepperoni 1/8 + 12 olives (wrong)", recipe = "pepperoni", pieces = join(ring("pepperoni", 1, 0, 360), ring("olive", 12, 0, 360, 0.3)), e = 1 / 8 },
+	{ name = "half & half, halves swapped", recipe = "halfolive", pieces = join(ring("olive", 6, -80, 80), ring("pepperoni", 4, 100, 260)), e = 0 },
+	{ name = "half & half, right", recipe = "halfolive", pieces = join(ring("olive", 6, 100, 260), ring("pepperoni", 4, -80, 80)), e = 1 },
+	{ name = "garden, no peppers", recipe = "garden", pieces = ring("mushroom", 6, 0, 360), e = 0 },
+	{ name = "garden, 6 mushrooms + 3 peppers", recipe = "garden", pieces = join(ring("mushroom", 6, 0, 360), ring("pepper", 3, 30, 390, 0.3)), e = 3 / 6 },
+	{ name = "pepperoni basil, no basil", recipe = "pepbasil", pieces = ring("pepperoni", 6, 0, 360), e = 0 },
+}
+note("")
+note("| Topping case | Toppings | Make (mean of 4) | Before: weighted, grade, coins, XP | Completeness | Ceiling | After: grade, coins, XP | Hold note |")
+note("|---|---|---|---|---|---|---|---|")
+local topRows = {}
+for _, c in topCases do
+	local recipe = Recipes.ById[c.recipe]
+	local made = makeOf(cleanDough(), sauces.clean, cheeses.clean)
+	setGrade({ toppingCompleteness = false })
+	local mb = Scoring.make(recipe, made, c.pieces)
+	local ob = Scoring.order(grade(100), mb, grade(100), grade(100))
+	setGrade({})
+	local ma = Scoring.make(recipe, made, c.pieces)
+	local oa = Scoring.order(grade(100), ma, grade(100), grade(100))
+	local tops = ma.detail.toppings
+	-- By hand: the share and its ramp; the grade is the weighted score held by it.
+	local ceil = ramp(c.e)
+	check(c.name .. ": completeness", math.abs(tops.detail.completeness - c.e) < 1e-9, true)
+	check(c.name .. ": Make mean unchanged by the safeguard", ma.score, mb.score)
+	check(c.name .. ": before = weighted", ob.grade, ob.weighted)
+	check(c.name .. ": after = weighted held by the ramp", oa.grade, math.min(oa.weighted, ceil))
+	check(c.name .. ": coins from the grade", oa.coins, whole(12 * oa.grade / 100))
+	check(c.name .. ": XP from the grade", oa.xp, whole(10 * oa.grade / 100))
+	local held = if oa.held then oa.held.note else "none"
+	topRows[c.name] = { before = ob, after = oa, make = ma }
+	note(string.format("| %s | %d | %d | %d, **%d**, %d, %d | %.3f | %d | **%d**, %d, %d | %s |", c.name, tops.score, ma.score, ob.weighted, ob.grade, ob.coins, ob.xp, c.e, ceil, oa.grade, oa.coins, oa.xp, held))
+end
+-- The defect Astra found: one correct pepperoni of eight. Toppings 0.6 x 1/8 + 0.4 = 0.475 -> 48;
+-- Make (100 + 97 + 100 + 48) / 4 = 86.25 -> 86; weighted 0.5 x 86 + 30 + 20 = 93 before. After:
+-- 1/8 = 0.125 is under a quarter, so the grade is held to 35 (4 coins, 4 XP).
+check("1/8 pepperoni: toppings 48", topRows["pepperoni 1/8"].make.detail.toppings.score, 48)
+check("1/8 pepperoni: before 93", topRows["pepperoni 1/8"].before.grade, 93)
+check("1/8 pepperoni: after held to 35", topRows["pepperoni 1/8"].after.grade, 35)
+check("1/8 pepperoni: the hold names the food", topRows["pepperoni 1/8"].after.held.note, "Needed 8 pepperoni on the whole pizza, placed 1")
+check("1/8 pepperoni + wrong olives: still 35", topRows["pepperoni 1/8 + 12 olives (wrong)"].after.grade, 35)
+check("halves swapped: held to 35", topRows["half & half, halves swapped"].after.grade, 35)
+check("garden without peppers: held to 35", topRows["garden, no peppers"].after.grade, 35)
+check("garden without peppers: note names the missing ingredient", topRows["garden, no peppers"].after.held.note, "Needed 6 bell peppers on the whole pizza, placed 0")
+check("pepperoni basil without basil: held to 35", topRows["pepperoni basil, no basil"].after.grade, 35)
+-- 3 of 6 peppers: 0.5 -> 35 + 65 x 0.5 = 67.5 -> 68.
+check("garden half the peppers: ceiling 68", topRows["garden, 6 mushrooms + 3 peppers"].after.grade, math.min(topRows["garden, 6 mushrooms + 3 peppers"].after.weighted, 68))
+check("8/8: no hold", topRows["pepperoni 8/8"].after.held, nil)
+check("6/8: no hold (three quarters is the ramp's top)", topRows["pepperoni 6/8"].after.held, nil)
+check("12/8: extra pieces never raise completeness past 1", topRows["pepperoni 12/8 (extra)"].after.held, nil)
+
+-- Dough-local pieces on an oval (slice 1): halves are what the player sees, the physical x of
+-- toPizza(S, q). On the worst oval turned 60 degrees, q = (0.2, -0.6) has q.x > 0 but sits left
+-- on screen: S q / 0.95 has x = (0.5375 x 0.2 - 0.3248 x 0.6) / 0.95 = -0.092.
+local TURNED = PrepGeometry.shape(1.1, 0.35, math.rad(60))
+local qL = PrepGeometry.toPizza(TURNED, P(0.2, -0.6))
+check("oval halves: the stored point is physically left", qL.x < 0, true)
+local leftOlives = {}
+for _ = 1, 6 do
+	table.insert(leftOlives, { ingredient = "olive", x = 0.2, y = -0.6 })
+end
+local half = Scoring.toppings(Recipes.ById.halfolive, join(leftOlives, ring("pepperoni", 0, 0, 0)), TURNED)
+check("oval halves: no olive is called outside the left half", table.find(half.notes, "6 olives landed outside the left half"), nil)
+check("oval halves: olive share 1, pepperoni share 0", half.detail.completeness, 0)
+check("oval halves: the short ingredient is the pepperoni", half.detail.short.ingredient, "pepperoni")
+-- A round dough: dough-local and pizza-local agree, so the grade is today's.
+check("round dough: toppings unchanged", Scoring.toppings(Recipes.ById.pepperoni, ring("pepperoni", 8, 0, 360)).score, Scoring.toppings(Recipes.ById.pepperoni, ring("pepperoni", 8, 0, 360), Scoring.ROUND).score)
+
+-- The server stores and checks dough-local positions: on the worst oval (rolled along x) a
+-- piece at q = (0.8, 0) sits inside the sauce edge (0.84) though its screen position,
+-- x = 1.098 x 0.8 / 0.95 = 0.925, is past the old round 0.84 limit; q = (0.9, 0) is refused.
+local ovalMade = makeOf(ovalDough(), sauces.clean, cheeses.clean)
+ovalMade.step = "toppings"
+local tp = { id = 81, ticketId = 80, stage = "topping", make = ovalMade, toppings = {}, cuts = {} }
+local tSession = { shift = { customers = {}, pizzas = { [81] = tp }, ovens = { false, false }, ingredients = { "pepperoni" } } } :: any
+check("server topping: q (0.8, 0) on the oval accepted", (ShiftService.apply(tSession, "placeTopping", { pizzaId = 81, ingredient = "pepperoni", x = 0.8, y = 0 })), true)
+check("server topping: stored dough-local", tp.toppings[1] and tp.toppings[1].x, 0.8)
+local okT, whyT = ShiftService.apply(tSession, "placeTopping", { pizzaId = 81, ingredient = "pepperoni", x = 0.9, y = 0 })
+check("server topping: q (0.9, 0) refused", okT, false)
+check("server topping: reason", whyT, "off the pizza")
+check("server topping: drawn on the dough", math.abs(PrepGeometry.toPizza(MakeDough.shape(ovalMade), tp.toppings[1]).x - PrepGeometry.axes(MakeDough.shape(ovalMade)).major * 0.8 / 0.95) < 1e-9, true)
+
+-- 10. Slice 1: the food-state hold (Config.Oven, proposals: raw up to 8 s, cooked 12 s to 32 s,
+-- burnt past 36 s, hold 35). The Bake score is only the distance from the asked doneness; raw or
+-- burnt food holds the grade, continuously. Boundary table: for light 18, regular 24 and well 30,
+-- just before, at and after every boundary, Make 99 / Cut 100 and Make 100 / Cut 100, Wait 100.
+local oven = Config.Oven
+check("proposal: burnt at 36", oven.burntAt, 36)
+check("proposal: hold 35", oven.foodCap, 35)
+check("proposal: raw until 8", oven.rawUntil, 8)
+check("proposal: cooked from 12", oven.cookedFrom, 12)
+check("proposal: scorching from 32 (well 30 + window 2)", oven.scorchFrom, oven.targets.well + oven.perfectWindow)
+local function capByHand(t: number): number
+	if t <= 8 or t >= 36 then
+		return 35
+	elseif t < 12 then
+		return 35 + 65 * (t - 8) / 4
+	elseif t > 32 then
+		return 35 + 65 * (36 - t) / 4
+	end
+	return 100
+end
+local function bakeByHand(target: number, t: number): number
+	local over = math.abs(t - target) - 2
+	return if over <= 0 then 100 else whole(100 * math.clamp(1 - over / 10, 0, 1))
+end
+local function serveAt(bakeId: string, t: number, makeScore: number, capOn: boolean): (any, any)
+	oven.foodCapOn = capOn
+	local b = Scoring.bake(bakeId, t)
+	local o = Scoring.order(grade(100), grade(makeScore), b, grade(100))
+	oven.foodCapOn = true
+	return b, o
+end
+local times = { 0, 7.9, 8, 8.1, 9.9, 10, 11.9, 12, 12.1, 15.9, 16, 16.1, 19.9, 20, 20.1, 21.9, 22, 22.1, 25.9, 26, 26.1, 27.9, 28, 28.1, 31.9, 32, 32.1, 33, 34, 35, 35.9, 36, 36.1, 38, 40, 48 }
+note("")
+note("| Bake | Time s | Make / Cut | Before: Bake, grade, coins, XP | After: Bake, hold, grade, coins, XP |")
+note("|---|---|---|---|---|")
+for _, bakeId in { "light", "regular", "well" } do
+	local target = oven.targets[bakeId]
+	for _, mk in { 99, 100 } do
+		local prev: number? = nil
+		for _, t in times do
+			local bb, ob = serveAt(bakeId, t, mk, false)
+			local ba, oa = serveAt(bakeId, t, mk, true)
+			-- By hand: Bake from the distance alone; the grade is the weighted score held by the hold.
+			local bh = bakeByHand(target, t)
+			local wh = whole(0.5 * mk + 0.3 * bh + 20)
+			local gh = math.min(wh, whole(capByHand(t)))
+			check(string.format("%s %.1fs make %d: Bake", bakeId, t, mk), ba.score, bh)
+			check(string.format("%s %.1fs make %d: grade", bakeId, t, mk), oa.grade, gh)
+			check(string.format("%s %.1fs make %d: coins", bakeId, t, mk), oa.coins, whole(12 * gh / 100))
+			check(string.format("%s %.1fs make %d: XP", bakeId, t, mk), oa.xp, whole(10 * gh / 100))
+			-- Never up past the peak, never down before it: the grade rises to the window and falls after.
+			if prev then
+				local step = oa.grade - prev
+				if t <= target then
+					check(string.format("%s %.1fs make %d: rising before the target", bakeId, t, mk), step >= 0, true)
+				else
+					check(string.format("%s %.1fs make %d: falling after the target", bakeId, t, mk), step <= 0, true)
+				end
+			end
+			prev = oa.grade
+			-- The printed table keeps the state boundaries (8, 12, 32, 36 s) and this bake's
+			-- perfect-window edges, just before, at and after each.
+			local lo, hi = target - oven.perfectWindow, target + oven.perfectWindow
+			local edge = false
+			for _, b in { 8, 12, 32, 36, lo, hi } do
+				if math.abs(t - b) <= 0.1 + 1e-9 then
+					edge = true
+				end
+			end
+			if edge then
+				note(string.format("| %s | %.1f | %d / 100 | %d, %d, %d, %d | %d, %s, **%d**, %d, %d |", bakeId, t, mk, bb.score, ob.grade, ob.coins, ob.xp, ba.score, if ba.detail.cap < 100 then tostring(ba.detail.cap) else "none", oa.grade, oa.coins, oa.xp))
+			end
+		end
+	end
+end
+-- No jump: across 36.0 / 36.1 (well, Make 99) the grade moves by at most the 0.1 s slope.
+local _, o359 = serveAt("well", 35.9, 99, true)
+local _, o360 = serveAt("well", 36.0, 99, true)
+local _, o361 = serveAt("well", 36.1, 99, true)
+local _, b359 = serveAt("well", 35.9, 99, false)
+local _, b361 = serveAt("well", 36.1, 99, false)
+check("well 35.9 / 36.0 / 36.1 before: 88 / 88 / 70 (Astra's cliff)", string.format("%d/%d", b359.grade, b361.grade), "88/70")
+check("well 35.9 after: hold 35 + 65 x 0.1 / 4 = 36.6 -> 37", o359.grade, 37)
+check("well 36.0 after: 35", o360.grade, 35)
+check("well 36.1 after: 35", o361.grade, 35)
+check("well 36.1 after: held by the food", o361.held and o361.held.name, "food")
+check("well 36.1 after: Bake is the distance (6.1 s past: 59)", (Scoring.bake("well", 36.1)).score, 59)
+-- A pizza baked inside any perfect window is never held.
+for _, bakeId in { "light", "regular", "well" } do
+	for _, d in { -2, 0, 2 } do
+		local _, o = serveAt(bakeId, oven.targets[bakeId] + d, 99, true)
+		check(string.format("%s %+ds: perfect window never held", bakeId, d), o.held, nil)
+	end
+end
+-- Lighter than asked but cooked is not raw: regular asked, light 18 s baked: Bake 60, no hold.
+local bl, ol = serveAt("regular", 18, 99, true)
+check("regular asked, 18 s: Bake 60", bl.score, 60)
+check("regular asked, 18 s: cooked, not held", ol.held, nil)
+check("regular asked, 18 s: food state cooked", bl.detail.food, "cooked")
+check("raw pizza (0 s): held to 35", (select(2, serveAt("regular", 0, 99, true))).grade, 35)
+check("raw pizza (0 s): note", (Scoring.bake("regular", 0)).notes[1], "Still raw")
+check("burnt note first", (Scoring.bake("well", 37)).notes[1], "Burnt")
+
+-- The server says the hold on Bake's notes ("Burnt: grade held to 35"), not on Make's.
+local burntPizza = { id = 91, ticketId = 90, stage = "cutting", make = makeOf(cleanDough(), sauces.clean, cheeses.clean), toppings = {}, cuts = cutsPerfect, bakeSeconds = 40 }
+local bSession = {
+	shift = {
+		customers = { { id = 90, status = "ordered", order = { recipe = "cheese", bake = "well", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } },
+		pizzas = { [91] = burntPizza },
+		ovens = { false, false },
+		ingredients = {},
+		nextArrival = 1,
+		customerCount = 5,
+		tips = 0,
+		xp = 0,
+		tutorial = false,
+	},
+} :: any
+check("serve burnt: accepted", (ShiftService.apply(bSession, "serve", { pizzaId = 91 })), true)
+local br = bSession.shift.customers[1].result
+check("serve burnt: grade 35", br.overall, 35)
+check("serve burnt: hold on Bake's notes", br.bake.notes[1], "Burnt: grade held to 35")
+check("serve burnt: Make's notes untouched", br.make.notes[1] ~= "Burnt: grade held to 35", true)
+
+-- 11. Slice 1: Service is a 0.85-1.00 pay modifier before integer rounding. The final coin cut
+-- can exceed 15 % on small payouts. Low-payout cases (Wait 100 against Wait 40, Service's floor):
+-- grade 100: paid 100 / 85, coins 12 / 10 (-16.7 %); grade 13: paid 13 / 11, coins 2 / 1 (-50 %).
+note("")
+note("| Grade | Coins at Service 100 | Paid at Service 40 | Coins at Service 40 | Coin cut |")
+note("|---|---|---|---|---|")
+for _, g in { 100, 50, 35, 21, 13, 4 } do
+	local o100 = Scoring.order(grade(100), grade(g), grade(g), grade(g))
+	local o40 = Scoring.order(grade(40), grade(g), grade(g), grade(g))
+	check(string.format("service grade %d: same grade either way", g), o40.grade, o100.grade)
+	check(string.format("service grade %d: same XP either way", g), o40.xp, o100.xp)
+	check(string.format("service grade %d: paid = round(grade x 0.85)", g), o40.paid, whole(o100.grade * 0.85))
+	check(string.format("service grade %d: coins = round(12 x paid / 100)", g), o40.coins, whole(12 * o40.paid / 100))
+	note(string.format("| %d | %d | %d | %d | %s |", o100.grade, o100.coins, o40.paid, o40.coins, if o100.coins > 0 then string.format("%.1f %%", 100 * (o100.coins - o40.coins) / o100.coins) else "n/a"))
+end
+check("service: grade 100 -> 12 / 10 coins", string.format("%d/%d", Scoring.order(grade(100), grade(100), grade(100), grade(100)).coins, Scoring.order(grade(40), grade(100), grade(100), grade(100)).coins), "12/10")
+check("service: grade 13 -> 2 / 1 coins", string.format("%d/%d", Scoring.order(grade(100), grade(13), grade(13), grade(13)).coins, Scoring.order(grade(40), grade(13), grade(13), grade(13)).coins), "2/1")
 
 for k, v in defaults do
 	Config.Grade[k] = v

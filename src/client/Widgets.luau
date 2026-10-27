@@ -10,11 +10,11 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
-local G = require(Shared.PrepGeometry)
 local MakeCheese = require(Shared.MakeCheese)
 local MakeDough = require(Shared.MakeDough)
 local MakeSauce = require(Shared.MakeSauce)
 local Recipes = require(Shared.Recipes)
+local Scoring = require(Shared.Scoring)
 local MakeLayers = require(script.Parent.MakeLayers)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
@@ -1114,11 +1114,11 @@ end
 
 -- A cut: the generated cut crevice (G9 v3: a dark slit with shadowed, lifted edges and no
 -- food drawn inside it), so the pizza underneath stays the food. A freehand cut (`line.path`,
--- the committed path or a live stroke's newest piece) is drawn along its path, one stretched
--- groove per straight run, clipped to the crust. A plain line (x1..y2, no path) is drawn as
--- the chord of the infinite line through its two points, clipped to the crust.
--- `transparency` fades it (the live stroke).
-local CRUST_EDGE = 0.95
+-- the committed path or the live stroke) is drawn along its path, one stretched groove per
+-- straight run, clipped to the dough. A plain line (x1..y2, no path) is drawn as the chord of
+-- the infinite line through its two points, clipped to the dough. The clip is the grade's own
+-- (Scoring.clipToDough on the made pizza's footprint), so the groove shows exactly the part the
+-- server grades. `transparency` fades it (the live stroke).
 
 -- The groove art is 1024 x 21 px with tapered ends (opaque from column 10 to 1011).
 local GROOVE_W, GROOVE_H = 1024, 21
@@ -1154,69 +1154,11 @@ local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by:
 	end
 end
 
--- The part of segment a-b inside the crust, as parameters along it (nil when none).
-local function clipToCrust(ax: number, ay: number, bx: number, by: number): (number?, number?)
-	local dx, dy = bx - ax, by - ay
-	local A = dx * dx + dy * dy
-	if A < 1e-12 then
-		return nil, nil
-	end
-	local B = 2 * (ax * dx + ay * dy)
-	local C = ax * ax + ay * ay - CRUST_EDGE * CRUST_EDGE
-	local disc = B * B - 4 * A * C
-	if disc <= 0 then
-		return nil, nil
-	end
-	local r = math.sqrt(disc)
-	local t0, t1 = math.max(0, (-B - r) / (2 * A)), math.min(1, (-B + r) / (2 * A))
-	if t1 - t0 < 1e-6 then
-		return nil, nil
-	end
-	return t0, t1
-end
-
--- The part of segment a-b inside the dough outline S (pizza-local; the outline is S applied to
--- the unit circle), as parameters along it. A linear map keeps the parameters, so it is the
--- unit-circle clip of the segment mapped by S^-1.
-local function clipToDough(S: any, ax: number, ay: number, bx: number, by: number): (number?, number?)
-	local Si = G.inverse(S)
-	local a, b = G.apply(Si, { x = ax, y = ay }), G.apply(Si, { x = bx, y = by })
-	local dx, dy = b.x - a.x, b.y - a.y
-	local A = dx * dx + dy * dy
-	if A < 1e-12 then
-		return nil, nil
-	end
-	local B = 2 * (a.x * dx + a.y * dy)
-	local C = a.x * a.x + a.y * a.y - 1
-	local disc = B * B - 4 * A * C
-	if disc <= 0 then
-		return nil, nil
-	end
-	local r = math.sqrt(disc)
-	local t0, t1 = math.max(0, (-B - r) / (2 * A)), math.min(1, (-B + r) / (2 * A))
-	if t1 - t0 < 1e-6 then
-		return nil, nil
-	end
-	return t0, t1
-end
-
--- `dough` (the made pizza's outline S, optional) also stops the groove at the dough's edge: on
--- an oval the pizza is not the round crust the cut is graded against (declared: Cut still grades
--- against the round 0.95 crust).
+-- `dough` is the made pizza's outline S (Scoring.footprint); omitted, the full round crust.
 function Widgets.drawCut(layer: Frame, line: any, transparency: number?, dough: any?)
+	local S = dough or Scoring.ROUND
 	local function clip(ax: number, ay: number, bx: number, by: number): (number?, number?)
-		local t0, t1 = clipToCrust(ax, ay, bx, by)
-		if t0 and t1 and dough then
-			local u0, u1 = clipToDough(dough, ax, ay, bx, by)
-			if not (u0 and u1) then
-				return nil, nil
-			end
-			t0, t1 = math.max(t0, u0), math.min(t1, u1)
-			if t1 - t0 < 1e-6 then
-				return nil, nil
-			end
-		end
-		return t0, t1
+		return Scoring.clipToDough(S, ax, ay, bx, by)
 	end
 	local path = line.path
 	if path then
@@ -1268,23 +1210,15 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?, dough: 
 	if len < 1e-4 then
 		return
 	end
+	-- The infinite line, long enough to cross any dough (semi-axes stop at 1.1), clipped to it.
 	local ux, uy = dx / len, dy / len
-	local t = -(line.x1 * ux + line.y1 * uy)
-	local cx, cy = line.x1 + ux * t, line.y1 + uy * t
-	local d2 = cx * cx + cy * cy
-	if d2 >= 1 then
+	local ax, ay, bx, by = line.x1 - ux * 4, line.y1 - uy * 4, line.x2 + ux * 4, line.y2 + uy * 4
+	local t0, t1 = clip(ax, ay, bx, by)
+	if not (t0 and t1) then
 		return
 	end
-	local half = math.sqrt(1 - d2) * CRUST_EDGE
-	local ax, ay, bx, by = cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half
-	if dough then
-		local t0, t1 = clip(ax, ay, bx, by)
-		if not (t0 and t1) then
-			return
-		end
-		local ex, ey = bx - ax, by - ay
-		ax, ay, bx, by = ax + ex * t0, ay + ey * t0, ax + ex * t1, ay + ey * t1
-	end
+	local ex, ey = bx - ax, by - ay
+	ax, ay, bx, by = ax + ex * t0, ay + ey * t0, ax + ex * t1, ay + ey * t1
 	groovePiece(layer, ax, ay, bx, by, transparency, true)
 end
 

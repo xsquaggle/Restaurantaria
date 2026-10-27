@@ -514,6 +514,8 @@ function Actions.placeTopping(shift: Shift, args: any): (boolean, string?)
 	if not table.find(shift.ingredients, args.ingredient) then
 		return false, "ingredient not unlocked"
 	end
+	-- Dough-local (slice 1): x, y are the piece's place on the made dough (PrepGeometry.toDough),
+	-- so the check below keeps every piece inside the dough's own outline on any oval.
 	if not isFiniteNumber(args.x, -1, 1) or not isFiniteNumber(args.y, -1, 1) then
 		return false, "position out of range"
 	end
@@ -577,8 +579,9 @@ function Actions.cut(shift: Shift, args: any): (boolean, string?)
 		return false, "already cut " .. Config.Cut.maxLines .. " times"
 	end
 	-- Freehand: the client sends the dragged path; the server grades and keeps it (the path's
-	-- best-fit chord, the path itself and its straightness and completeness).
-	local cut, reason = Scoring.cutPath(args.path)
+	-- best-fit chord, the path itself and its straightness and completeness), against the
+	-- pizza's own dough footprint from its made dough record, never from the client.
+	local cut, reason = Scoring.cutPath(args.path, Scoring.footprint(pizza.make))
 	if not cut then
 		return false, reason
 	end
@@ -723,12 +726,22 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local wait = Scoring.wait(Scoring.patienceFraction(customer.arrivedAt, now()))
 	local make = Scoring.make(recipe, pizza.make, pizza.toppings)
 	local bake = Scoring.bake(order.bake, pizza.bakeSeconds :: number)
-	local cut = Scoring.cut(order.slices, pizza.cuts)
+	local cut = Scoring.cut(order.slices, pizza.cuts, Scoring.footprint(pizza.make))
 	-- The join (Config.Grade): the grade, its ceiling, the pay and the XP, all from the parts.
 	local order_ = Scoring.order(wait, make, bake, cut)
 	local overall = order_.grade
 	if order_.held then
-		table.insert(make.notes, 1, string.format("%s: grade held to %d", order_.held.note, order_.held.value))
+		local text = string.format("%s: grade held to %d", order_.held.note, order_.held.value)
+		if order_.held.name == "food" then
+			-- The food's own state ("Burnt") already leads Bake's notes: say the hold there.
+			if bake.notes[1] == order_.held.note then
+				bake.notes[1] = text
+			else
+				table.insert(bake.notes, 1, text)
+			end
+		else
+			table.insert(make.notes, 1, text)
+		end
 	end
 	local tip = order_.coins
 	if session.devForcedTip and RunService:IsStudio() and SaveService.kindOf(shift.store) ~= "production" then
