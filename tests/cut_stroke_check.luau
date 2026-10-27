@@ -339,7 +339,7 @@ do
 	local on = CutStroke.grade(drive(Scoring.ROUND, true, short).points, Scoring.ROUND, true)
 	check("guard: short stroke accepted both ways", off ~= nil and on ~= nil, true)
 	if off and on then
-		check("guard: short stroke not extended", on.completeness <= off.completeness + 1e-12, true)
+		check("guard: short stroke not extended", on.completeness, off.completeness)
 		check("guard: raw samples kept with the cut", #on.raw, #drive(Scoring.ROUND, true, short).points)
 	end
 end
@@ -499,7 +499,7 @@ do
 	check("ends: no groove piece has a corner off the dough (chords)", endsWorst.outside, 0)
 	check("ends: the pieces cover each chord without a gap", endsWorst.gaps, 0)
 	check("ends: the taper reaches within 0.03 cut units of the edge", endsWorst.residue <= 0.03, true)
-	note(string.format("groove ends over %d chords (4 doughs, every 5 deg, offsets 0 to 0.9): full width stops up to %.4f cut units (%.1f px at 1920x1080) from the edge; the taper (widths 5/6 to 1/6) leaves at most %.4f (%.1f px) uncovered; no corner off the dough",
+	note(string.format("groove ends over %d chords (4 doughs, every 5 deg, offsets 0 to 0.9): full width stops up to %.4f cut units (%.1f px at 1920x1080) from the edge; the taper (widths 0.8 to 0.1) leaves at most %.4f (%.1f px) uncovered; no corner off the dough",
 		endsWorst.chords, endsWorst.pull, endsWorst.pull * 372, endsWorst.residue, endsWorst.residue * 372))
 end
 

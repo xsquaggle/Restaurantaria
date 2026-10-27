@@ -15,12 +15,15 @@
 --    function of the raw samples up to it and nothing later, computed once and kept, so the
 --    output for a raw prefix never changes as the stroke grows, and the server rebuilds the same
 --    output from the same raw list. See CutStroke.filter for the rule.
--- 3. The grade. CutStroke.grade grades the assisted list with Scoring.cutPath, and only when the
---    raw list is accepted too; the cut keeps the raw list's completeness when that is lower, so
---    the assist never makes a cut out of a miss or makes a short stroke longer.
+-- 3. The grade. CutStroke.grade grades the raw list, then the assisted list, with
+--    Scoring.cutPath, and keeps the assisted cut only when it does at least as well as the raw
+--    one (see there); otherwise the raw cut. So the assist never refuses a stroke, never makes a
+--    cut out of a miss, never makes a short stroke longer and never lowers a grade.
 -- 4. The drawing. CutStroke.runs merges nearly straight samples into groove runs with a rule
 --    that only looks forward from the last closed run, so runs already drawn never change as
---    the stroke grows, and the committed groove is the live one.
+--    the stroke grows, and the committed groove is the live one, except when the guard keeps
+--    the raw path: then the committed groove is the raw samples' (at most 0.015 dough units
+--    from the live one).
 
 local Config = require(script.Parent.Config)
 local PrepGeometry = require(script.Parent.PrepGeometry)
@@ -210,7 +213,7 @@ end
 -- Grades a sent raw list on the dough S. Assist off: Scoring.cutPath of the raw list. Assist on:
 -- the raw list is graded first and refused exactly when assist off would refuse it; the
 -- assisted path is then kept only when it is accepted, its path credit (Scoring.cutQuality,
--- with the raw list's completeness when that is lower) is at least the raw path's, and it does
+-- with the raw stroke's own completeness) is at least the raw path's, and it does
 -- not miss the centre where the raw path did not. Otherwise the raw cut is kept (assisted =
 -- false). So the assist never refuses a stroke, never lowers a stroke's credit and never makes
 -- a cut miss the centre. A kept assisted cut also carries the raw cut's line and credit, so the
@@ -229,7 +232,8 @@ function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local cut = Scoring.cutPath(assisted, S)
 	if cut then
 		local c = cut :: any
-		c.completeness = math.min(c.completeness, r.completeness)
+		-- The assist only straightens: the cut keeps the raw stroke's own span.
+		c.completeness = r.completeness
 		local tolerance = Config.Cut.centreTolerance
 		local centred = Scoring.cutOffset(c, S) <= tolerance or Scoring.cutOffset(r, S) > tolerance
 		if Scoring.cutQuality(c) >= Scoring.cutQuality(r) and centred then
@@ -466,7 +470,7 @@ end
 -- starts where its own corners fit, so the visible groove narrows into the crust instead of
 -- stopping short of it or crossing it, the way a mask cut to the crust would show it. The gap
 -- left between the narrowest step and the edge is the residue the checks measure.
-CutStroke.TAPER = { 1, 5 / 6, 4 / 6, 3 / 6, 2 / 6, 1 / 6 }
+CutStroke.TAPER = { 1, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1 }
 -- Pieces along one run overlap this far (cut units) at a join or a taper step, so no gap opens.
 CutStroke.JOIN = 0.008
 
@@ -497,7 +501,7 @@ local function grooveEnd(S: Mat2, Si: Mat2, ex: number, ey: number, dx: number, 
 		local s = CutStroke.endInset(S, ex, ey, dx, dy, w, maxInset)
 		if s < outer and cornersIn(Si, ex + dx * s, ey + dy * s, dx, dy, w) then
 			local stop = math.min(outer + CutStroke.JOIN, span / 2)
-			if stop > s then
+			if stop > s and cornersIn(Si, ex + dx * stop, ey + dy * stop, dx, dy, w) then
 				table.insert(out, { ax = ex + dx * s, ay = ey + dy * s, bx = ex + dx * stop, by = ey + dy * stop, half = w, whole = false })
 			end
 			outer = s
@@ -527,7 +531,9 @@ function CutStroke.groovePieces(line: any, S: Mat2, half: number): { Piece }
 		local tapers: { Piece } = {}
 		local s0 = grooveEnd(S, Si, ax, ay, ux, uy, half, span, maxInset, startEdge, startReach, tapers)
 		local s1 = grooveEnd(S, Si, bx, by, -ux, -uy, half, span, maxInset, endEdge, endReach, tapers)
-		if s0 + s1 < span then
+		-- endInset gives up at maxInset on a run too short or too close to the rim for the full
+		-- width: then only the taper steps that fit are drawn.
+		if s0 + s1 < span and cornersIn(Si, ax + ux * s0, ay + uy * s0, ux, uy, half) and cornersIn(Si, bx - ux * s1, by - uy * s1, ux, uy, half) then
 			table.insert(pieces, { ax = ax + ux * s0, ay = ay + uy * s0, bx = bx - ux * s1, by = by - uy * s1, half = half, whole = whole })
 		end
 		for _, t in tapers do
