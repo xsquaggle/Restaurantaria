@@ -214,10 +214,11 @@ end
 -- the raw list is graded first and refused exactly when assist off would refuse it; the
 -- assisted path is then kept only when it is accepted, its path credit (Scoring.cutQuality,
 -- with the raw stroke's own completeness) is at least the raw path's, its widest wobble is no
--- wider, and it does not miss the centre where the raw path did not. Otherwise the raw cut is kept (assisted =
--- false). So the assist never refuses a stroke, never lowers a stroke's credit, never widens its
--- wobble and never makes a cut miss the centre. A kept assisted cut also carries the raw cut's line and credit, so the
--- pizza's Cut grade can never fall below the raw grade (CutStroke.pizzaGrade).
+-- wider, and it does not miss the centre where the raw path did not. Otherwise the raw cut is
+-- kept (assisted = false). So the assist never refuses a stroke, never lowers a stroke's credit,
+-- never widens its wobble and never makes a cut miss the centre. A kept assisted cut also
+-- carries the raw cut's line and credit, so the pizza's Cut grade can never fall below the raw
+-- grade (CutStroke.pizzaGrade).
 function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local rawCut, reason = Scoring.cutPath(raw, S)
 	if not rawCut then
