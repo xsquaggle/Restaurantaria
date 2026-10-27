@@ -146,20 +146,52 @@ for _, rec in records do
 	-- Every disc keeps the contract.
 	local drawn, offDough, outside, badUv, onBare, badArea, badKind, maxDeep = 0, 0, 0, 0, 0, 0, 0, 0
 	local kinds = { full = 0, edge = 0, speck = 0 }
+	local area1 = MakeSauce.CELL * MakeSauce.CELL
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
 		local home = math.sqrt((d.x - MakeSauce.xs[d.cell]) ^ 2 + (d.y - MakeSauce.ys[d.cell]) ^ 2)
+		-- Pulled in to the material's span (then the checks of where it sits do not apply).
+		local pulled = r >= SauceCover.SPAN - d.w / 2 - 1e-9
 		-- A speck sits within its jitter; an edge disc is pushed back toward its patch by at most
-		-- its radius plus half a cell; a full disc sits on its cell (all three may be pulled in to
-		-- the material's span).
-		local allowed = if d.kind == "speck" then SauceCover.JITTER * MakeSauce.CELL * math.sqrt(2)
-			elseif d.kind == "edge" then
+		-- its radius plus half a cell; a full disc sits on its cell.
+		local allowed = 0
+		if d.kind == "speck" then
+			allowed = SauceCover.JITTER * MakeSauce.CELL * math.sqrt(2)
+		elseif d.kind == "edge" then
+			allowed = (SauceCover.FULL / 2 + 0.5) * MakeSauce.CELL
+		end
+		if home > allowed + 1e-9 and not pulled then
+			offDough += 1
+		end
+		if MakeSauce.rs[d.cell] > SauceCover.DOUGH + 1e-9 then
+			offDough += 1
+		end
+		if r + d.w / 2 > SauceCover.SPAN + 1e-9 or d.w ~= d.h then
+			outside += 1
+		end
+		local u, v, uw, vh = SauceCover.uv(d)
+		if u < -1e-9 or v < -1e-9 or u + uw > 1 + 1e-9 or v + vh > 1 + 1e-9
+			or math.abs(u + uw / 2 - (d.x + 1) / 2) > 1e-9 or math.abs(v + vh / 2 - (d.y + 1) / 2) > 1e-9
+			or math.abs(uw - d.w / 2) > 1e-9 or math.abs(vh - d.h / 2) > 1e-9 then
+			badUv += 1
+		end
+		if SauceCover.credit(field[d.cell]) < SauceCover.BARE then
+			onBare += 1
+		end
+		kinds[d.kind] += 1
+		if d.kind == "full" then
+			-- A covered cell inside a covered patch.
+			if d.credit < SauceCover.SOLID or math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 then
+				badKind += 1
+			end
+			drawn += area1
+		elseif d.kind == "edge" then
 			-- A FULL disc whose outer point is credit - 1/2 cells past its cell's centre: the
 			-- drawn edge on the scored edge.
 			if math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 then
 				badKind += 1
 			end
-			if r < SauceCover.SPAN - d.w / 2 - 1e-9 and math.abs((d.w / 2 - home) - (d.credit - 0.5) * MakeSauce.CELL) > 1e-9 then
+			if not pulled and math.abs((d.w / 2 - home) - (d.credit - 0.5) * MakeSauce.CELL) > 1e-9 then
 				badArea += 1
 			end
 			drawn += d.credit * area1
@@ -167,7 +199,7 @@ for _, rec in records do
 			-- A speck: its area is its credit (to the rounding).
 			local scale = d.w / MakeSauce.CELL
 			local want = SauceCover.AREA * math.sqrt(d.credit)
-			if d.w ~= d.h or (math.abs(scale - want) > SauceCover.STEP / 2 + 1e-9 and scale > SauceCover.STEP + 1e-9) then
+			if math.abs(scale - want) > SauceCover.STEP / 2 + 1e-9 and scale > SauceCover.STEP + 1e-9 then
 				badArea += 1
 			end
 			drawn += math.pi * (scale / 2) ^ 2 * area1
