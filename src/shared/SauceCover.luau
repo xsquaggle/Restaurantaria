@@ -12,8 +12,8 @@
 -- never drawn as transparency. A covered cell (at least SOLID credit) whose four neighbours are
 -- covered too is drawn a little larger (FULL) so the discs close up with no gaps; every other
 -- disc keeps the area of its credit (AREA), which keeps the drawn edge on the scored edge
--- (within a third of a cell), and one under SOLID credit (thin sauce) sits a little off the grid
--- (JITTER) so thin sauce reads as specks, not as a printed dot grid.
+-- (within a third of a cell) and sits a little off the grid (JITTER), so a thin trace reads as
+-- specks and an edge as an irregular line, not as a printed dot grid or a row of beads.
 --
 -- Material span (decided in slice 2, recorded in the hand-off): the 1024 px material maps cover
 -- the dough-local square -1..1 (radius 1.0) in every view; the dough's edge is 0.95. Sauce off
@@ -35,22 +35,21 @@ SauceCover.DOUGH = 0.95 -- cells out to here are drawn as material
 -- as covered sauce; thinner sauce as specks); disc diameters as
 -- multiples of the cell: AREA keeps a disc's area equal to its credit (2 / sqrt(pi)), FULL closes
 -- a fully covered patch (at least sqrt 2, so four neighbours leave no hole); the deep-red tint of
--- a thick layer starts at DEEP_FROM even layers and is full DEEP_SPAN later.
+-- a thick layer (its 5x5 mean) starts at DEEP_FROM even layers and is full DEEP_SPAN later.
 SauceCover.BARE = 0.03
 SauceCover.SOLID = 0.5
 SauceCover.AREA = 2 / math.sqrt(math.pi)
-SauceCover.FULL = 1.5
+SauceCover.FULL = 1.6
 SauceCover.DEEP_FROM = 1.3
 SauceCover.DEEP_SPAN = 1.7
 -- Diameters are rounded to this share of a cell (fewer resizes).
 SauceCover.STEP = 0.05
--- A thin disc (under SOLID) sits off its cell centre by a fixed amount up to JITTER cells each
--- way (from the cell's index), so thin sauce does not print as a regular dot grid; it still
--- samples the map at its own drawn place.
+-- A disc that is not closing a patch sits off its cell centre by a fixed amount up to JITTER
+-- cells each way (from the cell's index); it still samples the map at its own drawn place.
 SauceCover.JITTER = 0.35
 
 -- The material cells (drawn on the dough), each one's four grid neighbours (0 past the field's
--- extent or off the dough, which count as bare) and its 3x3 block (for the deep-red tint, read
+-- extent or off the dough, which count as bare) and its 5x5 block (for the deep-red tint, read
 -- from the block's mean so the tint changes smoothly instead of cell by cell).
 local cells: { number } = {}
 local neighbours: { [number]: { number } } = {}
@@ -69,8 +68,8 @@ do
 				end
 				neighbours[i] = list
 				local block = {}
-				for dx = -1, 1 do
-					for dy = -1, 1 do
+				for dx = -2, 2 do
+					for dy = -2, 2 do
 						local j = MakeSauce.cellAt(gx + dx, gy + dy)
 						if j then
 							table.insert(block, j)
@@ -120,7 +119,7 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 	local deep = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
 	deep = math.floor(deep * 20 + 0.5) / 20
 	local x, y = xs[i], ys[i]
-	if c < SauceCover.SOLID then
+	if scale < SauceCover.FULL then
 		local a = SauceCover.JITTER * CELL * 2
 		x += (((i * 0.6180339887) % 1) - 0.5) * a
 		y += (((i * 0.7548776662) % 1) - 0.5) * a
