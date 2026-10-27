@@ -6,11 +6,11 @@
 -- preassembled pizza. Cosmetic only: it never takes input and never changes a record.
 --
 -- Sauce (slice 2, Astra r14; SauceCover): one thick marinara material through the coverage the
--- grade scores. Every field cell on the dough that carries sauce shows a disc of Astra's material
--- map (sauce_material_raw_v2), sampled at the cell's own dough-local place over the one canonical
--- -1..1 square, so neighbouring discs read as one continuous opaque material; a disc's area is
--- the cell's coverage credit, so thin sauce shows as sparse specks, never as a wash. The discs
--- sit in one CanvasGroup; the cooked map (sauce_material_cooked_v2) is the same discs in a second
+-- grade scores. Every field cell on the dough that carries sauce shows a tile of Astra's material
+-- map (sauce_material_raw_v2), sampled at the tile's own dough-local place over the one canonical
+-- -1..1 square, so neighbouring tiles read as one continuous opaque material: covered patches
+-- close up, their edges are bands as deep as the edge cells' credit, and thin sauce shows as
+-- sparse specks, never as a wash (SauceCover.disc). The tiles sit in one CanvasGroup; the cooked map (sauce_material_cooked_v2) is the same discs in a second
 -- group over it, its GroupTransparency the cooking share, so the colour moves from raw to cooked
 -- under one unchanged mask (opaque wherever the sauce is). Cooking follows the food's own state
 -- (SauceCover.cooked), not the ticket. Sauce spilled past the dough's edge shows only as the board
@@ -221,9 +221,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	-- cell), so no stamp is drawn past the grid the grade sees.
 	type Stamp = { image: ImageLabel, cells: { number }, near: { { number } }, reach: number, turn: number, size: number, shown: number, tint: number, color: Color3? }
 	local stamps: { Stamp } = {}
-	-- (Material) one disc per field cell that has carried sauce (made on first use): its raw
+	-- (Material) one tile per field cell that has carried sauce (made on first use): its raw
 	-- label, its cooked twin once the pizza has been in the oven, and what it last showed.
-	type Tile = { raw: ImageLabel, cooked: ImageLabel?, d: number, deep: number, shown: boolean }
+	type Tile = { raw: ImageLabel, cooked: ImageLabel?, key: string, shown: boolean }
 	local tiles: { [number]: Tile } = {}
 	local cookedOn = false
 	local spills: { ImageLabel } = {}
@@ -272,19 +272,19 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		-- A disc closing a patch keeps at least CLOSE_PX past the corner it must cover, so pixel
 		-- rounding and edge smoothing at phone size never open pinholes between four discs (it
 		-- grows inward only: its neighbours are covered).
-		if disc.d >= SauceCover.FULL * MakeSauce.CELL - 1e-9 then
+		if disc.kind == "full" then
 			local least = MakeSauce.CELL * math.sqrt(2) + 2 * CLOSE_PX / math.min(tileA, tileB)
-			if disc.d < least then
+			if disc.w < least then
 				disc = table.clone(disc)
-				disc.d = least
+				disc.w, disc.h = least, least
 			end
 		end
 		img.Position = UDim2.fromOffset(p.X, p.Y)
-		img.Size = UDim2.fromOffset(tileA * disc.d, tileB * disc.d)
+		img.Size = UDim2.fromOffset(tileA * disc.w, tileB * disc.h)
 		img.Rotation = tileRot
-		local u, v, w = SauceCover.uv(disc)
+		local u, v, uw, vh = SauceCover.uv(disc)
 		img.ImageRectOffset = Vector2.new(u * MATERIAL_PX, v * MATERIAL_PX)
-		img.ImageRectSize = Vector2.new(w * MATERIAL_PX, w * MATERIAL_PX)
+		img.ImageRectSize = Vector2.new(uw * MATERIAL_PX, vh * MATERIAL_PX)
 		img.ImageColor3 = Color3.new(1, 1, 1):Lerp(DEEP, disc.deep)
 	end
 
@@ -343,7 +343,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		else
 			-- The discs are redrawn at the new place when next shown.
 			for _, tile in tiles do
-				tile.d = -1
+				tile.key = ""
 			end
 		end
 		for _, d in dollops do
@@ -538,15 +538,16 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 				seen[disc.cell] = true
 				local tile = tiles[disc.cell]
 				if not tile then
-					tile = { raw = newDisc("sauce_material_raw_v2", sauceRaw), cooked = nil, d = -1, deep = -1, shown = false }
+					tile = { raw = newDisc("sauce_material_raw_v2", sauceRaw), cooked = nil, key = "", shown = false }
 					tiles[disc.cell] = tile
 				end
 				if cookedOn and not tile.cooked then
 					tile.cooked = newDisc("sauce_material_cooked_v2", sauceCooked)
-					tile.d = -1
+					tile.key = ""
 				end
-				if tile.d ~= disc.d or tile.deep ~= disc.deep then
-					tile.d, tile.deep = disc.d, disc.deep
+				local key = string.format("%.4f,%.4f,%.4f,%.4f,%.2f", disc.x, disc.y, disc.w, disc.h, disc.deep)
+				if tile.key ~= key then
+					tile.key = key
 					drawDisc(tile.raw, disc)
 					if tile.cooked then
 						drawDisc(tile.cooked, disc)

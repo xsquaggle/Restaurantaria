@@ -1,9 +1,9 @@
 -- Checks for how the sauce is drawn (SauceCover, slice 2, Astra r14): presentation only. For
 -- every record of the comparison set the grade, mass, pours and coverage are the same before and
--- after the renderer reads the field, the field itself is unchanged, and the drawn discs keep the
+-- after the renderer reads the field, the field itself is unchanged, and the drawn tiles keep the
 -- material contract: only on the dough, inside the material's -1..1 span, sampled at their own
--- place, no disc on a bare cell, a boundary disc's area equal to its credit, a covered patch closed
--- up. The board smear appears only for recorded spill, at that spill. Cooking follows the food's
+-- place, no tile on a bare cell, an edge band as deep as its credit, a speck's area equal to its
+-- credit, a covered patch closed up. The board smear appears only for recorded spill, at that spill. Cooking follows the food's
 -- own state. The comparison records here are the ones the Studio A/B captures draw
 -- (tools/food_ab.luau builds the same actions). Run offline with tests/offline/run.py, or in
 -- Studio Edit after a sync. Arithmetic only: how it looks is checked in Studio and by Lawson.
@@ -89,6 +89,7 @@ check("proposal: solid", SauceCover.SOLID, 0.5)
 near("proposal: area disc", SauceCover.AREA, 2 / math.sqrt(math.pi), 1e-12)
 check("proposal: full disc", SauceCover.FULL, 1.6)
 check("proposal: full disc closes a patch (>= sqrt 2)", SauceCover.FULL >= math.sqrt(2), true)
+check("proposal: edge band inset", SauceCover.INSET, 0.1)
 check("proposal: spill sectors / min / full", string.format("%d/%g/%g", SauceCover.SECTORS, SauceCover.SPILL_MIN, SauceCover.SPILL_FULL), "12/0.01/0.15")
 check("default renderer", Config.FoodArt.sauce, "material")
 check("default cheese family", Config.FoodArt.cheese, "v2")
@@ -126,7 +127,7 @@ local records = {
 	{ "unmoved dollops", sauceOf(tri, {}) },
 }
 local area = MakeSauce.CELL * MakeSauce.CELL
-table.insert(report, "record                               pours  mass   coverage  grade  discs  drawn/edible  deepest  spills (ladles)")
+table.insert(report, "record                               pours  mass   coverage  grade  tiles (full/edge/speck)  drawn/edible  deepest  spills (ladles)")
 for _, rec in records do
 	local name, sauce = rec[1], rec[2]
 	local before = MakeSauce.grade(sauce)
@@ -144,42 +145,64 @@ for _, rec in records do
 	check(name .. ": pours unchanged", after.detail.pours, before.detail.pours)
 	check(name .. ": same discs again", #SauceCover.discs(field), #discs)
 	-- Every disc keeps the contract.
-	local drawn, offDough, outside, badUv, onBare, badArea, maxDeep = 0, 0, 0, 0, 0, 0, 0
+	local drawn, offDough, outside, badUv, onBare, badArea, badKind, maxDeep = 0, 0, 0, 0, 0, 0, 0, 0
+	local kinds = { full = 0, edge = 0, speck = 0 }
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
 		local home = math.sqrt((d.x - MakeSauce.xs[d.cell]) ^ 2 + (d.y - MakeSauce.ys[d.cell]) ^ 2)
-		if home > SauceCover.JITTER * MakeSauce.CELL * math.sqrt(2) + 1e-9 then
+		if home > (0.5 + SauceCover.INSET) * MakeSauce.CELL + 1e-9 then
 			offDough += 1
 		end
 		if MakeSauce.rs[d.cell] > SauceCover.DOUGH + 1e-9 then
 			offDough += 1
 		end
-		if r + d.d / 2 > SauceCover.SPAN + 1e-9 then
+		if r + math.sqrt(d.w * d.w + d.h * d.h) / 2 > SauceCover.SPAN + 1e-9 then
 			outside += 1
 		end
-		local u, v, w = SauceCover.uv(d)
-		if u < -1e-9 or v < -1e-9 or u + w > 1 + 1e-9 or v + w > 1 + 1e-9 or math.abs(u + w / 2 - (d.x + 1) / 2) > 1e-9 or math.abs(v + w / 2 - (d.y + 1) / 2) > 1e-9 then
+		local u, v, uw, vh = SauceCover.uv(d)
+		if u < -1e-9 or v < -1e-9 or u + uw > 1 + 1e-9 or v + vh > 1 + 1e-9
+			or math.abs(u + uw / 2 - (d.x + 1) / 2) > 1e-9 or math.abs(v + vh / 2 - (d.y + 1) / 2) > 1e-9
+			or math.abs(uw - d.w / 2) > 1e-9 or math.abs(vh - d.h / 2) > 1e-9 then
 			badUv += 1
 		end
 		if SauceCover.credit(field[d.cell]) < SauceCover.BARE then
 			onBare += 1
 		end
-		local scale = d.d / MakeSauce.CELL
-		if scale < SauceCover.FULL - 1e-9 then
-			-- A boundary disc: its area is its credit (to the diameter rounding).
-			local want = SauceCover.AREA * math.sqrt(d.credit)
-			if math.abs(scale - want) > SauceCover.STEP / 2 + 1e-9 and scale > SauceCover.STEP + 1e-9 then
+		kinds[d.kind] += 1
+		local area1 = MakeSauce.CELL * MakeSauce.CELL
+		if d.kind == "full" then
+			-- A covered cell inside a covered patch.
+			if d.credit < SauceCover.SOLID or math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 or d.w ~= d.h then
+				badKind += 1
+			end
+			drawn += area1
+		elseif d.kind == "edge" then
+			-- A band along the patch: FULL cells long, its depth past the patch side the credit.
+			local long, depth = math.max(d.w, d.h) / MakeSauce.CELL, math.min(d.w, d.h) / MakeSauce.CELL
+			if math.abs(long - SauceCover.FULL) > 1e-9 then
+				badKind += 1
+			end
+			if math.abs(depth - (d.credit + SauceCover.INSET)) > SauceCover.STEP / 2 + 1e-9 then
 				badArea += 1
 			end
+			drawn += d.credit * area1
+		else
+			-- A speck: its area is its credit (to the rounding).
+			local scale = d.w / MakeSauce.CELL
+			local want = SauceCover.AREA * math.sqrt(d.credit)
+			if d.w ~= d.h or (math.abs(scale - want) > SauceCover.STEP / 2 + 1e-9 and scale > SauceCover.STEP + 1e-9) then
+				badArea += 1
+			end
+			drawn += math.pi * (scale / 2) ^ 2 * area1
 		end
-		drawn += math.pi * (math.min(scale, SauceCover.AREA) / 2) ^ 2 * area
 		maxDeep = math.max(maxDeep, d.deep)
 	end
 	check(name .. ": every disc on a dough cell, near its centre", offDough, 0)
 	check(name .. ": no disc past the material span", outside, 0)
 	check(name .. ": every disc samples its own place", badUv, 0)
 	check(name .. ": no disc on a bare cell", onBare, 0)
-	check(name .. ": boundary disc area = credit", badArea, 0)
+	check(name .. ": edge depth and speck area = credit", badArea, 0)
+	check(name .. ": full discs and edge bands keep their sizes", badKind, 0)
 	-- Every material cell with credit is drawn, and only those.
 	local credited = 0
 	for _, i in SauceCover.cells do
@@ -205,7 +228,7 @@ for _, rec in records do
 		check(name .. ": clean board, no smear", #spills, 0)
 	end
 	check(name .. ": smear never stands for more than the spill", shown <= off + 1e-9, true)
-	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d   %.3f         %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
+	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d (%d/%d/%d)  %.3f   %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, kinds.full, kinds.edge, kinds.speck, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
 	if name == "excess mound" then
 		check("excess mound: thick sauce drawn deeper", maxDeep > 0, true)
 	elseif name == "even adequate" then
@@ -221,7 +244,7 @@ do
 	local field = MakeSauce.replay(even)
 	local full, closed = 0, 0
 	for _, d in SauceCover.discs(field) do
-		if d.d / MakeSauce.CELL >= SauceCover.FULL - 1e-9 then
+		if d.kind == "full" then
 			closed += 1
 		end
 		if d.credit >= SauceCover.SOLID then
