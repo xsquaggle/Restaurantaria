@@ -247,7 +247,7 @@ Assets.Meta = {
 	hudPill = { slice = Rect.new(88, 70, 552, 82), height = 152, inset = 96 },
 	-- V2 ticket: three pieces cut from one 840 px wide master; caps 96 px tall, only the
 	-- middle stretches.
-	ticket = { width = 840, cap = 96 },
+	ticket = { width = 840, cap = 96, midHeight = 746 },
 	-- UI V2 complete pack: slice centres in delivered pixels (right/bottom exclusive in the
 	-- manifest, so Rect.new takes them as is) and the source height SliceScale divides by.
 	buttonSecondary = { slice = Rect.new(88, 72, 424, 88), height = 160 },

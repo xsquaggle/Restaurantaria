@@ -711,15 +711,28 @@ export type RailNote = { frame: Frame, set: (RailNote, string?, string) -> () }
 function Widgets.railNote(width: number, compact: boolean, minHeight: number): RailNote
 	local cap = math.round(width * Assets.Meta.ticket.cap / Assets.Meta.ticket.width)
 	local frame = Ui.new("Frame", { Name = "Note", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, minHeight) })
-	local function part(name: string, props: { [string]: any })
+	local function part(name: string, props: { [string]: any }): ImageLabel
 		props.Name = name
 		props.BackgroundTransparency = 1
 		props.ScaleType = Enum.ScaleType.Stretch
 		props.Parent = frame
-		Art.apply(Ui.new("ImageLabel", props), name)
+		local label = Ui.new("ImageLabel", props)
+		Art.apply(label, name)
+		return label
 	end
 	part("ui_ticket_top", { Size = UDim2.new(1, 0, 0, cap) })
-	part("ui_ticket_mid", { Position = UDim2.fromOffset(0, cap), Size = UDim2.new(1, 0, 1, -cap * 2) })
+	-- The middle piece (840x746) is plain paper top to bottom, so only a band of it is shown,
+	-- at the same scale as the width. Squeezing all 746 rows into a short note made the engine
+	-- sample a small mip level, which blurred the side outlines into a pale grey edge (the
+	-- "narrow gray edge" in Astra's r7 empty-rail note).
+	local mid = part("ui_ticket_mid", { Position = UDim2.fromOffset(0, cap), Size = UDim2.new(1, 0, 1, -cap * 2) })
+	local function band()
+		local rows = math.clamp(math.round((frame.Size.Y.Offset - cap * 2) * Assets.Meta.ticket.width / width), 1, Assets.Meta.ticket.midHeight)
+		mid.ImageRectOffset = Vector2.new(0, math.floor((Assets.Meta.ticket.midHeight - rows) / 2))
+		mid.ImageRectSize = Vector2.new(Assets.Meta.ticket.width, rows)
+	end
+	frame:GetPropertyChangedSignal("Size"):Connect(band)
+	band()
 	part("ui_ticket_bottom", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, cap) })
 	local padX = if compact then 10 else math.round(width * 28 / 420)
 	local padY = math.max(10, math.round(cap * 0.75))
