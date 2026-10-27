@@ -58,6 +58,7 @@ local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
 -- Response 14 (asset-manifest.json): the material maps are 1024 px over the -1..1 square; the
 -- board smear's alpha spans 41..470 of its 512 px canvas across, centred.
 local MATERIAL_PX = 1024
+local CLOSE_PX = 1.5 -- see drawDisc
 local SPILL_SHARE = (470 - 41) / 512
 -- The cooked dollop: P7 tinted to the cooked map's mean colour (measured: P7 alpha>=128 mean
 -- 228,35,10; cooked map mean inside radius 0.95 168,21,8; per channel 0.74, 0.59, 0.81).
@@ -268,6 +269,16 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	end
 	local function drawDisc(img: ImageLabel, disc: SauceCover.Disc)
 		local p = screen(disc) - sauceOrigin
+		-- A disc closing a patch keeps at least CLOSE_PX past the corner it must cover, so pixel
+		-- rounding and edge smoothing at phone size never open pinholes between four discs (it
+		-- grows inward only: its neighbours are covered).
+		if disc.d >= SauceCover.FULL * MakeSauce.CELL - 1e-9 then
+			local least = MakeSauce.CELL * math.sqrt(2) + 2 * CLOSE_PX / math.min(tileA, tileB)
+			if disc.d < least then
+				disc = table.clone(disc)
+				disc.d = least
+			end
+		end
 		img.Position = UDim2.fromOffset(p.X, p.Y)
 		img.Size = UDim2.fromOffset(tileA * disc.d, tileB * disc.d)
 		img.Rotation = tileRot
