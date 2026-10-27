@@ -1123,27 +1123,26 @@ end
 
 -- The groove art is 1024 x 21 px with tapered ends (opaque from column 10 to 1011).
 local GROOVE_W, GROOVE_H = 1024, 21
--- The groove is 0.03 of the frame high, 0.06 cut units; its ends stop where both corners are
--- still on the dough (CutStroke.endInset), so no end crosses the crust onto the board.
+-- The groove is 0.03 of the frame high, 0.06 cut units. Where a full-width end would cross the
+-- crust, it narrows in steps to the edge instead (CutStroke.groovePieces), so no corner leaves the
+-- dough.
 local GROOVE_HALF = 0.03
 -- Slice 3 (Astra r15 3.4): the generated groove's pale lips read as a raised tan strip. Tinting
 -- the art darker turns the lips into shadowed walls, so the cut reads as an incision. A code
 -- tint stand-in on Astra's art (G9 v3), not new art.
 local GROOVE_TINT = Color3.fromRGB(150, 112, 88)
--- Freehand runs overlap this far (cut units) at each join, so turns don't open gaps.
-local GROOVE_JOIN = 0.008
 
 -- One straight groove from a to b. `whole` stretches the whole art along it (tapered ends, for
 -- a full chord); otherwise it shows a middle section of the art cut to the run's own
 -- proportions, so a short run is not squashed (squashing 1024 px into a few dozen blurs the
 -- slit into a pale smear) and joins along a freehand path carry no tapered ends.
-local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by: number, transparency: number?, whole: boolean?)
+local function groovePiece(layer: Frame, ax: number, ay: number, bx: number, by: number, half: number, transparency: number?, whole: boolean?)
 	local dx, dy = bx - ax, by - ay
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-3 then
 		return
 	end
-	local w, h = len / 2, GROOVE_HALF
+	local w, h = len / 2, half
 	local groove = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ImageTransparency = transparency or 0,
@@ -1166,57 +1165,13 @@ end
 
 -- `dough` is the made pizza's outline S (Scoring.footprint); omitted, the full round crust.
 function Widgets.drawCut(layer: Frame, line: any, transparency: number?, dough: any?)
-	local S = dough or Scoring.ROUND
-	local function clip(ax: number, ay: number, bx: number, by: number): (number?, number?)
-		return Scoring.clipToDough(S, ax, ay, bx, by)
+	-- Nearly straight samples merge into one groove (CutStroke.runs, within 0.008 of the drawn
+	-- line), so a steady stroke stays one groove; the groove art squashed into many short pieces
+	-- reads as pale smears. The runs only grow forward, so the live groove never redraws earlier
+	-- runs differently and the committed groove is the live one.
+	for _, p in CutStroke.groovePieces(line, dough or Scoring.ROUND, GROOVE_HALF) do
+		groovePiece(layer, p.ax, p.ay, p.bx, p.by, p.half, transparency, p.whole)
 	end
-	local path = line.path
-	if path then
-		-- Nearly straight samples merge into one groove (within 0.008 of the drawn line), so a
-		-- steady stroke stays one groove; the groove art squashed into many short pieces reads
-		-- as pale smears. The runs only grow forward (CutStroke.runs), so the live groove never
-		-- redraws earlier runs differently and the committed groove is the live one.
-		local keys = CutStroke.runs(path)
-		for i = 2, #keys do
-			local a, b = path[keys[i - 1]], path[keys[i]]
-			local t0, t1 = clip(a.x, a.y, b.x, b.y)
-			if t0 and t1 then
-				local dx, dy = b.x - a.x, b.y - a.y
-				local len = math.sqrt(dx * dx + dy * dy)
-				local ux, uy = dx / len, dy / len
-				local ax, ay = a.x + dx * t0, a.y + dy * t0
-				local bx, by = a.x + dx * t1, a.y + dy * t1
-				local span = (t1 - t0) * len
-				-- An end on the dough's edge pulls in until the groove's corners are on the dough;
-				-- an end at a join reaches a hair past it.
-				local reach = if t0 > 0 and t1 < 1 then span / 2 else span
-				local s0 = if t0 > 0 then CutStroke.endInset(S, ax, ay, ux, uy, GROOVE_HALF, reach) else if i > 2 then -GROOVE_JOIN else 0
-				local s1 = if t1 < 1 then CutStroke.endInset(S, bx, by, -ux, -uy, GROOVE_HALF, reach) else if i < #keys then -GROOVE_JOIN else 0
-				if s0 + s1 < span then
-					groovePiece(layer, ax + ux * s0, ay + uy * s0, bx - ux * s1, by - uy * s1, transparency)
-				end
-			end
-		end
-		return
-	end
-	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
-	local len = math.sqrt(dx * dx + dy * dy)
-	if len < 1e-4 then
-		return
-	end
-	-- The infinite line, long enough to cross any dough (semi-axes stop at 1.1), clipped to it.
-	local ux, uy = dx / len, dy / len
-	local ax, ay, bx, by = line.x1 - ux * 4, line.y1 - uy * 4, line.x2 + ux * 4, line.y2 + uy * 4
-	local t0, t1 = clip(ax, ay, bx, by)
-	if not (t0 and t1) then
-		return
-	end
-	local ex, ey = bx - ax, by - ay
-	ax, ay, bx, by = ax + ex * t0, ay + ey * t0, ax + ex * t1, ay + ey * t1
-	local span = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2)
-	local s0 = CutStroke.endInset(S, ax, ay, ux, uy, GROOVE_HALF, span / 2)
-	local s1 = CutStroke.endInset(S, bx, by, -ux, -uy, GROOVE_HALF, span / 2)
-	groovePiece(layer, ax + ux * s0, ay + uy * s0, bx - ux * s1, by - uy * s1, transparency, true)
 end
 
 -- Reserved hint strip between the work surface and the tab bar: live text and, optionally, a

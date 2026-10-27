@@ -359,7 +359,8 @@ function Cut.new(ctx: any, container: Frame)
 			trace(string.format("send %s screen=%.0f,%.0f points=%d from=%.4f,%.4f to=%.4f,%.4f length=%.3f angle=%.1f straight=%.3f dev=%.4f complete=%.3f assist=%s%s pizza=%d",
 				input.UserInputType.Name, input.Position.X, input.Position.Y, #path, first.x, first.y, last.x, last.y, pathLength(path),
 				math.deg(math.atan2(cut.y2 - cut.y1, cut.x2 - cut.x1)), cut.straightness :: number, cut.deviation, cut.completeness :: number,
-				tostring(st.assist), if st.stream.filter.reason then " off:" .. st.stream.filter.reason else "", st.pizzaId))
+				tostring(st.assist) .. (if st.assist and not cut.assisted then " kept-raw" else ""),
+				if st.stream.filter.reason then " off:" .. st.stream.filter.reason else "", st.pizzaId))
 			-- The sent samples themselves, so a recorded stroke can be replayed in the offline checks.
 			local pts = table.create(#path)
 			for i, q in path do
@@ -367,7 +368,8 @@ function Cut.new(ctx: any, container: Frame)
 			end
 			trace("path " .. table.concat(pts, " "))
 			if st.assist then
-				-- And their outputs, which the live groove showed and the server stores.
+				-- And their outputs, which the live groove showed and the server stores (unless the
+				-- guard kept the raw path: "kept-raw" above).
 				for i, q in st.stream.out do
 					pts[i] = string.format("%.4f,%.4f", q.x, q.y)
 				end

@@ -171,7 +171,7 @@ local function drive(S: any, on: boolean, events: { any })
 end
 
 -- 1. Replay equality and frozen outputs, assist off and on, every case on every dough.
-local equal, frozen, bounded, offRaw, total, tails, latchedCount = 0, 0, 0, 0, 0, 0, 0
+local equal, frozen, bounded, offRaw, total, tails, latchedCount, keptRaw = 0, 0, 0, 0, 0, 0, 0, 0
 local cap = A.strength * A.deviation
 for _, d in DOUGHS do
 	for _, c in CASES do
@@ -188,7 +188,11 @@ for _, d in DOUGHS do
 			local batch, f = CutStroke.assist(sent, d.S, on)
 			local same = ser(batch) == ser(st.out)
 			local cut = CutStroke.grade(sent, d.S, on)
-			if cut then
+			if cut and cut.assisted == false then
+				-- The guard kept the raw path (the assisted one graded worse): stored = sent.
+				keptRaw += 1
+				same = same and ser(cut.path) == ser(sent)
+			elseif cut then
 				same = same and ser(cut.path) == ser(st.out)
 			end
 			check(label .. ": client outputs = server rebuild", same, true)
@@ -245,8 +249,8 @@ for _, d in DOUGHS do
 		end
 	end
 end
-note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d hit the %d-sample limit (open tail); the assist switched itself off in %d",
-	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, latchedCount))
+note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d hit the %d-sample limit (open tail); the assist switched itself off in %d; the guard kept the raw path in %d",
+	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, latchedCount, keptRaw))
 
 -- 2. Gates. Before 0.10 u of travel nothing is corrected.
 do
@@ -314,8 +318,8 @@ do
 		moved = math.max(moved, math.abs(p.y - straight[i].y), math.abs(p.x - straight[i].x))
 	end
 	check("degenerate: a straight centred line is not moved", moved < 1e-12, true)
-	-- Equal-axis spread (a plus sign of samples) has no principal axis: the direction is first ->
-	-- newest, and the result is finite.
+	-- Equal-axis spread (a plus sign of samples) has no principal axis; the grade's fit (shared)
+	-- still gives a line, and the result is finite.
 	local plus = { P(-0.3, 0), P(0.3, 0), P(0, -0.3), P(0, 0.3), P(0, 0) }
 	local po = CutStroke.assist(plus, S, true)
 	check("degenerate: equal-axis spread stays finite", po[5].x == po[5].x and po[5].y == po[5].y, true)
@@ -363,12 +367,12 @@ for _, d in DOUGHS do
 		local qOff, qOn = quality(cOff), quality(cOn)
 		if cOff and cOn then
 			worstGain = math.max(worstGain, qOn - qOff)
-			-- The assist is light both ways: it may lose a little on a curve it fades out of.
-			check(d.name .. " / " .. c.name .. ": quality within 0.05 off vs on", math.abs(qOn - qOff) <= 0.05, true)
+			check(d.name .. " / " .. c.name .. ": quality never lower on", qOn >= qOff - 1e-12, true)
 		end
 		if d.name == "round" or c.name == "diagonal, slight wobble" or c.name == "deliberate curve (chevron)" or c.name == "short stroke (0.6 of the chord)" then
 			note(string.format("| %s | %s | %s | %s | %.3f -> %.3f | %s |", d.name, c.name, cell(cOff, wOff), cell(cOn, wOn), qOff, qOn,
-				if f.latched then "off at sample " .. f.latched .. " (" .. tostring(f.reason) .. ")" else "on"))
+				(if f.latched then "off at sample " .. f.latched .. " (" .. tostring(f.reason) .. ")" else "on")
+					.. (if cOn and cOn.assisted == false then ", raw kept" else "")))
 		end
 		if c.name == "deliberate curve (chevron)" and cOff and cOn then
 			check(d.name .. ": a chevron gains nothing that matters", qOn <= qOff + 0.01, true)
@@ -396,9 +400,9 @@ for _, d in DOUGHS do
 				table.insert(onLines, cOn)
 			end
 		end
-		local gOff, gOn = Scoring.cut(slices, offLines, d.S).score, Scoring.cut(slices, onLines, d.S).score
+		local gOff, gOn = CutStroke.pizzaGrade(slices, offLines, d.S).score, CutStroke.pizzaGrade(slices, onLines, d.S).score
 		check(d.name .. " " .. slices .. " slices: accepted alike", #offLines, #onLines)
-		check(d.name .. " " .. slices .. " slices: on within 6 points of off", math.abs(gOn - gOff) <= 6, true)
+		check(d.name .. " " .. slices .. " slices: on never below off", gOn >= gOff, true)
 		note(string.format("| %s | %d | %d | %d |", d.name, slices, gOff, gOn))
 	end
 end
@@ -422,31 +426,81 @@ do
 	check("runs: a steady line is one run", #flat, 2)
 end
 
--- 7. Groove ends: pulled in until both corners of the groove are on the dough.
-do
-	local worst = 0
-	for _, d in DOUGHS do
-		local Si = G.inverse(d.S)
-		for deg = 0, 175, 5 do
-			local a = math.rad(deg)
-			local dir = P(math.cos(a), math.sin(a))
-			local t0, t1 = Scoring.clipToDough(d.S, -3 * dir.x, -3 * dir.y, 3 * dir.x, 3 * dir.y)
-			if t0 and t1 then
-				local ex, ey = -3 * dir.x + 6 * dir.x * t0, -3 * dir.y + 6 * dir.y * t0
-				local s = CutStroke.endInset(d.S, ex, ey, dir.x, dir.y, 0.03, 3 * (t1 - t0))
-				local px, py = ex + dir.x * s, ey + dir.y * s
-				for _, sign in { 1, -1 } do
-					local c = G.apply(Si, P(px - dir.y * 0.03 * sign, py + dir.x * 0.03 * sign))
-					if c.x * c.x + c.y * c.y > 1 + 1e-9 then
-						worst = math.huge
-					end
+-- 7. Groove ends (CutStroke.groovePieces): no piece has a corner off the dough, the pieces cover
+-- the chord without a gap, and the taper carries the groove to within a small residue of the
+-- edge. Chords at every 5 degrees and at offsets across each dough, plus every sweep stroke
+-- below (section 9). Distances are reported in px at 1920x1080 (frame radius 372 px).
+local HALF = 0.03
+local function piecesInside(S: any, pieces: { any }): boolean
+	local Si = G.inverse(S)
+	for _, p in pieces do
+		local dx, dy = p.bx - p.ax, p.by - p.ay
+		local len = math.sqrt(dx * dx + dy * dy)
+		if len > 0 then
+			local nx, ny = -dy / len * p.half, dx / len * p.half
+			for _, c in { P(p.ax + nx, p.ay + ny), P(p.ax - nx, p.ay - ny), P(p.bx + nx, p.by + ny), P(p.bx - nx, p.by - ny) } do
+				local u = G.apply(Si, c)
+				if u.x * u.x + u.y * u.y > 1 + 1e-9 then
+					return false
 				end
-				worst = math.max(worst, s)
 			end
 		end
 	end
-	check("ends: both corners on the dough at every angle and dough", worst < math.huge, true)
-	note(string.format("groove ends: largest pull-in %.4f cut units (%.1f px at 1920x1080, frame radius 372 px)", worst, worst * 372))
+	return true
+end
+local endsWorst = { pull = 0, residue = 0, gaps = 0, outside = 0, chords = 0 }
+do
+	for _, d in DOUGHS do
+		for deg = 0, 175, 5 do
+			local a = math.rad(deg)
+			local dir = P(math.cos(a), math.sin(a))
+			for _, off in { 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9 } do
+				-- Offset in dough units, mapped to the frame.
+				local o = G.apply(d.S, P(-math.sin(a) * off, math.cos(a) * off))
+				local w = G.apply(d.S, dir)
+				local line = { x1 = o.x - w.x, y1 = o.y - w.y, x2 = o.x + w.x, y2 = o.y + w.y }
+				local len = math.sqrt(w.x * w.x + w.y * w.y)
+				local ux, uy = w.x / len, w.y / len
+				local t0, t1 = Scoring.clipToDough(d.S, o.x - ux * 4, o.y - uy * 4, o.x + ux * 4, o.y + uy * 4)
+				if t0 and t1 then
+					endsWorst.chords += 1
+					local e0, e1 = 8 * t0, 8 * t1 -- along the line from o - 4u
+					local pieces = CutStroke.groovePieces(line, d.S, HALF)
+					if not piecesInside(d.S, pieces) then
+						endsWorst.outside += 1
+					end
+					-- Cover along the line: intervals of the pieces, merged.
+					local spans = {}
+					for _, p in pieces do
+						local ta = (p.ax - (o.x - ux * 4)) * ux + (p.ay - (o.y - uy * 4)) * uy
+						local tb = (p.bx - (o.x - ux * 4)) * ux + (p.by - (o.y - uy * 4)) * uy
+						table.insert(spans, { math.min(ta, tb), math.max(ta, tb), p.half })
+						if p.half == HALF then
+							endsWorst.pull = math.max(endsWorst.pull, math.min(ta, tb) - e0, e1 - math.max(ta, tb))
+						end
+					end
+					table.sort(spans, function(x, y)
+						return x[1] < y[1]
+					end)
+					if #spans > 0 then
+						local reach = spans[1][2]
+						for i = 2, #spans do
+							if spans[i][1] > reach + 1e-6 then
+								endsWorst.gaps += 1
+							end
+							reach = math.max(reach, spans[i][2])
+						end
+						endsWorst.residue = math.max(endsWorst.residue, spans[1][1] - e0, e1 - reach)
+					end
+				end
+			end
+		end
+	end
+	check("ends: no groove piece has a corner off the dough (chords)", endsWorst.outside, 0)
+	check("ends: the pieces cover each chord without a gap", endsWorst.gaps, 0)
+	check("ends: the taper reaches within 0.03 cut units of the edge", endsWorst.residue <= 0.03, true)
+	note(string.format("groove ends over %d chords (4 doughs, every 5 deg, offsets 0 to 0.9): full width stops up to %.4f cut units (%.1f px at 1920x1080) from the edge; the taper (widths 5/6 to 1/6) leaves at most %.4f (%.1f px) uncovered; no corner off the dough",
+		endsWorst.chords, endsWorst.pull, endsWorst.pull * 372, endsWorst.residue, endsWorst.residue * 372))
 end
 
 -- 8. The server: the shift's assist rebuilds from the raw samples and keeps both.
@@ -469,6 +523,167 @@ do
 	check("server off: no raw copy", pizza.cuts[3] and pizza.cuts[3].raw, nil)
 	local okL = ShiftService.apply(session, "cut", { pizzaId = 7, path = table.create(cfg.maxPoints + 1, P(0, 0)) })
 	check("server: more than maxPoints refused", okL, false)
+end
+
+-- 9. The sweep: 3,456 strokes, every one graded with the assist off and on from the same raw
+-- samples. 4 doughs x 12 directions x 4 offsets x 3 shapes (wobble, bow, bow with wobble) x 3
+-- lengths (0.55, 1.0 and 1.25 of the half chord each way) x 2 starts (straight in, or a bent
+-- lead-in across the worktop). The assist must never refuse a stroke the raw path passes, never
+-- lower its credit, never make it miss the centre, and never lower a one-cut pizza's Cut grade;
+-- then 240 whole pizzas (4, 6, 8 slices) from sweep-like strokes must never grade lower on.
+local function yield()
+	-- Lets Studio breathe between batches; a no-op where there is no task library.
+	pcall(function()
+		task.wait()
+	end)
+end
+local function bowed(S: any, deg: number, reach: number, offset: number, bow: number, wobble: number): { any }
+	local a = math.rad(deg)
+	local u = G.apply(S, P(math.cos(a), math.sin(a)))
+	local len = math.sqrt(u.x * u.x + u.y * u.y)
+	local nx, ny = -u.y / len, u.x / len
+	local pts = {}
+	local n = math.max(8, math.floor(2 * reach * len / 0.02))
+	for i = 0, n do
+		local t = i / n
+		local side = offset + bow * math.sin(t * math.pi) + wobble * (math.sin(t * math.pi * 3) * 0.6 + rnd())
+		table.insert(pts, P(-u.x * reach + 2 * u.x * reach * t + nx * side, -u.y * reach + 2 * u.y * reach * t + ny * side))
+	end
+	return pts
+end
+local function withLeadIn(pts: { any }): { any }
+	-- Starts beside the stroke on the worktop and bends into it.
+	local a, b = pts[1], pts[2]
+	local dx, dy = b.x - a.x, b.y - a.y
+	local len = math.max(math.sqrt(dx * dx + dy * dy), 1e-9)
+	dx, dy = dx / len, dy / len
+	local start = P(a.x - dx * 0.25 - dy * 0.2, a.y - dy * 0.25 + dx * 0.2)
+	local out = line(start.x, start.y, a.x, a.y, 0.02, 0)
+	for i = 2, #pts do
+		table.insert(out, pts[i])
+	end
+	return out
+end
+local SHAPES = { { name = "wobble", bow = 0, wobble = 0.014 }, { name = "bow", bow = 0.05, wobble = 0 }, { name = "bow+wobble", bow = 0.035, wobble = 0.01 } }
+local sweep = { strokes = 0, accepted = 0, refusedBoth = 0, mismatch = 0, lower = 0, centre = 0, gradeLower = 0, keptRaw = 0, latched = 0,
+	gain = 0, gradeGain = 0, addedDev = 0, leadAddedDev = 0, outside = 0 }
+local tol = cfg.centreTolerance
+for _, d in DOUGHS do
+	for k = 0, 11 do
+		for _, offset in { 0, 0.04, 0.1, 0.2 } do
+			for _, shape in SHAPES do
+				for _, reach in { 0.55, 1.0, 1.25 } do
+					for _, lead in { false, true } do
+						local events = bowed(d.S, k * 15 + 4, reach, offset, shape.bow, shape.wobble)
+						if lead then
+							events = withLeadIn(events)
+						end
+						sweep.strokes += 1
+						-- Recorded with the assist off: the raw samples are the same either way (section 5).
+						local sent = drive(d.S, false, events).points
+						local cOff = CutStroke.grade(sent, d.S, false)
+						local cOn = CutStroke.grade(sent, d.S, true)
+						if (cOff ~= nil) ~= (cOn ~= nil) then
+							sweep.mismatch += 1
+						elseif not cOff then
+							sweep.refusedBoth += 1
+						else
+							sweep.accepted += 1
+							local qOff, qOn = Scoring.cutQuality(cOff), Scoring.cutQuality(cOn)
+							if qOn < qOff - 1e-12 then
+								sweep.lower += 1
+							end
+							sweep.gain = math.max(sweep.gain, qOn - qOff)
+							if Scoring.cutOffset(cOn, d.S) > tol and Scoring.cutOffset(cOff, d.S) <= tol then
+								sweep.centre += 1
+							end
+							local gOff = CutStroke.pizzaGrade(2, { cOff }, d.S).score
+							local gOn = CutStroke.pizzaGrade(2, { cOn }, d.S).score
+							if gOn < gOff then
+								sweep.gradeLower += 1
+							end
+							sweep.gradeGain = math.max(sweep.gradeGain, gOn - gOff)
+							if cOn.assisted == false then
+								sweep.keptRaw += 1
+							else
+								local added = cOn.deviation - cOff.deviation
+								sweep.addedDev = math.max(sweep.addedDev, added)
+								if lead then
+									sweep.leadAddedDev = math.max(sweep.leadAddedDev, added)
+								end
+							end
+							if not piecesInside(d.S, CutStroke.groovePieces(cOn, d.S, HALF)) then
+								sweep.outside += 1
+							end
+						end
+						local _, f = CutStroke.assist(sent, d.S, true)
+						if f.latched then
+							sweep.latched += 1
+						end
+					end
+				end
+			end
+		end
+		yield()
+	end
+end
+check("sweep: 3,456 strokes", sweep.strokes, 3456)
+check("sweep: the assist never changes whether a stroke is accepted", sweep.mismatch, 0)
+check("sweep: the assist never lowers a stroke's credit", sweep.lower, 0)
+check("sweep: the assist never makes a cut miss the centre", sweep.centre, 0)
+check("sweep: the assist never lowers a one-cut Cut grade", sweep.gradeLower, 0)
+check("sweep: no groove piece has a corner off the dough", sweep.outside, 0)
+note(string.format("sweep: %d strokes, %d accepted alike, %d refused alike, 0 refused only with the assist; credit never lower (largest gain %.3f), Cut grade never lower (largest gain %d points), never off-centre; the guard kept the raw path for %d; the gates switched the assist off in %d",
+	sweep.strokes, sweep.accepted, sweep.refusedBoth, sweep.gain, sweep.gradeGain, sweep.keptRaw, sweep.latched))
+note(string.format("sweep: where the assisted path was kept, it widened the widest wobble by at most %.4f cut units (%.1f px at 1920x1080); strokes with a worktop lead-in: at most %.4f (%.1f px). Never enough to lower the credit (the guard).",
+	sweep.addedDev, sweep.addedDev * 372, sweep.leadAddedDev, sweep.leadAddedDev * 372))
+
+do
+	local pizzas, lower, gain = 0, 0, 0
+	for _, d in DOUGHS do
+		for _, slices in { 4, 6, 8 } do
+			for trial = 1, 20 do
+				local offLines, onLines = {}, {}
+				for k = 0, slices // 2 - 1 do
+					local shape = SHAPES[(trial + k) % 3 + 1]
+					local deg = 180 * k / (slices // 2) + 7 + rnd() * 10
+					local events = bowed(d.S, deg, 1.15 + rnd() * 0.2, rnd() * 0.12, shape.bow * (0.5 + rnd()), shape.wobble)
+					if trial % 2 == 0 then
+						events = withLeadIn(events)
+					end
+					local sent = drive(d.S, false, events).points
+					local cOff, cOn = CutStroke.grade(sent, d.S, false), CutStroke.grade(sent, d.S, true)
+					if cOff then
+						table.insert(offLines, cOff)
+					end
+					if cOn then
+						table.insert(onLines, cOn)
+					end
+				end
+				pizzas += 1
+				local gOff = CutStroke.pizzaGrade(slices, offLines, d.S).score
+				local gOn = CutStroke.pizzaGrade(slices, onLines, d.S).score
+				if gOn < gOff then
+					lower += 1
+				end
+				gain = math.max(gain, gOn - gOff)
+			end
+			yield()
+		end
+	end
+	check("sweep pizzas: 240", pizzas, 240)
+	check("sweep pizzas: Cut grade never lower with the assist", lower, 0)
+	note(string.format("sweep: %d whole pizzas (4 doughs x 4/6/8 slices x 20): Cut grade never lower with the assist; largest gain %d points", pizzas, gain))
+end
+
+-- The guard keeps the raw grade when the assisted lines grade lower as a set: a pizza whose
+-- stored assisted lines grade worse than their raw lines gets the raw lines' grade.
+do
+	local S = Scoring.ROUND
+	local good = { x1 = -0.95, y1 = 0, x2 = 0.95, y2 = 0, straightness = 1, completeness = 1 }
+	local bent = { x1 = -0.95, y1 = 0.3, x2 = 0.95, y2 = 0.3, straightness = 1, completeness = 1, rawLine = { x1 = 0, y1 = -0.95, x2 = 0, y2 = 0.95 }, rawStraightness = 1, rawCompleteness = 1 }
+	local g = CutStroke.pizzaGrade(4, { good, bent }, S)
+	check("pizza guard: raw lines' grade kept when higher", g.score, Scoring.cut(4, { good, { x1 = 0, y1 = -0.95, x2 = 0, y2 = 0.95, straightness = 1, completeness = 1 } }, S).score)
 end
 
 for _, l in report do

@@ -50,10 +50,10 @@ end
 -- Astra asked (r15), on RAW samples only. For sample k with raw prefix r1..rk:
 -- * Raw output (no correction) while k < 3 or the raw travel so far (sum of |u(i) - u(i-1)|) is
 --   under assist.travel.
--- * Line: the principal axis of r1..rk in frame units (unweighted mean and covariance, the same
---   method as Scoring.cutPath), pointing from r1 towards rk. Degenerate cases: all samples at
---   one point gives no correction; equal-axis covariance (no clear axis) uses the direction
---   r1 -> rk, and no correction when that is zero too.
+-- * Line: the grade's own best-fit line (Scoring.cutFit, the function Scoring.cutPath uses) of
+--   r1..rk: the principal axis, in frame units, of the part of the samples on the dough, pointing
+--   from r1 towards rk. No correction until that fit exists (it needs three samples' worth on
+--   the dough), so a stroke started on the worktop is not bent by its off-pizza lead-in.
 -- * Gates, on the raw sample: its distance from the line in u over assist.deviation, or the
 --   raw progress along the line falling more than assist.backtrack (u) behind its furthest
 --   point so far, switches the assist off for the rest of the stroke (it never comes back on, so
@@ -120,39 +120,15 @@ local function correction(f: Filter): (number, number, string?)
 	if k < 3 or f.travel < cfg.travel then
 		return 0, 0, nil
 	end
-	local mx, my = 0, 0
-	for i = 1, k do
-		mx += raw[i].x
-		my += raw[i].y
-	end
-	mx /= k
-	my /= k
-	local sxx, syy, sxy = 0, 0, 0
-	for i = 1, k do
-		local dx, dy = raw[i].x - mx, raw[i].y - my
-		sxx += dx * dx
-		syy += dy * dy
-		sxy += dx * dy
-	end
-	if sxx + syy < 1e-12 then
+	-- The grade's own fit (Scoring.cutFit) of the raw samples so far: the principal axis of the
+	-- part on the dough, pointing from the first sample towards the newest. Nothing to correct
+	-- until it has a line (fewer than three samples' worth on the dough).
+	local fit = Scoring.cutFit(raw, f.S)
+	if not fit then
 		return 0, 0, nil
 	end
 	local first, newest = raw[1], raw[k]
-	local tx, ty = newest.x - first.x, newest.y - first.y
-	local dx, dy
-	if math.sqrt((sxx - syy) ^ 2 + 4 * sxy * sxy) < 1e-9 * (sxx + syy) then
-		local len = math.sqrt(tx * tx + ty * ty)
-		if len < 1e-9 then
-			return 0, 0, nil
-		end
-		dx, dy = tx / len, ty / len
-	else
-		local theta = 0.5 * math.atan2(2 * sxy, sxx - syy)
-		dx, dy = math.cos(theta), math.sin(theta)
-		if dx * tx + dy * ty < 0 then
-			dx, dy = -dx, -dy
-		end
-	end
+	local mx, my, dx, dy = fit.mx, fit.my, fit.ux, fit.uy
 	-- Gates in u, on the raw samples: the line mapped by S^-1.
 	local mu, mv = toU(Si, mx, my)
 	local du, dv = toU(Si, dx, dy)
@@ -231,9 +207,14 @@ function CutStroke.assist(raw: { Point }, S: Mat2, on: boolean): ({ Point }, Fil
 	return f.out, f
 end
 
--- Grades a sent raw list on the dough S: the assisted path (when on) graded by Scoring.cutPath,
--- accepted only when the raw list is accepted too, with the raw list's completeness when that
--- is lower. The cut keeps the assisted path (drawn) and the raw samples.
+-- Grades a sent raw list on the dough S. Assist off: Scoring.cutPath of the raw list. Assist on:
+-- the raw list is graded first and refused exactly when assist off would refuse it; the
+-- assisted path is then kept only when it is accepted, its path credit (Scoring.cutQuality,
+-- with the raw list's completeness when that is lower) is at least the raw path's, and it does
+-- not miss the centre where the raw path did not. Otherwise the raw cut is kept (assisted =
+-- false). So the assist never refuses a stroke, never lowers a stroke's credit and never makes
+-- a cut miss the centre. A kept assisted cut also carries the raw cut's line and credit, so the
+-- pizza's Cut grade can never fall below the raw grade (CutStroke.pizzaGrade).
 function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local rawCut, reason = Scoring.cutPath(raw, S)
 	if not rawCut then
@@ -242,17 +223,50 @@ function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	if not on then
 		return rawCut, nil
 	end
+	local r = rawCut :: any
 	-- cutPath has checked the list: plain, at most maxPoints numeric points in range.
-	local assisted = CutStroke.assist(rawCut.path, S, true)
-	local cut, why = Scoring.cutPath(assisted, S)
-	if not cut then
-		return nil, why
+	local assisted = CutStroke.assist(r.path, S, true)
+	local cut = Scoring.cutPath(assisted, S)
+	if cut then
+		local c = cut :: any
+		c.completeness = math.min(c.completeness, r.completeness)
+		local tolerance = Config.Cut.centreTolerance
+		local centred = Scoring.cutOffset(c, S) <= tolerance or Scoring.cutOffset(r, S) > tolerance
+		if Scoring.cutQuality(c) >= Scoring.cutQuality(r) and centred then
+			c.raw = r.path
+			c.assisted = true
+			c.rawLine = { x1 = r.x1, y1 = r.y1, x2 = r.x2, y2 = r.y2 }
+			c.rawStraightness = r.straightness
+			c.rawCompleteness = r.completeness
+			return c, nil
+		end
 	end
-	local c = cut :: any
-	c.completeness = math.min(c.completeness, (rawCut :: any).completeness)
-	c.raw = rawCut.path
-	c.assisted = true
-	return c, nil
+	r.assisted = false
+	return r, nil
+end
+
+-- The pizza's Cut grade from its stored cuts (Scoring.cut), never below the grade the same
+-- strokes get without the assist: when any cut kept an assisted path, the cuts are also graded
+-- on their raw lines and the higher grade is used.
+function CutStroke.pizzaGrade(slices: number, cuts: { any }, S: Mat2?): Scoring.Grade
+	local grade = Scoring.cut(slices, cuts, S)
+	local plain, any = {}, false
+	for _, c in cuts do
+		if c.rawLine then
+			any = true
+			local l = c.rawLine
+			table.insert(plain, { x1 = l.x1, y1 = l.y1, x2 = l.x2, y2 = l.y2, straightness = c.rawStraightness, completeness = c.rawCompleteness })
+		else
+			table.insert(plain, c)
+		end
+	end
+	if any then
+		local rawGrade = Scoring.cut(slices, plain, S)
+		if rawGrade.score > grade.score then
+			return rawGrade
+		end
+	end
+	return grade
 end
 
 ------------------------------------------------------------------------------------------
@@ -416,11 +430,10 @@ function CutStroke.runs(path: { Point }, tol: number?): { number }
 	return keys
 end
 
--- How far to pull the groove's end at the dough's edge (point e, the run heading inward along
--- unit d) so both corners of a groove of half-width `half` (cut units) lie on the dough. The
--- visible stroke ends inside the crust; the geometry and the grade are unchanged. 0 when the
--- corners are already inside. maxInset caps it and must not pass the point where the run could
--- leave the dough again (half the run when both its ends are on the edge).
+-- How far along the groove (from point e, heading inward along unit d) a groove of half-width
+-- `half` (cut units) must start so both its corners lie on the dough. 0 when the corners are
+-- already inside. maxInset caps it and must not pass the point where the run could leave the
+-- dough again (half the run when both its ends are on the edge).
 function CutStroke.endInset(S: Mat2, ex: number, ey: number, dx: number, dy: number, half: number, maxInset: number): number
 	local Si = PrepGeometry.inverse(S)
 	local nx, ny = -dy * half, dx * half
@@ -446,6 +459,108 @@ function CutStroke.endInset(S: Mat2, ex: number, ey: number, dx: number, dy: num
 		end
 	end
 	return hi
+end
+
+-- The groove's end taper: the widths (shares of the full half-width) of the steps that carry the
+-- groove from where its full width fits on the dough out to the crust's edge. Each narrower step
+-- starts where its own corners fit, so the visible groove narrows into the crust instead of
+-- stopping short of it or crossing it, the way a mask cut to the crust would show it. The gap
+-- left between the narrowest step and the edge is the residue the checks measure.
+CutStroke.TAPER = { 1, 5 / 6, 4 / 6, 3 / 6, 2 / 6, 1 / 6 }
+-- Pieces along one run overlap this far (cut units) at a join or a taper step, so no gap opens.
+CutStroke.JOIN = 0.008
+
+export type Piece = { ax: number, ay: number, bx: number, by: number, half: number, whole: boolean }
+
+-- Whether both corners of a groove of half-width `half` at point (px, py), heading along unit
+-- (dx, dy), lie on the dough.
+local function cornersIn(Si: Mat2, px: number, py: number, dx: number, dy: number, half: number): boolean
+	local nx, ny = -dy * half, dx * half
+	local au, av = toU(Si, px + nx, py + ny)
+	local bu, bv = toU(Si, px - nx, py - ny)
+	return au * au + av * av <= 1 and bu * bu + bv * bv <= 1
+end
+
+-- One end of a groove piece from e heading inward along d (span: the piece's length). `edge` is
+-- true when e is on the dough's edge; otherwise e is a join or the path's own end, where the
+-- piece reaches `reach` past e (a join's overlap) when its corners stay on the dough there. Gives
+-- the inset of the full-width piece's end and the taper steps (narrower pieces) beyond it.
+local function grooveEnd(S: Mat2, Si: Mat2, ex: number, ey: number, dx: number, dy: number, half: number, span: number, maxInset: number, edge: boolean, reach: number, out: { Piece })
+	if not edge and cornersIn(Si, ex - dx * reach, ey - dy * reach, dx, dy, half) then
+		return -reach
+	end
+	local steps = CutStroke.TAPER
+	local full = CutStroke.endInset(S, ex, ey, dx, dy, half, maxInset)
+	local outer = full -- where the last (wider) step begins
+	for i = 2, #steps do
+		local w = half * steps[i]
+		local s = CutStroke.endInset(S, ex, ey, dx, dy, w, maxInset)
+		if s < outer and cornersIn(Si, ex + dx * s, ey + dy * s, dx, dy, w) then
+			local stop = math.min(outer + CutStroke.JOIN, span / 2)
+			if stop > s then
+				table.insert(out, { ax = ex + dx * s, ay = ey + dy * s, bx = ex + dx * stop, by = ey + dy * stop, half = w, whole = false })
+			end
+			outer = s
+		end
+	end
+	return full
+end
+
+-- The groove pieces for a cut (the committed path or the live stroke, or a plain line) on the
+-- dough S, half-width `half` (cut units). A path is drawn along its runs (CutStroke.runs), each
+-- clipped to the dough with the grade's own clip (Scoring.clipToDough); a plain line (x1..y2, no
+-- path) as the chord of its infinite line across the dough, with the art's own tapered ends
+-- (whole). Wherever a full-width end would put a corner past the crust (at the dough's edge, or
+-- at a join near the rim), the full-width piece stops where its corners fit and the taper steps
+-- carry the groove on toward the edge. No piece has a corner off the dough.
+function CutStroke.groovePieces(line: any, S: Mat2, half: number): { Piece }
+	local Si = PrepGeometry.inverse(S)
+	local pieces: { Piece } = {}
+	local function piece(ax: number, ay: number, bx: number, by: number, startEdge: boolean, endEdge: boolean, startReach: number, endReach: number, whole: boolean)
+		local dx, dy = bx - ax, by - ay
+		local span = math.sqrt(dx * dx + dy * dy)
+		if span < 1e-4 then
+			return
+		end
+		local ux, uy = dx / span, dy / span
+		local maxInset = if startEdge and endEdge then span / 2 else span
+		local tapers: { Piece } = {}
+		local s0 = grooveEnd(S, Si, ax, ay, ux, uy, half, span, maxInset, startEdge, startReach, tapers)
+		local s1 = grooveEnd(S, Si, bx, by, -ux, -uy, half, span, maxInset, endEdge, endReach, tapers)
+		if s0 + s1 < span then
+			table.insert(pieces, { ax = ax + ux * s0, ay = ay + uy * s0, bx = bx - ux * s1, by = by - uy * s1, half = half, whole = whole })
+		end
+		for _, t in tapers do
+			table.insert(pieces, t)
+		end
+	end
+	local path = line.path
+	if path then
+		local keys = CutStroke.runs(path)
+		for i = 2, #keys do
+			local a, b = path[keys[i - 1]], path[keys[i]]
+			local t0, t1 = Scoring.clipToDough(S, a.x, a.y, b.x, b.y)
+			if t0 and t1 then
+				local dx, dy = b.x - a.x, b.y - a.y
+				piece(a.x + dx * t0, a.y + dy * t0, a.x + dx * t1, a.y + dy * t1, t0 > 0, t1 < 1, if i > 2 then CutStroke.JOIN else 0, if i < #keys then CutStroke.JOIN else 0, false)
+			end
+		end
+		return pieces
+	end
+	local dx, dy = line.x2 - line.x1, line.y2 - line.y1
+	local len = math.sqrt(dx * dx + dy * dy)
+	if len < 1e-4 then
+		return pieces
+	end
+	-- The infinite line, long enough to cross any dough (semi-axes stop at 1.1), clipped to it.
+	local ux, uy = dx / len, dy / len
+	local ax, ay, bx, by = line.x1 - ux * 4, line.y1 - uy * 4, line.x2 + ux * 4, line.y2 + uy * 4
+	local t0, t1 = Scoring.clipToDough(S, ax, ay, bx, by)
+	if t0 and t1 then
+		local ex, ey = bx - ax, by - ay
+		piece(ax + ex * t0, ay + ey * t0, ax + ex * t1, ay + ey * t1, true, true, 0, 0, true)
+	end
+	return pieces
 end
 
 return CutStroke

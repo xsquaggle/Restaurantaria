@@ -16,7 +16,7 @@ export type Point = { x: number, y: number }
 -- and that path's grades (0..1). Lines without grades (test hooks) count as straight and full.
 -- With the cutting assist on (CutStroke.grade), `path` is the assisted path and `raw` the samples
 -- the client sent.
-export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number?, raw: { Point }?, assisted: boolean? }
+export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number?, raw: { Point }?, assisted: boolean?, rawLine: Line?, rawStraightness: number?, rawCompleteness: number? }
 export type Grade = { score: number, notes: { string }, detail: any? }
 
 local Scoring = {}
@@ -407,6 +407,16 @@ local function lineAngleAndOffset(line: Line): (number, number)
 	return angle, offset
 end
 
+-- A cut line's distance from the dough's centre in dough-local units (PrepGeometry.toDough), the
+-- measure Scoring.cut holds against centreTolerance.
+function Scoring.cutOffset(line: Line, S: PrepGeometry.Mat2?): number
+	local dough = S or Scoring.ROUND
+	local a = PrepGeometry.toDough(dough, { x = line.x1, y = line.y1 })
+	local b = PrepGeometry.toDough(dough, { x = line.x2, y = line.y2 })
+	local _, offset = lineAngleAndOffset({ x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y })
+	return offset
+end
+
 -- The part of segment a-b on the dough S, as parameters along it (nil when none). A linear map
 -- keeps the parameters, so it is the unit-circle clip of the segment mapped by S^-1. The one
 -- clip shared by the grade (Scoring.cutPath), the live groove and the committed groove (Widgets).
@@ -432,48 +442,14 @@ function Scoring.clipToDough(S: PrepGeometry.Mat2, ax: number, ay: number, bx: n
 	return t0, t1
 end
 
--- Grades one freehand cut from its dragged path (cut coordinates: the pizza frame, frame edge
--- 1) against the made pizza's dough footprint S (Scoring.footprint; the full round crust when
--- omitted). Returns the cut to store, or nil and a refusal reason. The server runs this on every
--- cut it accepts with the pizza's own S; the client runs it with the same S to explain a refusal
--- first and to show whether the live stroke would cut. Only the part of the path on the dough is
--- graded, since the wheel cuts nothing off the food: the best-fit line (principal axis) of that
--- part gives the chord across the dough, the widest distance from it gives straightness and the
--- share of the chord the path spans gives completeness. The fit and the wobble are measured in
--- frame units (the hand's own scale), so a thin oval does not magnify jitter; the chord and the
--- span are measured on the dough, so a cut across bare board never counts. Shares along one line
--- are the same in frame and dough units (the map is linear).
-function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
-	local cfg = Config.Cut
-	local dough = S or Scoring.ROUND
-	if type(points) ~= "table" then
-		return nil, "cut path missing"
-	end
-	local n = #points
-	if n > cfg.maxPoints then
-		return nil, "cut path too long"
-	end
-	-- A plain list only. Counting stops one past the length, so a table stuffed with extra keys
-	-- costs at most maxPoints + 1 steps.
-	local count = 0
-	for _ in points do
-		count += 1
-		if count > n then
-			break
-		end
-	end
-	if n < 2 or count ~= n then
-		return nil, "cut path missing"
-	end
-	local path: { Point } = table.create(n)
-	for i = 1, n do
-		local p = points[i]
-		local x, y = if type(p) == "table" then p.x else nil, if type(p) == "table" then p.y else nil
-		if type(x) ~= "number" or type(y) ~= "number" or x ~= x or y ~= y or math.abs(x) > 1.6 or math.abs(y) > 1.6 then
-			return nil, "cut out of range"
-		end
-		path[i] = { x = x, y = y }
-	end
+-- The best-fit line of a checked path (plain list, at least 2 points in range) on the dough S:
+-- the principal axis, in frame units, of even samples along the path that lie on the dough,
+-- pointing the way the cutter travelled. The one fit shared by the grade (Scoring.cutPath) and
+-- the cutting assist (CutStroke), so the assist straightens toward the very line the grade
+-- measures. Nil and a refusal reason when the path is too short or misses the dough.
+export type CutFit = { xs: { number }, ys: { number }, ws: { number }, mx: number, my: number, ux: number, uy: number, total: number }
+function Scoring.cutFit(path: { Point }, dough: PrepGeometry.Mat2): (CutFit?, string?)
+	local n = #path
 	local total = 0
 	for i = 2, n do
 		total += math.sqrt((path[i].x - path[i - 1].x) ^ 2 + (path[i].y - path[i - 1].y) ^ 2)
@@ -560,6 +536,60 @@ function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 	-- Point the line the way the cutter travelled.
 	if ux * (path[n].x - path[1].x) + uy * (path[n].y - path[1].y) < 0 then
 		ux, uy = -ux, -uy
+	end
+	return { xs = xs, ys = ys, ws = ws, mx = mx, my = my, ux = ux, uy = uy, total = total }, nil
+end
+
+-- Grades one freehand cut from its dragged path (cut coordinates: the pizza frame, frame edge
+-- 1) against the made pizza's dough footprint S (Scoring.footprint; the full round crust when
+-- omitted). Returns the cut to store, or nil and a refusal reason. The server runs this on every
+-- cut it accepts with the pizza's own S; the client runs it with the same S to explain a refusal
+-- first and to show whether the live stroke would cut. Only the part of the path on the dough is
+-- graded, since the wheel cuts nothing off the food: the best-fit line (principal axis) of that
+-- part gives the chord across the dough, the widest distance from it gives straightness and the
+-- share of the chord the path spans gives completeness. The fit and the wobble are measured in
+-- frame units (the hand's own scale), so a thin oval does not magnify jitter; the chord and the
+-- span are measured on the dough, so a cut across bare board never counts. Shares along one line
+-- are the same in frame and dough units (the map is linear).
+function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
+	local cfg = Config.Cut
+	local dough = S or Scoring.ROUND
+	if type(points) ~= "table" then
+		return nil, "cut path missing"
+	end
+	local n = #points
+	if n > cfg.maxPoints then
+		return nil, "cut path too long"
+	end
+	-- A plain list only. Counting stops one past the length, so a table stuffed with extra keys
+	-- costs at most maxPoints + 1 steps.
+	local count = 0
+	for _ in points do
+		count += 1
+		if count > n then
+			break
+		end
+	end
+	if n < 2 or count ~= n then
+		return nil, "cut path missing"
+	end
+	local path: { Point } = table.create(n)
+	for i = 1, n do
+		local p = points[i]
+		local x, y = if type(p) == "table" then p.x else nil, if type(p) == "table" then p.y else nil
+		if type(x) ~= "number" or type(y) ~= "number" or x ~= x or y ~= y or math.abs(x) > 1.6 or math.abs(y) > 1.6 then
+			return nil, "cut out of range"
+		end
+		path[i] = { x = x, y = y }
+	end
+	local fit, why = Scoring.cutFit(path, dough)
+	if not fit then
+		return nil, why
+	end
+	local xs, ys, mx, my, ux, uy, total = fit.xs, fit.ys, fit.mx, fit.my, fit.ux, fit.uy, fit.total
+	local Si = PrepGeometry.inverse(dough)
+	local function mapped(x: number, y: number): (number, number)
+		return Si.a * x + Si.b * y, Si.c * x + Si.d * y
 	end
 	-- Where the line (mx, my) + t (ux, uy) meets the dough's edge: |S^-1 (m + t u)| = 1.
 	local au, av = mapped(mx, my)
