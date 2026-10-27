@@ -5,9 +5,8 @@
 --
 -- Astra r14 (art-integration.md): one thick marinara material drawn through the coverage the
 -- field already holds, never a translucent stamp. Each field cell on the dough that carries
--- sauce shows a disc of the material map, sampled at the cell's own dough-local place, so
--- neighbouring discs show one continuous material (each samples the map at its drawn place). The
--- disc's area is the cell's coverage
+-- sauce shows a disc of the material map, sampled at the disc's own dough-local place, so
+-- neighbouring discs show one continuous material. The disc's area is the cell's coverage
 -- credit (MakeSauce.measure: min(1, thickness / half an even layer)), so a thin trace shows as
 -- sparse specks with the board or dough between them and a covered patch reads solid: amount is
 -- never drawn as transparency. A fully credited cell inside a covered patch is drawn a little
