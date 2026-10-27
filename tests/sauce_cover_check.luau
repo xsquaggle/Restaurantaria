@@ -112,7 +112,7 @@ end
 -- over every field cell its square could touch: the largest radius minus distance to the cell's
 -- square (negative: it stops short). Astra's edge rule: at most 2 reference HD px.
 local HD_CELL_PX = 661 / 2 * MakeSauce.CELL -- a cell at the HD Make size (F = 661): 16.525 px
-local function bareReach(field: { number }, d: any): number
+local function bareReach(field: { number }, d: any, only: number?): number
 	local worst = -math.huge
 	local r = d.w / 2
 	local half = MakeSauce.CELL / 2
@@ -123,7 +123,7 @@ local function bareReach(field: { number }, d: any): number
 	for gx = g0x, g1x do
 		for gy = g0y, g1y do
 			local j = MakeSauce.cellAt(gx, gy)
-			if j and SauceCover.credit(field[j]) < SauceCover.BARE then
+			if j and (only == nil or j == only) and SauceCover.credit(field[j]) < SauceCover.BARE then
 				local dx = math.max(math.abs(d.x - MakeSauce.xs[j]) - half, 0)
 				local dy = math.max(math.abs(d.y - MakeSauce.ys[j]) - half, 0)
 				worst = math.max(worst, r - math.sqrt(dx * dx + dy * dy))
@@ -307,7 +307,7 @@ end
 
 -- 5. A one-cell hole in a covered patch stays open: every cell of the even layer, one cell
 -- emptied; no disc reaches more than EDGE_TOL onto it, so at least (1 - 2 EDGE_TOL)^2 of the
--- cell's square shows bare dough at any size.
+-- cell's square shows bare dough at any size (MakeLayers' pinhole guard keeps to the same limit).
 do
 	local field = table.create(MakeSauce.COUNT, 0)
 	for _, i in SauceCover.cells do
@@ -318,7 +318,7 @@ do
 	local worst = -math.huge
 	local touching = 0
 	for _, d in SauceCover.discs(field) do
-		local reach = bareReach(field, d)
+		local reach = bareReach(field, d, hole)
 		worst = math.max(worst, reach)
 		if reach > 0 then
 			touching += 1
