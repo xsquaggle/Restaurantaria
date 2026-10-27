@@ -1,0 +1,115 @@
+{
+  "status": "Generated candidate P14 art; locally registered and inspected; not Studio-approved.",
+  "runtimeSize": [
+    512,
+    512
+  ],
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "coordinateFootprintRadius": 0.17,
+  "sharedFootprintCanvasShare": 0.95,
+  "sourceAlphaThreshold": 128,
+  "sourceAlphaBboxes": {
+    "melted": [
+      99,
+      157,
+      1162,
+      1126
+    ],
+    "golden": [
+      63,
+      117,
+      1207,
+      1156
+    ],
+    "burnt": [
+      90,
+      153,
+      1172,
+      1129
+    ]
+  },
+  "sourceBodyBoxReference": "melted",
+  "outputToSourceAffine": {
+    "melted": [
+      2.3275548020065635,
+      0,
+      34.64597068631974,
+      0,
+      2.3275548020065635,
+      45.64597068631974
+    ],
+    "golden": [
+      2.5049131641538183,
+      0,
+      -6.257770023377432,
+      0,
+      2.4956960157738077,
+      -2.3981800380947362
+    ],
+    "burnt": [
+      2.3691573807818456,
+      0,
+      24.495710519847563,
+      0,
+      2.3443689233832883,
+      40.8415556138783
+    ]
+  },
+  "processing": [
+    "Box registration to melted reference using generated pixels only",
+    "One common minimum-alpha intersection mask across three registered variants",
+    "Clear alpha below 8, contain within logical .95 circle, retain largest connected body",
+    "Shared 512px export canvas/pivot/alpha for all cooked states"
+  ],
+  "alphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a",
+  "alphaBbox128": [
+    28,
+    48,
+    484,
+    464
+  ],
+  "alphaBbox8": [
+    27,
+    48,
+    485,
+    464
+  ],
+  "actualAlpha128DiameterCanvasShare": 0.9377644483795124,
+  "actualAlpha8DiameterCanvasShare": 0.9389352620226441,
+  "coverage": {
+    "opaque128Pixels": 133007,
+    "alphaAreaPixels": 131344.47450980393,
+    "opaqueShareOfLogicalCircle": 0.7158095431196886
+  },
+  "oldMeltedCoverage": {
+    "opaque128Pixels": 100015,
+    "alphaAreaPixels": 99168.67843137255,
+    "opaqueShareOfLogicalCircle": 0.5382550651854087
+  },
+  "runtimeFiles": {
+    "melted": {
+      "path": "food_cheese_melted_v2.png",
+      "sha256": "6721f8a03a85b3b3a5f6c141569de84e7cdfb68739bf8d036dd54d67a01783c5",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a"
+    },
+    "golden": {
+      "path": "food_cheese_golden_v2.png",
+      "sha256": "c3e5deeabd63db17adc8e35b4e180dd38f5ab2542033fe8421ebb6bfde32e1fd",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a"
+    },
+    "burnt": {
+      "path": "food_cheese_burnt_v2.png",
+      "sha256": "63afeb9f86e7621e14bcdbbbb94eb48f7b527dafdbb8f83682a16d2dbe1e6dec",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a"
+    }
+  },
+  "caveats": [
+    "The physical r=.17 footprint is unchanged; dense cheese is not permission to cover unrecorded regions.",
+    "Shared minimum alpha slightly narrows the perimeter and enlarges tiny holes where source shapes disagree.",
+    "Raw shreds retain their existing asset and placement; only cooked family is replaced.",
+    "Validate sparse, clustered and clean real arrangements, actual phone size and Bake projection in Studio."
+  ]
+}

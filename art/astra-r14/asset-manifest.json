@@ -1,0 +1,195 @@
+{
+  "version": "Message13 corrective candidate pack",
+  "game_art_source": "Built-in image generation; code only cropped/resized/registered existing generated pixels",
+  "assets": [
+    {
+      "id": "sauce_material_raw_v2",
+      "path": "art/runtime/sauce_material_raw_v2.png",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGB",
+      "alpha_bbox_128": null,
+      "sha256": "7077728f26d48b9e875a04aa727e3a407f14cccdf8a02235c883fe2ae4578179",
+      "role": "Full-field material, apply ONLY through the authoritative sauce coverage mask; not a stamp or whole-pizza overlay",
+      "status": "Integration candidate, not Studio-tested",
+      "registration": "UV 0..1 over the same canonical dough-local square in both states; alpha comes from gameplay coverage"
+    },
+    {
+      "id": "sauce_material_cooked_v2",
+      "path": "art/runtime/sauce_material_cooked_v2.png",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGB",
+      "alpha_bbox_128": null,
+      "sha256": "18635dc9b7dce9b430a6acdb02c63561f424eba7b8f227be5fae4a4e7d21c49d",
+      "role": "Full-field material, apply ONLY through the authoritative sauce coverage mask; not a stamp or whole-pizza overlay",
+      "status": "Integration candidate, not Studio-tested",
+      "registration": "UV 0..1 over the same canonical dough-local square in both states; alpha comes from gameplay coverage"
+    },
+    {
+      "id": "sauce_board_spill_v2",
+      "path": "art/runtime/sauce_board_spill_v2.png",
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        41,
+        157,
+        470,
+        355
+      ],
+      "sha256": "22e2e1466a9e05811f7621e2f92e871940efaa54220fc11e316a3c8b0d88392e",
+      "role": "Actual recorded board-spill feedback; bound to its support and amount, never decorative",
+      "status": "Integration candidate, not Studio-tested",
+      "source_crop_alpha8": [
+        88,
+        379,
+        1184,
+        883
+      ],
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "suggested_display_width_px": [
+        36,
+        60
+      ]
+    },
+    {
+      "id": "icon_nav_make_selected_v2",
+      "path": "art/runtime/icon_nav_make_selected_v2.png",
+      "width": 128,
+      "height": 128,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        7,
+        11,
+        120,
+        116
+      ],
+      "sha256": "753e4c53a98a184f407312236d7497db706ac9ba63d7a0c9cf78ec022f3f702c",
+      "role": "Selected Make tab: dough and rolling pin; do not tint to white",
+      "status": "Integration candidate, not Studio-tested",
+      "source_crop_alpha8": [
+        57,
+        77,
+        1207,
+        1151
+      ],
+      "pivot": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "icon_nav_make_selected_v2_28",
+      "path": "art/runtime/icon_nav_make_selected_v2_28.png",
+      "width": 28,
+      "height": 28,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        2,
+        2,
+        26,
+        25
+      ],
+      "sha256": "b4b723c6258f92675399312465d4600b4ab3aa06b37403a879047979a21757c3",
+      "role": "28px preview/export of same selected Make icon",
+      "status": "Integration candidate, not Studio-tested",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "use": "Prefer 128px master at runtime if device scaling needs it; this export documents small-size readability"
+    },
+    {
+      "id": "F2_existing_scoop_anchor",
+      "path": "references/tool_flour_scoop_existing.png",
+      "new_art": false,
+      "width": 512,
+      "height": 512,
+      "sha256": "c532f0f6b4ca71252b7391206c1f194c8cdb3e9cc394a1f16da504baa8379c11",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "interactionPivot": [
+        0.5,
+        0.35
+      ],
+      "anchor_type": "Art-directed visual bowl centre, selected on delivered sprite; not a new measured mesh coordinate",
+      "note": "Transform this point with the displayed scoop for pointer/dust contact; emission follows authoritative flour actions. Verify through actual tilt animation."
+    },
+    {
+      "id": "food_cheese_melted_v2",
+      "path": "art/runtime/cheese/food_cheese_melted_v2.png",
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        28,
+        48,
+        484,
+        464
+      ],
+      "sha256": "6721f8a03a85b3b3a5f6c141569de84e7cdfb68739bf8d036dd54d67a01783c5",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sharedFootprintCanvasShare": 0.95,
+      "coordinateFootprintRadius": 0.17,
+      "role": "Denser cooked P14 candidate; same footprint, no game-coverage increase",
+      "status": "Registered and inspected; not Studio-approved"
+    },
+    {
+      "id": "food_cheese_golden_v2",
+      "path": "art/runtime/cheese/food_cheese_golden_v2.png",
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        28,
+        48,
+        484,
+        464
+      ],
+      "sha256": "c3e5deeabd63db17adc8e35b4e180dd38f5ab2542033fe8421ebb6bfde32e1fd",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sharedFootprintCanvasShare": 0.95,
+      "coordinateFootprintRadius": 0.17,
+      "role": "Denser cooked P14 candidate; same footprint, no game-coverage increase",
+      "status": "Registered and inspected; not Studio-approved"
+    },
+    {
+      "id": "food_cheese_burnt_v2",
+      "path": "art/runtime/cheese/food_cheese_burnt_v2.png",
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA",
+      "alpha_bbox_128": [
+        28,
+        48,
+        484,
+        464
+      ],
+      "sha256": "63afeb9f86e7621e14bcdbbbb94eb48f7b527dafdbb8f83682a16d2dbe1e6dec",
+      "commonAlphaSha256": "be08c33555ff3bd1d2410c7a3d4e1cfe38b22f13c6ff2d425b6a901906cd143a",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sharedFootprintCanvasShare": 0.95,
+      "coordinateFootprintRadius": 0.17,
+      "role": "Denser cooked P14 candidate; same footprint, no game-coverage increase",
+      "status": "Registered and inspected; not Studio-approved"
+    }
+  ],
+  "finalized": "2026-10-27"
+}
