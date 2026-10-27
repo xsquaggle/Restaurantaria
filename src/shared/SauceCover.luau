@@ -5,15 +5,15 @@
 --
 -- Astra r14 (art-integration.md): one thick marinara material drawn through the coverage the
 -- field already holds, never a translucent stamp. Each field cell on the dough that carries
--- sauce shows one tile of the material map, sampled at the tile's own dough-local place, so
--- neighbouring tiles show one continuous material. Amount is never drawn as transparency:
+-- sauce shows one disc of the material map, sampled at the disc's own dough-local place, so
+-- neighbouring discs show one continuous material. Amount is never drawn as transparency:
 --  * "full": a covered cell (at least SOLID credit) whose four neighbours are covered too is a
 --    disc a little larger than the cell (FULL), so a covered patch closes up with no gaps;
---  * "edge": any other cell next to a covered cell is a band along the patch's edge, axis
---    aligned on the side away from the patch, FULL cells long (so the bands of neighbouring
---    edge cells join into one edge) and reaching as far past the cell's patch side as the cell
---    has credit, so the drawn edge sits where the scored edge is and the patch has a smooth
---    rim, not a row of beads;
+--  * "edge": any other cell next to a covered cell is a FULL disc pushed back toward the patch
+--    (against the way the credit falls, read from its four neighbours) so that it reaches out
+--    just as far as the cell's credit (its outer point at credit - 1/2 cells from the cell's
+--    centre): the drawn edge sits where the scored edge is, and neighbouring edge discs overlap
+--    into one rim with shallow scallops, not a row of beads or a staircase;
 --  * "speck": a cell with no covered neighbour is a disc whose area is its credit (AREA), a
 --    little off the grid (JITTER), so a thin trace reads as scattered specks, not a dot grid.
 --
@@ -34,16 +34,15 @@ SauceCover.SPAN = 1.0 -- the material maps' half width, dough-local
 SauceCover.DOUGH = 0.95 -- cells out to here are drawn as material
 -- Proposals (looks, not grading): a cell under BARE credit is drawn bare; one at SOLID credit
 -- or more counts as covered (a patch of cells at half credit or more reads as covered sauce,
--- thinner sauce as specks); tile sizes as multiples of the cell: AREA keeps a speck's area equal
--- to its credit (2 / sqrt(pi)), FULL closes a covered patch (at least sqrt 2, so four neighbours
--- leave no hole) and is an edge band's length; an edge band starts INSET cells inside the cell's
--- patch side (under the patch's own discs, so band and patch join); the deep-red tint of a thick
--- layer (its 5x5 mean) starts at DEEP_FROM even layers and is full DEEP_SPAN later.
+-- thinner sauce as specks); disc diameters as multiples of the cell: AREA keeps a speck's area
+-- equal to its credit (2 / sqrt(pi)), FULL closes a covered patch (at least sqrt 2, so four
+-- neighbours leave no hole) and is the edge discs' size (their scallops are 0.18 cells deep);
+-- the deep-red tint of a thick layer (its 5x5 mean) starts at DEEP_FROM even layers and is full
+-- DEEP_SPAN later.
 SauceCover.BARE = 0.03
 SauceCover.SOLID = 0.5
 SauceCover.AREA = 2 / math.sqrt(math.pi)
 SauceCover.FULL = 1.6
-SauceCover.INSET = 0.1
 SauceCover.DEEP_FROM = 1.3
 SauceCover.DEEP_SPAN = 1.7
 -- Sizes are rounded to this share of a cell (fewer resizes).
@@ -98,9 +97,8 @@ local function round(scale: number): number
 	return math.max(SauceCover.STEP, math.floor(scale / SauceCover.STEP + 0.5) * SauceCover.STEP)
 end
 
--- The tile drawn for material cell i (nil: bare): its kind ("full", "edge" or "speck"), centre
--- and axis-aligned width and height (dough-local; a disc when they are equal, otherwise a band
--- with round ends), its credit and its deep-red share (0..1, in 0.05 steps).
+-- The disc drawn for material cell i (nil: bare): its kind ("full", "edge" or "speck"), centre
+-- and diameter (w = h, dough-local), its credit and its deep-red share (0..1, in 0.05 steps).
 function SauceCover.disc(field: { number }, i: number): Disc?
 	local c = SauceCover.credit(field[i])
 	if c < SauceCover.BARE then
@@ -126,28 +124,17 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 	local kind, w, h
 	if c >= SauceCover.SOLID and covered == 4 then
 		kind, w, h = "full", SauceCover.FULL * CELL, SauceCover.FULL * CELL
-	elseif covered > 0 then
-		-- The patch's side: the axis along which the credit changes most, toward the higher.
-		-- (neighbours are +x, -x, +y, -y)
+	elseif covered > 0 and (n[1] ~= n[2] or n[3] ~= n[4]) then
+		-- The way out of the patch: against the credit's rise across the four neighbours
+		-- (+x, -x, +y, -y).
 		kind = "edge"
 		local gx, gy = n[1] - n[2], n[3] - n[4]
-		local dx, dy = 0, 0
-		if math.abs(gx) >= math.abs(gy) then
-			dx = if gx >= 0 then 1 else -1
-		else
-			dy = if gy >= 0 then 1 else -1
-		end
-		-- From INSET inside the patch-side boundary to the credit's share of the cell outward.
-		local depth = round(c + SauceCover.INSET)
-		local along = SauceCover.FULL
-		local shift = (0.5 + SauceCover.INSET - depth / 2) * CELL
-		x += dx * shift
-		y += dy * shift
-		if dx ~= 0 then
-			w, h = depth * CELL, along * CELL
-		else
-			w, h = along * CELL, depth * CELL
-		end
+		local g = math.sqrt(gx * gx + gy * gy)
+		local d = SauceCover.FULL * CELL
+		local back = d / 2 - (c - 0.5) * CELL
+		x += gx / g * back
+		y += gy / g * back
+		w, h = d, d
 	else
 		kind = "speck"
 		local d = round(SauceCover.AREA * math.sqrt(c)) * CELL
@@ -157,7 +144,7 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 		y += (((i * 0.7548776662) % 1) - 0.5) * a
 	end
 	-- Never past the material's span.
-	local reach = math.sqrt(w * w + h * h) / 2
+	local reach = w / 2
 	local r = math.sqrt(x * x + y * y)
 	local limit = SauceCover.SPAN - reach
 	if r > limit then
@@ -178,7 +165,7 @@ function SauceCover.discs(field: { number }): { Disc }
 	return out
 end
 
--- Where a tile samples the material map: the top-left corner and size of its rectangle in the
+-- Where a disc samples the material map: the top-left corner and size of its rectangle in the
 -- map's 0..1 UV (the map's -SPAN..SPAN square, y down as on screen).
 function SauceCover.uv(disc: Disc): (number, number, number, number)
 	local span = 2 * SauceCover.SPAN

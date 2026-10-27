@@ -6,11 +6,11 @@
 -- preassembled pizza. Cosmetic only: it never takes input and never changes a record.
 --
 -- Sauce (slice 2, Astra r14; SauceCover): one thick marinara material through the coverage the
--- grade scores. Every field cell on the dough that carries sauce shows a tile of Astra's material
--- map (sauce_material_raw_v2), sampled at the tile's own dough-local place over the one canonical
--- -1..1 square, so neighbouring tiles read as one continuous opaque material: covered patches
--- close up, their edges are bands as deep as the edge cells' credit, and thin sauce shows as
--- sparse specks, never as a wash (SauceCover.disc). The tiles sit in one CanvasGroup; the cooked map (sauce_material_cooked_v2) is the same discs in a second
+-- grade scores. Every field cell on the dough that carries sauce shows a disc of Astra's material
+-- map (sauce_material_raw_v2), sampled at the disc's own dough-local place over the one canonical
+-- -1..1 square, so neighbouring discs read as one continuous opaque material: covered patches
+-- close up, their edges reach out as far as the edge cells' credit, and thin sauce shows as
+-- sparse specks, never as a wash (SauceCover.disc). The discs sit in one CanvasGroup; the cooked map (sauce_material_cooked_v2) is the same discs in a second
 -- group over it, its GroupTransparency the cooking share, so the colour moves from raw to cooked
 -- under one unchanged mask (opaque wherever the sauce is). Cooking follows the food's own state
 -- (SauceCover.cooked), not the ticket. Sauce spilled past the dough's edge shows only as the board

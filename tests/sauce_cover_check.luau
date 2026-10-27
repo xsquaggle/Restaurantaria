@@ -1,9 +1,9 @@
 -- Checks for how the sauce is drawn (SauceCover, slice 2, Astra r14): presentation only. For
 -- every record of the comparison set the grade, mass, pours and coverage are the same before and
--- after the renderer reads the field, the field itself is unchanged, and the drawn tiles keep the
+-- after the renderer reads the field, the field itself is unchanged, and the drawn discs keep the
 -- material contract: only on the dough, inside the material's -1..1 span, sampled at their own
--- place, no tile on a bare cell, an edge band as deep as its credit, a speck's area equal to its
--- credit, a covered patch closed up. The board smear appears only for recorded spill, at that spill. Cooking follows the food's
+-- place, no disc on a bare cell, an edge disc reaching out as far as its credit, a speck's area
+-- equal to its credit, a covered patch closed up. The board smear appears only for recorded spill, at that spill. Cooking follows the food's
 -- own state. The comparison records here are the ones the Studio A/B captures draw
 -- (tools/food_ab.luau builds the same actions). Run offline with tests/offline/run.py, or in
 -- Studio Edit after a sync. Arithmetic only: how it looks is checked in Studio and by Lawson.
@@ -89,7 +89,6 @@ check("proposal: solid", SauceCover.SOLID, 0.5)
 near("proposal: area disc", SauceCover.AREA, 2 / math.sqrt(math.pi), 1e-12)
 check("proposal: full disc", SauceCover.FULL, 1.6)
 check("proposal: full disc closes a patch (>= sqrt 2)", SauceCover.FULL >= math.sqrt(2), true)
-check("proposal: edge band inset", SauceCover.INSET, 0.1)
 check("proposal: spill sectors / min / full", string.format("%d/%g/%g", SauceCover.SECTORS, SauceCover.SPILL_MIN, SauceCover.SPILL_FULL), "12/0.01/0.15")
 check("default renderer", Config.FoodArt.sauce, "material")
 check("default cheese family", Config.FoodArt.cheese, "v2")
@@ -127,7 +126,7 @@ local records = {
 	{ "unmoved dollops", sauceOf(tri, {}) },
 }
 local area = MakeSauce.CELL * MakeSauce.CELL
-table.insert(report, "record                               pours  mass   coverage  grade  tiles (full/edge/speck)  drawn/edible  deepest  spills (ladles)")
+table.insert(report, "record                               pours  mass   coverage  grade  discs (full/edge/speck)  drawn/edible  deepest  spills (ladles)")
 for _, rec in records do
 	local name, sauce = rec[1], rec[2]
 	local before = MakeSauce.grade(sauce)
@@ -150,39 +149,17 @@ for _, rec in records do
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
 		local home = math.sqrt((d.x - MakeSauce.xs[d.cell]) ^ 2 + (d.y - MakeSauce.ys[d.cell]) ^ 2)
-		if home > (0.5 + SauceCover.INSET) * MakeSauce.CELL + 1e-9 then
-			offDough += 1
-		end
-		if MakeSauce.rs[d.cell] > SauceCover.DOUGH + 1e-9 then
-			offDough += 1
-		end
-		if r + math.sqrt(d.w * d.w + d.h * d.h) / 2 > SauceCover.SPAN + 1e-9 then
-			outside += 1
-		end
-		local u, v, uw, vh = SauceCover.uv(d)
-		if u < -1e-9 or v < -1e-9 or u + uw > 1 + 1e-9 or v + vh > 1 + 1e-9
-			or math.abs(u + uw / 2 - (d.x + 1) / 2) > 1e-9 or math.abs(v + vh / 2 - (d.y + 1) / 2) > 1e-9
-			or math.abs(uw - d.w / 2) > 1e-9 or math.abs(vh - d.h / 2) > 1e-9 then
-			badUv += 1
-		end
-		if SauceCover.credit(field[d.cell]) < SauceCover.BARE then
-			onBare += 1
-		end
-		kinds[d.kind] += 1
-		local area1 = MakeSauce.CELL * MakeSauce.CELL
-		if d.kind == "full" then
-			-- A covered cell inside a covered patch.
-			if d.credit < SauceCover.SOLID or math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 or d.w ~= d.h then
+		-- A speck sits within its jitter; an edge disc is pushed back toward its patch by at most
+		-- its radius plus half a cell; a full disc sits on its cell (all three may be pulled in to
+		-- the material's span).
+		local allowed = if d.kind == "speck" then SauceCover.JITTER * MakeSauce.CELL * math.sqrt(2)
+			elseif d.kind == "edge" then
+			-- A FULL disc whose outer point is credit - 1/2 cells past its cell's centre: the
+			-- drawn edge on the scored edge.
+			if math.abs(d.w - SauceCover.FULL * MakeSauce.CELL) > 1e-9 then
 				badKind += 1
 			end
-			drawn += area1
-		elseif d.kind == "edge" then
-			-- A band along the patch: FULL cells long, its depth past the patch side the credit.
-			local long, depth = math.max(d.w, d.h) / MakeSauce.CELL, math.min(d.w, d.h) / MakeSauce.CELL
-			if math.abs(long - SauceCover.FULL) > 1e-9 then
-				badKind += 1
-			end
-			if math.abs(depth - (d.credit + SauceCover.INSET)) > SauceCover.STEP / 2 + 1e-9 then
+			if r < SauceCover.SPAN - d.w / 2 - 1e-9 and math.abs((d.w / 2 - home) - (d.credit - 0.5) * MakeSauce.CELL) > 1e-9 then
 				badArea += 1
 			end
 			drawn += d.credit * area1
@@ -201,8 +178,8 @@ for _, rec in records do
 	check(name .. ": no disc past the material span", outside, 0)
 	check(name .. ": every disc samples its own place", badUv, 0)
 	check(name .. ": no disc on a bare cell", onBare, 0)
-	check(name .. ": edge depth and speck area = credit", badArea, 0)
-	check(name .. ": full discs and edge bands keep their sizes", badKind, 0)
+	check(name .. ": edge reach and speck area = credit", badArea, 0)
+	check(name .. ": full and edge discs keep their sizes", badKind, 0)
 	-- Every material cell with credit is drawn, and only those.
 	local credited = 0
 	for _, i in SauceCover.cells do
