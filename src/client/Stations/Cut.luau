@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Scoring = require(Shared.Scoring)
+local CutStroke = require(Shared.CutStroke)
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Parent = script.Parent.Parent
@@ -166,6 +167,9 @@ function Cut.new(ctx: any, container: Frame)
 	local REST_ANGLE = -32
 	cutter.Position = rest
 	cutter.Rotation = REST_ANGLE
+	-- While a stroke is held the handle turns see-through, so it never hides the groove it trails
+	-- (open item fc-02); the wheel stays solid.
+	local HANDLE_HELD = 0.55
 	local GLIDE = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local PICK = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local lastPoint: Vector2? = nil
@@ -195,48 +199,31 @@ function Cut.new(ctx: any, container: Frame)
 	-- Drag to cut. Drags may start anywhere on the board, so a stroke that begins just off the
 	-- crust still counts. One stroke at a time: it belongs to the input that started it (the
 	-- mouse, or that one finger) and to the pizza it started on; other fingers are ignored and
-	-- a ticket or station change cancels it without cutting. The stroke records the dragged
-	-- path (freehand, Lawson 2026-10-26); the release sends it, resampled to at most
-	-- Config.Cut.maxPoints points, for the server to grade.
-	local RANGE = 1.599 -- just inside the server's accepted range (+-1.6), so a clipped point never rounds past it
-	local SPACING = 0.03 -- cut units between recorded points
-	local MAX_RAW = 400 -- recorded points kept before thinning
+	-- a ticket or station change, or a resize of the pizza, cancels it without cutting. The drag
+	-- is recorded as one append-only list of samples (CutStroke, slice 3): the live groove and
+	-- the cutter show those samples' outputs (assisted when the shift has the assist on), the
+	-- release sends exactly those samples, and the server rebuilds the same outputs from them.
 	type Stroke = {
 		input: InputObject,
 		mouse: boolean,
 		button: Enum.UserInputType,
 		pizzaId: number,
 		dough: any, -- the pizza's footprint (Scoring.footprint), fixed for the stroke
-		points: { Vector2 },
-		length: number,
-		outside: Vector2?, -- where the path left the accepted range, while it is outside
-		closed: boolean, -- the path came back in across the pizza; nothing more is recorded
-		dirty: boolean, -- points added since the groove was last drawn
+		assist: boolean, -- the shift's cutting assist when the stroke began
+		stream: CutStroke.Stream,
+		view: { Vector2 }, -- the pizza's screen position and size when the stroke began
 	}
 	local stroke: Stroke? = nil
+	local assistOn = false
 
-	-- Pizza-local point of a screen position, not clamped.
-	local function rawLocal(position: Vector3): Vector2
-		local rel = (Vector2.new(position.X, position.Y) - view.frame.AbsolutePosition) / view.frame.AbsoluteSize
-		return Vector2.new(rel.X * 2 - 1, rel.Y * 2 - 1)
-	end
-	local function inRange(p: Vector2): boolean
-		return math.abs(p.X) <= RANGE and math.abs(p.Y) <= RANGE
-	end
-	-- Where the segment from a (inside the range) towards b leaves the range; clipping each axis
-	-- on its own would bend the path.
-	local function rangeExit(a: Vector2, b: Vector2): Vector2
-		local d = b - a
-		local t = 1
-		for _, axis in { "X", "Y" } do
-			local dv, av = (d :: any)[axis], (a :: any)[axis]
-			if dv > 1e-9 then
-				t = math.min(t, (RANGE - av) / dv)
-			elseif dv < -1e-9 then
-				t = math.min(t, (-RANGE - av) / dv)
-			end
+	-- Pizza-local point of a screen position, not clamped, through the view frozen at the press.
+	local function rawLocal(position: Vector3, frozen: { Vector2 }?): Vector2
+		local at, size = view.frame.AbsolutePosition, view.frame.AbsoluteSize
+		if frozen then
+			at, size = frozen[1], frozen[2]
 		end
-		return a + d * math.max(t, 0)
+		local rel = (Vector2.new(position.X, position.Y) - at) / size
+		return Vector2.new(rel.X * 2 - 1, rel.Y * 2 - 1)
 	end
 	local function trace(line: string)
 		local log = IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutTrace")
@@ -244,86 +231,34 @@ function Cut.new(ctx: any, container: Frame)
 			LocalPlayer:SetAttribute("RestaurantariaCutTrace", log .. string.format("%.3f %s\n", os.clock(), line))
 		end
 	end
-	local function addPoint(st: Stroke, p: Vector2)
-		local last = st.points[#st.points]
-		st.length += (p - last).Magnitude
-		table.insert(st.points, p)
-		-- The groove is redrawn once a frame (drawGroove, from tick), not per point, so a fast
-		-- drag records every pointer sample instead of waiting on the redraw.
-		st.dirty = true
-		if #st.points > MAX_RAW then
-			-- Thin to every other point (keeping both ends); the sent path is resampled anyway.
-			local thin = {}
-			for i = 1, #st.points, 2 do
-				table.insert(thin, st.points[i])
-			end
-			if thin[#thin] ~= st.points[#st.points] then
-				table.insert(thin, st.points[#st.points])
-			end
-			st.points = thin
+	local function pathLength(path: { any }): number
+		local total = 0
+		for i = 2, #path do
+			total += math.sqrt((path[i].x - path[i - 1].x) ^ 2 + (path[i].y - path[i - 1].y) ^ 2)
 		end
+		return total
 	end
-	-- The stroke's points as the path the release would send (resampled to the server's cap).
-	local function sendPath(st: Stroke): { any }
-		local raw = table.create(#st.points)
-		for i, p in st.points do
-			raw[i] = { x = p.X, y = p.Y }
-		end
-		return Scoring.resamplePath(raw, Config.Cut.maxPoints)
-	end
-	-- The groove grows behind the cutter: only the part already rolled over is drawn, clipped to
-	-- the dough as the grade clips it. It is faint until the server's own grading would accept
-	-- the path (Scoring.cutPath on the same footprint), so it never promises a cut the release
-	-- would drop. The whole path is redrawn so straight runs stay single grooves (the groove art
-	-- squashed into many short pieces reads as pale smears).
+	-- The groove grows behind the cutter: the samples' outputs, clipped to the dough as the grade
+	-- clips them. It is faint until the server's own grading of these samples would accept the
+	-- cut (CutStroke.grade on the same footprint), so it never promises a cut the release would
+	-- drop. Runs already drawn never change as the stroke grows (CutStroke.runs).
 	local function drawGroove(st: Stroke)
-		st.dirty = false
-		local path = sendPath(st)
-		local strong = Scoring.cutPath(path, st.dough) ~= nil
-		local drawn = table.create(#st.points)
-		for i, q in st.points do
-			drawn[i] = { x = q.X, y = q.Y }
-		end
+		st.stream.dirty = false
+		local strong = CutStroke.grade(st.stream.points, st.dough, st.assist) ~= nil
 		Ui.clear(preview)
-		Widgets.drawCut(preview, { path = drawn }, if strong then 0.3 else 0.7, st.dough)
+		Widgets.drawCut(preview, { path = st.stream.out }, if strong then 0.3 else 0.7, st.dough)
 	end
-	-- Records the pointer's pizza-local position on the stroke's path.
-	local function record(st: Stroke, raw: Vector2, final: boolean?)
-		if st.closed then
-			return
-		end
-		local last = st.points[#st.points]
-		if st.outside then
-			if not inRange(raw) then
-				return
-			end
-			-- Back in range: where it re-entered, unless the jump from where it left would run
-			-- across the dough, which the wheel never rolled over. Then the path ends where it left.
-			local entry = rangeExit(raw, st.outside)
-			local out = st.outside :: Vector2
-			if Scoring.clipToDough(st.dough, out.X, out.Y, entry.X, entry.Y) ~= nil then
-				st.closed = true
-				return
-			end
-			addPoint(st, entry)
-			st.outside = nil
-			last = entry
-		end
-		if not inRange(raw) then
-			local exit = rangeExit(last, raw)
-			if (exit - last).Magnitude > 1e-4 then
-				addPoint(st, exit)
-			end
-			st.outside = exit
-			return
-		end
-		if (raw - last).Magnitude >= SPACING or (final and (raw - last).Magnitude > 1e-4) then
-			addPoint(st, raw)
-		end
+	-- Where the wheel touches: the pointer moved by the newest sample's correction, so the wheel
+	-- runs on the line the groove shows.
+	local function contact(st: Stroke, point: Vector2): Vector2
+		local c = CutStroke.lastCorrection(st.stream)
+		local size = st.view[2]
+		return point + Vector2.new(c.x * size.X / 2, c.y * size.Y / 2)
 	end
 	local function endStroke()
 		stroke, lastPoint = nil, nil
 		Ui.clear(preview)
+		handleImg.ImageTransparency = 0
 		TweenService:Create(cutter, GLIDE, { Position = rest, Rotation = REST_ANGLE }):Play()
 	end
 	local function cancelStroke(reason: string)
@@ -358,24 +293,26 @@ function Cut.new(ctx: any, container: Frame)
 			trace("ignored begin " .. input.UserInputType.Name .. (if stroke then " (stroke held)" else ""))
 			return
 		end
-		local p = rawLocal(input.Position)
-		local s = Vector2.new(math.clamp(p.X, -RANGE, RANGE), math.clamp(p.Y, -RANGE, RANGE))
-		stroke = {
+		local frozen = { view.frame.AbsolutePosition, view.frame.AbsoluteSize }
+		local p = rawLocal(input.Position, frozen)
+		local dough = Scoring.footprint(current.make)
+		local st: Stroke = {
 			input = input,
 			mouse = isMouse,
 			button = input.UserInputType,
 			pizzaId = current.id,
-			dough = Scoring.footprint(current.make),
-			points = { s },
-			length = 0,
-			outside = nil,
-			closed = false,
-			dirty = false,
+			dough = dough,
+			assist = assistOn,
+			stream = CutStroke.stream(dough, assistOn, { x = p.X, y = p.Y }),
+			view = frozen,
 		}
+		stroke = st
+		local s = st.stream.points[1]
 		local point = toStation(input.Position)
 		lastPoint = point
+		handleImg.ImageTransparency = HANDLE_HELD
 		TweenService:Create(cutter, PICK, { Position = UDim2.fromOffset(point.X, point.Y) }):Play()
-		trace(string.format("begin %s screen=%.0f,%.0f local=%.3f,%.3f pizza=%d ticket=%d", input.UserInputType.Name, input.Position.X, input.Position.Y, s.X, s.Y, current.id, current.ticketId))
+		trace(string.format("begin %s screen=%.0f,%.0f local=%.4f,%.4f pizza=%d ticket=%d assist=%s", input.UserInputType.Name, input.Position.X, input.Position.Y, s.x, s.y, current.id, current.ticketId, tostring(assistOn)))
 	end)
 	ctx.connect(UserInputService.InputChanged, function(input: InputObject)
 		local st = stroke
@@ -383,8 +320,9 @@ function Cut.new(ctx: any, container: Frame)
 			return
 		end
 		if (st.mouse and input.UserInputType == Enum.UserInputType.MouseMovement) or (not st.mouse and input == st.input) then
-			follow(toStation(input.Position))
-			record(st, rawLocal(input.Position))
+			local p = rawLocal(input.Position, st.view)
+			CutStroke.record(st.stream, { x = p.X, y = p.Y })
+			follow(contact(st, toStation(input.Position)))
 		end
 	end)
 	ctx.connect(UserInputService.InputEnded, function(input: InputObject)
@@ -395,32 +333,34 @@ function Cut.new(ctx: any, container: Frame)
 		if (st.mouse and input.UserInputType ~= st.button) or (not st.mouse and input ~= st.input) then
 			return
 		end
-		record(st, rawLocal(input.Position), true)
+		local p = rawLocal(input.Position, st.view)
+		CutStroke.record(st.stream, { x = p.X, y = p.Y }, true)
 		endStroke()
 		if not current or current.id ~= st.pizzaId then
 			trace("dropped: pizza changed")
 			return
 		end
-		local path = sendPath(st)
-		-- The server's own grading on the same footprint, run first so a refusal is explained
-		-- instead of sent.
-		local cut, reason = Scoring.cutPath(path, st.dough)
+		-- Exactly the recorded samples; the server's own grading of them on the same footprint
+		-- runs first so a refusal is explained instead of sent.
+		local path = st.stream.points
+		local cut, reason = CutStroke.grade(path, st.dough, st.assist)
 		if cut then
 			local first, last = path[1], path[#path]
-			trace(string.format("send %s screen=%.0f,%.0f points=%d raw=%d from=%.3f,%.3f to=%.3f,%.3f length=%.3f angle=%.1f straight=%.3f dev=%.4f complete=%.3f pizza=%d",
-				input.UserInputType.Name, input.Position.X, input.Position.Y, #path, #st.points, first.x, first.y, last.x, last.y, st.length,
-				math.deg(math.atan2(cut.y2 - cut.y1, cut.x2 - cut.x1)), cut.straightness :: number, (cut :: any).deviation, cut.completeness :: number, st.pizzaId))
-			-- The sent path itself, so a recorded stroke can be replayed in the offline checks.
+			trace(string.format("send %s screen=%.0f,%.0f points=%d from=%.4f,%.4f to=%.4f,%.4f length=%.3f angle=%.1f straight=%.3f dev=%.4f complete=%.3f assist=%s%s pizza=%d",
+				input.UserInputType.Name, input.Position.X, input.Position.Y, #path, first.x, first.y, last.x, last.y, pathLength(path),
+				math.deg(math.atan2(cut.y2 - cut.y1, cut.x2 - cut.x1)), cut.straightness :: number, cut.deviation, cut.completeness :: number,
+				tostring(st.assist), if st.stream.filter.reason then " off:" .. st.stream.filter.reason else "", st.pizzaId))
+			-- The sent samples themselves, so a recorded stroke can be replayed in the offline checks.
 			local pts = table.create(#path)
-			for i, p in path do
-				pts[i] = string.format("%.4f,%.4f", p.x, p.y)
+			for i, q in path do
+				pts[i] = string.format("%.4f,%.4f", q.x, q.y)
 			end
 			trace("path " .. table.concat(pts, " "))
 			ctx.send("cut", { pizzaId = st.pizzaId, path = path }, function(ok, why)
 				trace(string.format("reply ok=%s %s", tostring(ok), tostring(why)))
 			end)
 		else
-			trace(string.format("refused locally: %s length=%.3f points=%d", tostring(reason), st.length, #path))
+			trace(string.format("refused locally: %s length=%.3f points=%d", tostring(reason), pathLength(path), #path))
 			guide.Text = "Drag all the way\nacross the pizza"
 			task.delay(1.5, ctx.refresh)
 		end
@@ -429,6 +369,7 @@ function Cut.new(ctx: any, container: Frame)
 	local station = { frame = frame }
 
 	function station.refresh(snap: any)
+		assistOn = snap.cutAssist == true
 		current = ctx.focusPizza(snap, "cutting")
 		if stroke and (not current or current.id ~= stroke.pizzaId) then
 			cancelStroke("ticket changed")
@@ -451,8 +392,14 @@ function Cut.new(ctx: any, container: Frame)
 	end
 
 	function station.tick(_now: number)
-		if stroke and stroke.dirty then
-			drawGroove(stroke)
+		local st = stroke
+		if st then
+			-- The view is frozen for the stroke: a resize or move of the pizza cancels it.
+			if view.frame.AbsoluteSize ~= st.view[2] or view.frame.AbsolutePosition ~= st.view[1] then
+				cancelStroke("view moved")
+			elseif st.stream.dirty then
+				drawGroove(st)
+			end
 		end
 	end
 

@@ -180,8 +180,29 @@ Config.Cut = {
 	-- pizza's own dough outline (Scoring.footprint); crustRadius is the full round's, kept for
 	-- pizzas with no dough record. centreTolerance is in dough-local units (dough edge 0.95).
 	crustRadius = 0.95,
-	-- Most points one cut's path may carry. The client resamples the drag to this many.
+	-- Most points one cut's path may carry. Since slice 3 (2026-10-27) the client records the
+	-- drag as at most this many samples, one each `spacing` cut units (CutStroke), and sends
+	-- exactly those; nothing is resampled. 0.07 lets a straight drag cross the whole accepted
+	-- range (3.2 units) in 47 steps; past maxPoints the last sample follows the pointer.
+	-- Proposal: 0.07 = 26 px at 1920x1080 and 6 px on a 667x375 phone.
 	maxPoints = 48,
+	spacing = 0.07,
+	-- Cutting assist (slice 3; Lawson's request, Astra's 0.10 starting value). Test proposals,
+	-- not balance decisions, and OFF by default: a shift turns it on only through the Studio
+	-- test hook (RestaurantariaDebug "cutAssist") until Lawson accepts it. The rule is in
+	-- CutStroke.filter. travel, deviation, backtrack and centre are in the dough's unit disc
+	-- (u = S^-1 p, edge 1); strength is the share of the measured offset corrected; the
+	-- correction is capped at strength x deviation (u); decay fades the last correction per
+	-- sample once the gates switch the assist off.
+	assist = {
+		on = false,
+		strength = 0.10,
+		travel = 0.10,
+		deviation = 0.15,
+		backtrack = 0.05,
+		centre = 0.10,
+		decay = 0.5,
+	},
 	-- Widest distance (cut units) of the path inside the crust from its best-fit line that
 	-- still counts as straight, and where straightness reaches zero. One cut unit is the pizza
 	-- frame's radius, measured in Studio: 372 px at 1920x1080 (0.04 = 15 px, 0.2 = 74 px) and

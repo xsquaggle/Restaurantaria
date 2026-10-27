@@ -22,6 +22,7 @@ DEFAULT_CHECKS = [
     "tests/prep_check.luau",
     "tests/cut_check.luau",
     "tests/cut_replay_check.luau",
+    "tests/cut_stroke_check.luau",
     "tests/make_check.luau",
     "tests/sauce_cheese_check.luau",
     "tests/sauce_cover_check.luau",

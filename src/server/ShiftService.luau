@@ -13,6 +13,7 @@ local MakeDough = require(Shared.MakeDough)
 local MakeSauce = require(Shared.MakeSauce)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
+local CutStroke = require(Shared.CutStroke)
 local CustomerLooks = require(script.Parent.CustomerLooks)
 local SaveService = require(script.Parent.SaveService)
 
@@ -71,6 +72,9 @@ type Shift = {
 	finished: boolean,
 	-- The save store of the profile this shift began on; its receipt is only written there.
 	store: any?,
+	-- The cutting assist (Config.Cut.assist) for this shift's cuts. Sent in the snapshot so the
+	-- Cut station's live groove runs the same filter the server grades with.
+	cutAssist: boolean,
 	-- Set when the shift ends: the rewards to commit, unchanged on every attempt.
 	receipt: SaveService.Receipt?,
 	-- nil while running, then "pending" (being saved), "saved", "session" (kept for this
@@ -155,6 +159,7 @@ function ShiftService.newShift(player: Player): Shift
 		tutorialBonus = nil,
 		finished = false,
 		store = if profile then profile.store else nil,
+		cutAssist = Config.Cut.assist.on,
 	}
 end
 
@@ -578,10 +583,11 @@ function Actions.cut(shift: Shift, args: any): (boolean, string?)
 	if #pizza.cuts >= Config.Cut.maxLines then
 		return false, "already cut " .. Config.Cut.maxLines .. " times"
 	end
-	-- Freehand: the client sends the dragged path; the server grades and keeps it (the path's
+	-- Freehand: the client sends the stroke's raw samples (CutStroke); the server rebuilds the
+	-- assisted path from them when the shift has the assist on, grades and keeps it (the path's
 	-- best-fit chord, the path itself and its straightness and completeness), against the
 	-- pizza's own dough footprint from its made dough record, never from the client.
-	local cut, reason = Scoring.cutPath(args.path, Scoring.footprint(pizza.make))
+	local cut, reason = CutStroke.grade(args.path, Scoring.footprint(pizza.make), shift.cutAssist == true)
 	if not cut then
 		return false, reason
 	end
@@ -895,6 +901,7 @@ function ShiftService.snapshot(player: Player): any
 		tutorialBonus = shift.tutorialBonus or 0,
 		xp = shift.xp,
 		day = shift.day,
+		cutAssist = shift.cutAssist,
 		-- From the receipt: set once the shift has finished, never moved by the save result.
 		completedShiftDay = if shift.receipt then shift.receipt.completedShiftDay else nil,
 		finished = shift.finished,

@@ -14,7 +14,9 @@ export type Line = { x1: number, y1: number, x2: number, y2: number }
 export type Point = { x: number, y: number }
 -- A committed cut: its best-fit chord (x1..y2, across the crust), the dragged path it came from
 -- and that path's grades (0..1). Lines without grades (test hooks) count as straight and full.
-export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number? }
+-- With the cutting assist on (CutStroke.grade), `path` is the assisted path and `raw` the samples
+-- the client sent.
+export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number?, raw: { Point }?, assisted: boolean? }
 export type Grade = { score: number, notes: { string }, detail: any? }
 
 local Scoring = {}
@@ -601,7 +603,8 @@ function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 end
 
 -- A dragged path with at most `max` points, evenly spaced along it (both ends kept). Paths
--- already within `max` points come back unchanged (copied).
+-- already within `max` points come back unchanged (copied). Since slice 3 the Cut station no
+-- longer resamples (it records at most maxPoints samples, CutStroke); kept for the checks.
 function Scoring.resamplePath(points: { Point }, max: number): { Point }
 	local out = {}
 	if #points <= max then

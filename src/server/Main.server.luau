@@ -150,7 +150,7 @@ local function cleanMake(act: (string, any) -> (), pizza: any)
 	end
 end
 
-local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true }
+local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true }
 local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true }
 
 if RunService:IsStudio() then
@@ -204,6 +204,12 @@ if RunService:IsStudio() then
 			-- server session. Shifts started after it use it; restartShift starts one now.
 			Config.Dev.mixedOrders = value == true
 			return "ok"
+		elseif command == "cutAssist" then
+			-- value = true/false: the cutting assist (Config.Cut.assist) for this player's current
+			-- shift, for A/B play tests on a test store. Cuts already made keep how they were graded.
+			session.shift.cutAssist = value == true
+			push(player)
+			return "ok cutAssist=" .. tostring(session.shift.cutAssist)
 		elseif command == "restartShift" then
 			-- Abandons the current shift (no reward, nothing saved) and starts a new one. A receipt
 			-- for a persistent store (production or the test DataStore) still saving or waiting
