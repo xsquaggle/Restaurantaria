@@ -10,7 +10,12 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
+local G = require(Shared.PrepGeometry)
+local MakeCheese = require(Shared.MakeCheese)
+local MakeDough = require(Shared.MakeDough)
+local MakeSauce = require(Shared.MakeSauce)
 local Recipes = require(Shared.Recipes)
+local MakeLayers = require(script.Parent.MakeLayers)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local PizzaArt = require(script.Parent.PizzaArt)
@@ -978,6 +983,13 @@ end
 
 export type PizzaView = { frame: Frame, cutLayer: Frame, set: (PizzaView, any, number, boolean?) -> () }
 
+-- A pizza the player made on the Make tab (rolled dough, sauce, cheese): drawn from its own
+-- record instead of the generated pre-sauced art.
+local function madeBy(pizza: any): any?
+	local m = pizza and pizza.make
+	return if m and m.placed then m else nil
+end
+
 function Widgets.pizza(): PizzaView
 	local art = PizzaArt.new()
 	local frame = art.frame
@@ -992,29 +1004,55 @@ function Widgets.pizza(): PizzaView
 	-- Inside the pizza's frame, so cut lines move with its wobble.
 	local cutLayer = Ui.new("Frame", { Name = "Cuts", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = frame })
 
+	-- The player's own pizza (MakeLayers): its rolled dough as the bare crust of its bake state,
+	-- its sauce and cheese in their cooked states. Positions are in px of this frame, so it is
+	-- placed again whenever the frame's size changes (the oven draws it flattened: the frame's
+	-- height over its width).
+	local food = MakeLayers.new(frame, 1)
+	local toppings = frame:FindFirstChild("Toppings") :: Frame
+	local last: { any }? = nil
+
 	local cutKey = ""
-	local view: PizzaView = {
+	local view: PizzaView
+	view = {
 		frame = frame,
 		cutLayer = cutLayer,
 		set = function(_v: PizzaView, pizza: any, doneness: number, burnt: boolean?)
+			last = { pizza, doneness, burnt }
 			art:set(pizza, false)
 			local seconds = doneness * Config.Oven.targets.regular
 			if burnt then
 				seconds = math.max(seconds, BAKE_STATES[#BAKE_STATES].at)
 			end
-			local i, t = bakeBlend(seconds)
-			if i ~= shownState then
-				shownState = i
-				Art.apply(lower, BAKE_STATES[i].art)
-				Art.apply(upper, BAKE_STATES[i + 1].art)
+			local m = madeBy(pizza)
+			local S = if m then MakeDough.shape(m) else nil
+			lower.Visible = m == nil
+			upper.Visible = m == nil
+			food.frame.Visible = m ~= nil
+			if m then
+				local size = frame.AbsoluteSize
+				if size.X > 0 and size.Y > 0 then
+					food:place(size.X / 2, size.Y / 2, size.X, S, size.Y / size.X)
+					food:dough(true, seconds)
+					food:bake(seconds)
+					food:sauce((MakeSauce.replay(m.sauce)), m.sauce.actions)
+					food:cheese(MakeCheese.pinches(m.cheese))
+				end
+			else
+				local i, t = bakeBlend(seconds)
+				if i ~= shownState then
+					shownState = i
+					Art.apply(lower, BAKE_STATES[i].art)
+					Art.apply(upper, BAKE_STATES[i + 1].art)
+				end
+				upper.ImageTransparency = 1 - t
 			end
-			upper.ImageTransparency = 1 - t
 			-- Each piece keeps its own drawing and turn; its baked drawing (same piece, G7 v2)
 			-- fades in over it between the light and regular bakes, and both darken toward
 			-- burnt.
 			local tint = toppingTint(seconds)
 			local baked = math.clamp((seconds - Config.Oven.targets.light * 0.5) / (Config.Oven.targets.regular - Config.Oven.targets.light * 0.5), 0, 1)
-			for _, d in frame:GetDescendants() do
+			for _, d in toppings:GetDescendants() do
 				if d:IsA("ImageLabel") and d.Name == "Sprite" then
 					local sprite = d :: ImageLabel
 					local look = sprite:GetAttribute("Look") :: string?
@@ -1040,16 +1078,24 @@ function Widgets.pizza(): PizzaView
 			for _, line in pizza.cuts or {} do
 				table.insert(parts, string.format("%.3f%.3f%.3f%.3f/%d", line.x1, line.y1, line.x2, line.y2, if line.path then #line.path else 0))
 			end
+			if S then
+				table.insert(parts, string.format("S%.4f%.4f%.4f%.4f", S.a, S.b, S.c, S.d))
+			end
 			local key = table.concat(parts, ",")
 			if key ~= cutKey then
 				cutKey = key
 				Ui.clear(cutLayer)
 				for _, line in pizza.cuts or {} do
-					Widgets.drawCut(cutLayer, line)
+					Widgets.drawCut(cutLayer, line, nil, S)
 				end
 			end
 		end,
 	}
+	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if last and frame.Parent then
+			view:set(last[1], last[2], last[3])
+		end
+	end)
 	return view
 end
 
@@ -1116,7 +1162,49 @@ local function clipToCrust(ax: number, ay: number, bx: number, by: number): (num
 	return t0, t1
 end
 
-function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
+-- The part of segment a-b inside the dough outline S (pizza-local; the outline is S applied to
+-- the unit circle), as parameters along it. A linear map keeps the parameters, so it is the
+-- unit-circle clip of the segment mapped by S^-1.
+local function clipToDough(S: any, ax: number, ay: number, bx: number, by: number): (number?, number?)
+	local Si = G.inverse(S)
+	local a, b = G.apply(Si, { x = ax, y = ay }), G.apply(Si, { x = bx, y = by })
+	local dx, dy = b.x - a.x, b.y - a.y
+	local A = dx * dx + dy * dy
+	if A < 1e-12 then
+		return nil, nil
+	end
+	local B = 2 * (a.x * dx + a.y * dy)
+	local C = a.x * a.x + a.y * a.y - 1
+	local disc = B * B - 4 * A * C
+	if disc <= 0 then
+		return nil, nil
+	end
+	local r = math.sqrt(disc)
+	local t0, t1 = math.max(0, (-B - r) / (2 * A)), math.min(1, (-B + r) / (2 * A))
+	if t1 - t0 < 1e-6 then
+		return nil, nil
+	end
+	return t0, t1
+end
+
+-- `dough` (the made pizza's outline S, optional) also stops the groove at the dough's edge: on
+-- an oval the pizza is not the round crust the cut is graded against (declared: Cut still grades
+-- against the round 0.95 crust).
+function Widgets.drawCut(layer: Frame, line: any, transparency: number?, dough: any?)
+	local function clip(ax: number, ay: number, bx: number, by: number): (number?, number?)
+		local t0, t1 = clipToCrust(ax, ay, bx, by)
+		if t0 and t1 and dough then
+			local u0, u1 = clipToDough(dough, ax, ay, bx, by)
+			if not (u0 and u1) then
+				return nil, nil
+			end
+			t0, t1 = math.max(t0, u0), math.min(t1, u1)
+			if t1 - t0 < 1e-6 then
+				return nil, nil
+			end
+		end
+		return t0, t1
+	end
 	local path = line.path
 	if path then
 		-- Merge nearly straight runs (Douglas-Peucker, within 0.008 of the drawn line) so a
@@ -1154,7 +1242,7 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		end
 		for i = 2, #runs do
 			local a, b = runs[i - 1], runs[i]
-			local t0, t1 = clipToCrust(a.x, a.y, b.x, b.y)
+			local t0, t1 = clip(a.x, a.y, b.x, b.y)
 			if t0 and t1 then
 				local dx, dy = b.x - a.x, b.y - a.y
 				groovePiece(layer, a.x + dx * t0, a.y + dy * t0, a.x + dx * t1, a.y + dy * t1, transparency)
@@ -1175,7 +1263,16 @@ function Widgets.drawCut(layer: Frame, line: any, transparency: number?)
 		return
 	end
 	local half = math.sqrt(1 - d2) * CRUST_EDGE
-	groovePiece(layer, cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half, transparency, true)
+	local ax, ay, bx, by = cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half
+	if dough then
+		local t0, t1 = clip(ax, ay, bx, by)
+		if not (t0 and t1) then
+			return
+		end
+		local ex, ey = bx - ax, by - ay
+		ax, ay, bx, by = ax + ex * t0, ay + ey * t0, ax + ex * t1, ay + ey * t1
+	end
+	groovePiece(layer, ax, ay, bx, by, transparency, true)
 end
 
 -- Reserved hint strip between the work surface and the tab bar: live text and, optionally, a

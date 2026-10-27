@@ -1119,18 +1119,41 @@ function ctx.showResult(ticketId: number)
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Assets.Meta.card.slice,
 		SliceScale = if compact then 0.5 else 0.7,
-		Size = UDim2.new(1, 0, 0, (if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20)),
+		-- Tall enough for the thumbnail too.
+		Size = UDim2.new(1, 0, 0, math.max((if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20), (if compact then 56 else 72) + 16)),
 		ZIndex = 9,
 		Parent = ui.toastHolder,
 	})
 	Art.apply(toast, "ui_card_result")
+	-- The served pizza itself as a thumbnail (56 px on phones, 72 px wide screens; Astra r13's
+	-- result view): its own dough, sauce, cheese, toppings, bake state and cuts.
+	local thumb = if compact then 56 else 72
+	local served = nil
+	for _, p in snap.pizzas do
+		if p.ticketId == ticketId then
+			served = p
+		end
+	end
+	local inset = 0
+	if served then
+		inset = thumb + 8
+		local pic = Widgets.pizza()
+		pic.frame.Name = "Thumbnail"
+		pic.frame.AnchorPoint = Vector2.new(1, 0)
+		pic.frame.Position = UDim2.new(1, -10, 0, 8)
+		pic.frame.Size = UDim2.fromOffset(thumb, thumb)
+		pic.frame.ZIndex = 10
+		pic.frame.Parent = toast
+		local seconds = served.bakeSeconds or 0
+		pic:set(served, Widgets.doneness(seconds), ctx.ovenStatus(customer.order.bake, seconds).burnt)
+	end
 	Ui.text({
 		-- The order's reward in coins, like the summary (r.tip is the whole reward, not a tip part).
 		Text = string.format("%s · %d%% · +%d coin%s", customer.label, r.overall, r.tip, if r.tip == 1 then "" else "s"),
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 18 else 24,
 		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(1, -24, 0, 28),
+		Size = UDim2.new(1, -24 - inset, 0, 28),
 		ZIndex = 10,
 		Parent = toast,
 	})
@@ -1143,7 +1166,7 @@ function ctx.showResult(ticketId: number)
 		FontFace = Theme.Font.bodySemi,
 		TextSize = if ctx.compact then 14 else 18,
 		Position = UDim2.fromOffset(12, if ctx.compact then 36 else 40),
-		Size = UDim2.new(1, -24, 0, 22),
+		Size = UDim2.new(1, -24 - inset, 0, 22),
 		ZIndex = 10,
 		Parent = toast,
 	})
@@ -1153,7 +1176,7 @@ function ctx.showResult(ticketId: number)
 		TextSize = if ctx.compact then 14 else 16,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(12, if ctx.compact then 60 else 68),
-		Size = UDim2.new(1, -24, 1, -(if ctx.compact then 64 else 72)),
+		Size = UDim2.new(1, -24 - inset, 1, -(if ctx.compact then 64 else 72)),
 		ZIndex = 10,
 		Parent = toast,
 	})

@@ -214,6 +214,16 @@ local Assets = {
 	food_sauce_dollop = "rbxassetid://121541372225849",
 	tool_cheese_bowl = "rbxassetid://72993269606607",
 	food_cheese_raw = "rbxassetid://83704168156179",
+	-- The same kit, uploaded 2026-10-27 byte-exact (manifest sha256): the baked states that carry
+	-- the player's own pizza through Bake, Cut and the result (P13 bare crusts, P15, P14).
+	food_crust_light = "rbxassetid://135966052112911",
+	food_crust_regular = "rbxassetid://118516807780052",
+	food_crust_well = "rbxassetid://116244074109839",
+	food_crust_burnt = "rbxassetid://130620142435420",
+	food_sauce_cooked = "rbxassetid://97657862155105",
+	food_cheese_melted = "rbxassetid://74313384211353",
+	food_cheese_golden = "rbxassetid://118860189516118",
+	food_cheese_burnt = "rbxassetid://135522129771732",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",

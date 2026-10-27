@@ -46,12 +46,47 @@ local SIZE_STEP = 0.02 -- stamp diameters are rounded to this (fewer resizes)
 local DEEP = Color3.fromRGB(190, 150, 150)
 local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
 local DOUGH_BODY = { alphaX = 0.94921875, alphaY = 0.94921875, centreX = 0, centreY = 0 }
+-- Baked states (Bake, Cut and the result card): seconds in the oven at which each drawn state is
+-- fully shown, the same timeline as the old pre-sauced bake art (Widgets) so the look follows
+-- the real bake progress, never the ticket. Crust: the rolled raw dough (P4 keys), then the P13
+-- bare crusts (same 0.949 body share, fitted to the scored oval, so the rim thins with it).
+-- Cheese: P11 raw, then P14 melted, golden, burnt on the one shared canvas. Sauce: P9 raw, then
+-- P15 cooked at one moment (SAUCE_COOKED_AT; no crossfade, which would double every stamp), and
+-- the burnt tint past the regular bake. Timings are proposals.
+local CRUSTS = {
+	{ art = nil, at = 0 },
+	{ art = "food_crust_light", at = Config.Oven.targets.light },
+	{ art = "food_crust_regular", at = Config.Oven.targets.regular },
+	{ art = "food_crust_well", at = Config.Oven.targets.well },
+	{ art = "food_crust_burnt", at = Config.Oven.burntAt },
+}
+local CHEESES = {
+	{ art = "food_cheese_raw", at = 0 },
+	{ art = "food_cheese_melted", at = Config.Oven.targets.light },
+	{ art = "food_cheese_golden", at = Config.Oven.targets.well },
+	{ art = "food_cheese_burnt", at = Config.Oven.burntAt },
+}
+-- Halfway through the toppings' raw-to-baked crossfade (Widgets: from half the light bake to the
+-- regular bake).
+local SAUCE_COOKED_AT = (Config.Oven.targets.light * 0.5 + Config.Oven.targets.regular) / 2
+local SCORCH = Color3.fromRGB(150, 105, 85) -- sauce at the burnt time (proposal)
+
+-- The two neighbouring states and how far the bake is from the first to the second.
+local function blend(states: { any }, seconds: number): (number, number)
+	for i = 1, #states - 1 do
+		if seconds < states[i + 1].at then
+			return i, math.clamp((seconds - states[i].at) / (states[i + 1].at - states[i].at), 0, 1)
+		end
+	end
+	return #states - 1, 1
+end
 local ROLLS = { "food_dough_roll_01", "food_dough_roll_02", "food_dough_roll_03", "food_dough_roll_04", "food_dough_roll_05", "food_dough_roll_06" }
 
 export type Layers = {
 	frame: Frame,
-	place: (Layers, number, number, number, any) -> (),
-	dough: (Layers, boolean) -> (),
+	place: (Layers, number, number, number, any, number?) -> (),
+	dough: (Layers, boolean, number?) -> (),
+	bake: (Layers, number?) -> (),
 	sauce: (Layers, { number }?, { any }?) -> (),
 	cheese: (Layers, { any }?) -> (),
 }
@@ -78,30 +113,41 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 		Art.apply(img, name)
 		keys[i] = img
 	end
+	-- The baked crusts: the lower state fully shown, the upper fading in over it.
+	local crustLower = Ui.new("ImageLabel", { Name = "CrustLower", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = zIndex, Visible = false, Parent = doughLayer })
+	local crustUpper = Ui.new("ImageLabel", { Name = "CrustUpper", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = zIndex + 1, Visible = false, Parent = doughLayer })
 	local sauceLayer = Ui.new("Frame", { Name = "Sauce", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = zIndex, Parent = frame })
 	local dollopLayer = Ui.new("Frame", { Name = "Dollops", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = zIndex + 1, Parent = frame })
 	local cheeseLayer = Ui.new("Frame", { Name = "Cheese", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = zIndex + 2, Parent = frame })
 
 	local geometry = ""
-	local cx, cy, F = 0, 0, 1
+	local cx, cy, F, flat = 0, 0, 1, 1
+	-- Seconds in the oven (nil: not baked, the raw art).
+	local baked: number? = nil
+	local sauceArt = "food_sauce_raw"
 	local S: any = G.shape(0.95, 0.95, 0)
 	-- Sauce stamps: one per drawn grid point, with the fine cells it averages.
 	-- near: the cells within the stamp's reach, nearest first, with their distances (for the edge).
-	type Stamp = { image: ImageLabel, cells: { number }, near: { { number } }, turn: number, size: number, shown: number, tint: number }
+	-- reach: the distance from the stamp's centre to the field's outer edge (extent plus half a
+	-- cell), so no stamp is drawn past the grid the grade sees.
+	type Stamp = { image: ImageLabel, cells: { number }, near: { { number } }, reach: number, turn: number, size: number, shown: number, tint: number, color: Color3? }
 	local stamps: { Stamp } = {}
 	local dollops: { ImageLabel } = {}
-	local pinches: { ImageLabel } = {}
+	-- Each pinch: its lower and upper cooking state (the upper fades in over it).
+	local pinches: { { ImageLabel } } = {}
 	-- The field last drawn: a replay memo's field is never changed, so the same table again
 	-- (a frame with no new action) needs no redraw.
 	local drawn: { number }? = nil
+	-- The cheese last drawn (pinches, place and cooking state).
+	local cheeseKey = ""
 
 	local function screen(q: any): Vector2
-		local o = G.screenOf(S, F, 1, q)
+		local o = G.screenOf(S, F, flat, q)
 		return Vector2.new(cx + o.x, cy + o.y)
 	end
 	local function fit(img: ImageLabel, diameter: number, share: number, turn: number)
 		local canvas = diameter / share
-		local f = G.spriteFit(G.localStretch(S, F, 1), canvas, canvas, math.rad(turn))
+		local f = G.spriteFit(G.localStretch(S, F, flat), canvas, canvas, math.rad(turn))
 		img.Size = UDim2.fromOffset(f.width, f.height)
 		img.Rotation = f.rotation
 	end
@@ -149,8 +195,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 					})
 					local turn = (n * 137.5) % 360
 					fit(img, STAMP, SAUCE_SHARE, turn)
-					Art.apply(img, "food_sauce_raw")
-					table.insert(stamps, { image = img, cells = cells, near = near, turn = turn, size = STAMP, shown = 0, tint = 0 })
+					Art.apply(img, sauceArt)
+					local reach = Config.Sauce.extent + MakeSauce.CELL / 2 - math.sqrt(px * px + py * py)
+					table.insert(stamps, { image = img, cells = cells, near = near, reach = reach, turn = turn, size = STAMP, shown = 0, tint = 0 })
 				end
 			end
 		end
@@ -159,47 +206,91 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 		end
 		table.clear(dollops)
 		for _, p in pinches do
-			p:Destroy()
+			p[1]:Destroy()
+			p[2]:Destroy()
 		end
 		table.clear(pinches)
+		cheeseKey = ""
 	end
 
 	local layers = {} :: Layers
 	layers.frame = frame
 
-	-- Where the dough is drawn: centre (px in the parent), pizza frame F (px), dough shape S.
-	function layers.place(_self: Layers, x: number, y: number, frameSize: number, shape: any)
-		local k = key(shape, frameSize) .. string.format("|%.2f,%.2f", x, y)
+	-- Where the dough is drawn: centre (px in the parent), pizza frame F (px, its width), dough
+	-- shape S and the view's flatten (the oven's 0.58; 1 elsewhere).
+	function layers.place(_self: Layers, x: number, y: number, frameSize: number, shape: any, flatten: number?)
+		local f = flatten or 1
+		local k = key(shape, frameSize) .. string.format("|%.2f,%.2f|%.3f", x, y, f)
 		if k == geometry then
 			return
 		end
 		geometry = k
-		cx, cy, F, S = x, y, frameSize, shape
+		cx, cy, F, S, flat = x, y, frameSize, shape, f
 		build()
 	end
 
 	-- The rolled dough under the food (the Topping view; Make draws its own, with the ball): the
 	-- two appearance keys either side of the mean radius, the upper one crossfaded in, fitted to
-	-- the scored oval.
-	function layers.dough(_self: Layers, on: boolean)
+	-- the scored oval. With `seconds` (in the oven) the bare crusts take over by the bake
+	-- timeline: raw keys, then light, regular, well done and burnt crusts, each crossfaded.
+	function layers.dough(_self: Layers, on: boolean, seconds: number?)
 		doughLayer.Visible = on
 		if not on then
 			return
 		end
-		local pl = G.bodyPlacement(G.ellipseOf(G.viewMatrix(S, F)), DOUGH_BODY)
+		local pl = G.bodyPlacement(G.ellipseOf(G.viewMatrix(S, F, flat)), DOUGH_BODY)
+		local function put(img: ImageLabel)
+			img.Size = UDim2.fromOffset(pl.width, pl.height)
+			img.Rotation = pl.rotation
+			img.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
+		end
+		local ci, ct = 1, 0
+		if seconds then
+			ci, ct = blend(CRUSTS, seconds)
+		end
+		-- Raw keys show until the light crust is fully in.
+		local rawShown = ci == 1
 		local i1, i2, w = G.stateBlend(G.meanRadius(S))
 		for i, k in keys do
-			local shown = i == i1 or (i == i2 and w > 0)
+			local shown = rawShown and (i == i1 or (i == i2 and w > 0))
 			k.Visible = shown
 			if shown then
-				k.Size = UDim2.fromOffset(pl.width, pl.height)
-				k.Rotation = pl.rotation
-				k.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
+				put(k)
 				local upper = i == i2 and i2 ~= i1
 				k.ZIndex = if upper then zIndex + 1 else zIndex
 				k.ImageTransparency = if upper then 1 - w else 0
 			end
 		end
+		local lowerArt = CRUSTS[ci].art
+		crustLower.Visible = lowerArt ~= nil
+		if lowerArt then
+			Art.apply(crustLower, lowerArt)
+			put(crustLower)
+		end
+		crustUpper.Visible = seconds ~= nil and ct > 0
+		if crustUpper.Visible then
+			Art.apply(crustUpper, CRUSTS[ci + 1].art :: string)
+			put(crustUpper)
+			-- Over the raw keys (two of them may be stacked) the light crust sits above both.
+			crustUpper.ZIndex = zIndex + 2
+			crustUpper.ImageTransparency = 1 - ct
+		end
+	end
+
+	-- How long the pizza has been in the oven (nil: not baked). Swaps the sauce to the cooked
+	-- art, tints it toward scorched past the regular bake, and moves the cheese through its
+	-- states. Call before sauce() and cheese() so they draw with it.
+	function layers.bake(_self: Layers, seconds: number?)
+		baked = seconds
+		local art = if seconds and seconds >= SAUCE_COOKED_AT then "food_sauce_cooked" else "food_sauce_raw"
+		if art ~= sauceArt then
+			sauceArt = art
+			for _, st in stamps do
+				Art.apply(st.image, art)
+			end
+		end
+		-- The deep-red and scorch tints are combined in sauce(); force them to be redone.
+		drawn = nil
 	end
 
 	-- The sauce field (nil: none) and the pours that made it (for the dollops).
@@ -224,6 +315,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 						break
 					end
 				end
+				-- Nor past the field's own edge (1.2 plus half a cell): cells beyond it are never
+				-- scored, so the drawn sauce stops there too.
+				size = math.min(size, 2 * math.max(st.reach, 0))
 				size = math.floor(size / SIZE_STEP) * SIZE_STEP
 			end
 			if size <= 0 then
@@ -241,9 +335,17 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 				st.image.Visible = shown > 0
 				st.image.ImageTransparency = 1 - shown
 			end
-			if tint ~= st.tint then
+			local scorch = 0
+			if baked and baked > Config.Oven.targets.regular then
+				scorch = math.clamp((baked - Config.Oven.targets.regular) / (Config.Oven.burntAt - Config.Oven.targets.regular), 0, 1)
+			end
+			local deep = Color3.new(1, 1, 1):Lerp(DEEP, tint)
+			local hot = Color3.new(1, 1, 1):Lerp(SCORCH, scorch)
+			local color = Color3.new(deep.R * hot.R, deep.G * hot.G, deep.B * hot.B)
+			if tint ~= st.tint or color ~= st.color then
 				st.tint = tint
-				st.image.ImageColor3 = Color3.new(1, 1, 1):Lerp(DEEP, tint)
+				st.color = color
+				st.image.ImageColor3 = color
 			end
 		end
 		-- Dollops: a pour still mostly where it landed (the mean thickness around it against one
@@ -278,24 +380,52 @@ function MakeLayers.new(parent: GuiObject, zIndex: number): Layers
 		end
 	end
 
-	-- The cheese pinches (dough-local), in placement order.
+	-- The cheese pinches (dough-local), in placement order, in the cooking state of the bake
+	-- (raw when not baked): both states on the shared canvas, the upper fading in.
 	function layers.cheese(_self: Layers, list: { any }?)
+		local i, t = 1, 0
+		if baked then
+			i, t = blend(CHEESES, baked)
+			t = math.floor(t * 50 + 0.5) / 50
+		end
+		-- Redrawn only when the pinches, the place or the cooking state change (the oven calls
+		-- this every frame).
+		local parts = { geometry, tostring(baked ~= nil), tostring(i), tostring(t) }
+		for _, p in list or {} do
+			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
+		end
+		local k = table.concat(parts, "|")
+		if k == cheeseKey then
+			return
+		end
+		cheeseKey = k
 		local n = 0
 		for _, p in list or {} do
 			n += 1
-			local img = pinches[n]
-			if not img then
-				img = Ui.new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = zIndex + 2, Parent = cheeseLayer })
-				Art.apply(img, "food_cheese_raw")
-				pinches[n] = img
+			local pair = pinches[n]
+			if not pair then
+				local lower = Ui.new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = zIndex + 2, Parent = cheeseLayer })
+				local upper = Ui.new("ImageLabel", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = zIndex + 3, Parent = cheeseLayer })
+				pair = { lower, upper }
+				pinches[n] = pair
 			end
 			local s = screen(p)
-			img.Position = UDim2.fromOffset(s.X, s.Y)
-			fit(img, 2 * PrepFood.PINCH_RADIUS, CHEESE_SHARE, (n * 137.5) % 360)
-			img.Visible = true
+			for k, img in pair do
+				img.Position = UDim2.fromOffset(s.X, s.Y)
+				fit(img, 2 * PrepFood.PINCH_RADIUS, CHEESE_SHARE, (n * 137.5) % 360)
+				local art = if k == 1 then CHEESES[i].art else CHEESES[i + 1].art
+				if img:GetAttribute("Look") ~= art then
+					img:SetAttribute("Look", art)
+					Art.apply(img, art)
+				end
+			end
+			pair[1].Visible = true
+			pair[2].Visible = baked ~= nil and t > 0
+			pair[2].ImageTransparency = 1 - t
 		end
-		for i = n + 1, #pinches do
-			pinches[i].Visible = false
+		for k = n + 1, #pinches do
+			pinches[k][1].Visible = false
+			pinches[k][2].Visible = false
 		end
 	end
 
