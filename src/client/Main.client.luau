@@ -1177,18 +1177,20 @@ function ctx.showResult(ticketId: number)
 		TextSize = if ctx.compact then 14 else 16,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Position = UDim2.fromOffset(12, noteTop),
-		Size = UDim2.new(1, -24 - inset, 1, -(noteTop + 4)),
+		Size = UDim2.new(1, -24 - inset, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 10,
 		Parent = toast,
 	})
 	-- A long note (a held-grade note beside the thumbnail) wraps to more lines than the notes
-	-- count allows for: grow the card to the wrapped text so no line falls past its lower edge.
+	-- count allows for: the label grows with its text, and the card grows with the label, so no
+	-- line is cut off. (A fixed-height label drops the lines that do not fit.)
 	local baseHeight = toast.Size.Y.Offset
 	local function fitNotes()
-		local need = noteTop + math.ceil(noteLabel.TextBounds.Y) + (if ctx.compact then 8 else 10)
+		local need = noteTop + math.ceil(noteLabel.AbsoluteSize.Y) + (if ctx.compact then 8 else 10)
 		toast.Size = UDim2.new(1, 0, 0, math.max(baseHeight, need))
 	end
-	noteLabel:GetPropertyChangedSignal("TextBounds"):Connect(fitNotes)
+	noteLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitNotes)
 	fitNotes()
 	task.delay(Theme.Motion.toastSeconds, function()
 		if toast.Parent then
