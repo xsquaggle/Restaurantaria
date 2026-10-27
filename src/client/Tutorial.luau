@@ -17,13 +17,17 @@ local Ui = require(script.Parent.Ui)
 local Tutorial = {}
 
 -- The action that teaches each station. Make (station key Topping) teaches one lesson per part
--- of its dough step (Make.hint reads them) and is learned as a whole when a pizza is sent.
+-- of its dough step and one per sauce and cheese step (Make.hint reads them) and is learned as a
+-- whole when a pizza is sent.
 Tutorial.Lesson = {
 	takeOrder = "Order",
 	flour = "Make.flour",
 	placeDough = "Make.dough",
 	rollDough = "Make.roll",
 	finishDough = "Make.next",
+	pourSauce = "Make.sauce",
+	finishSauce = "Make.sauceNext",
+	finishCheese = "Make.cheeseNext",
 	placeTopping = "Make.toppings",
 	sendToOven = "Topping",
 	takeOut = "Bake",

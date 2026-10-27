@@ -17,6 +17,9 @@ local PizzaArt = {}
 
 export type View = {
 	frame: Frame,
+	-- The generated pre-sauced base. Views that draw the player's own dough, sauce and cheese
+	-- under the toppings (MakeLayers) hide it.
+	base: ImageLabel,
 	pizzaId: number?,
 	set: (View, any?, boolean) -> (),
 	wobble: (View) -> (),
@@ -173,6 +176,7 @@ function PizzaArt.new(): View
 	local view: View
 	view = {
 		frame = frame,
+		base = base,
 		pizzaId = nil,
 		wobble = function(_v: View)
 			if wobbleTween then

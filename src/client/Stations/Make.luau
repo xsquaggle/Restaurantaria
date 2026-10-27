@@ -1,15 +1,24 @@
 --!strict
 -- Make station (the tab once called Topping, then Prep; Lawson 2026-10-26): the whole manual
--- chain as ordered steps on one board. Flour the board, pull the dough onto it, roll it; sauce
--- and cheese are not hands-on yet, so "Next" adds them with today's look; then the toppings
--- (the Topping view, unchanged) and Send to oven. Steps never reopen; Undo works inside the
--- dough step only.
+-- chain as ordered steps on one board. Flour the board, pull the dough onto it, roll it; pour and
+-- spread the sauce; sprinkle the cheese; then the toppings (the Topping view, drawn on the
+-- player's own dough, sauce and cheese) and Send to oven. Steps never reopen; Undo works inside
+-- the current step.
 --
 -- The dough step draws Astra's response-13 kit at its measured registration: the clean board
 -- (P1), flour crock, scoop and dust stamps (F1-F4), the dough tub and ball (P2, P3), the six
 -- rolled appearance keys (P4, crossfaded by mean radius and stretched to the exact scored oval,
--- so the rim thins with the body) and the rolling pin (P5). Every input is drawn at once and
--- sent to the server, which checks and keeps it (MakeDough); a refusal snaps the view back.
+-- so the rim thins with the body) and the rolling pin (P5). The sauce step draws the pot and
+-- ladle (P6), the sauce as soft stamps and dollops (P9, P7; MakeLayers); the cheese step the
+-- bowl (P10) and the pinches (P11). Every input is drawn at once and sent to the server, which
+-- checks and keeps it (MakeDough, MakeSauce, MakeCheese); a refusal snaps the view back.
+--
+-- Sauce: a press on the dough is a pour unless it moves Config.Sauce.tapPixels first, then it is
+-- a spread (plan rev 6, D8); a drag from the pot pours where it is released. The live spread is
+-- the server's own spread function applied to the path so far. Cheese: hold and drag to
+-- sprinkle (PrepFood.sampler); pinches are drawn at once and sent in batches of up to
+-- Config.Cheese.batchSize, one batch every Config.Cheese.batchGap s while held, the rest on
+-- release.
 -- Actions for one pizza go out one at a time, so a reply can never land on a later one.
 --
 -- Studio play tests only: RestaurantariaMakeButton2 = true on the local player (set from the
@@ -27,9 +36,13 @@ local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local G = require(Shared.PrepGeometry)
+local MakeCheese = require(Shared.MakeCheese)
 local MakeDough = require(Shared.MakeDough)
+local MakeSauce = require(Shared.MakeSauce)
+local PrepFood = require(Shared.PrepFood)
 local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
+local MakeLayers = require(Parent.MakeLayers)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
@@ -48,11 +61,14 @@ local PIN_SHARE = 0.87890625 -- tool_rolling_pin alpha width / canvas
 local DUST_SHARE = 0.8633 -- fx_flour_dust alpha width / canvas
 local CLUMP_SHARE = 0.8789
 local SCOOP_SHARE_Y = 0.877 -- tool_flour_scoop alpha height / canvas
+local LADLE_SHARE_Y = 0.859375 -- tool_ladle_loaded / _empty alpha height / canvas
+local LADLE_PIVOT = Vector2.new(0.49963, 0.74373) -- the bowl's centre (interactionPivot)
 local ROLLS = { "food_dough_roll_01", "food_dough_roll_02", "food_dough_roll_03", "food_dough_roll_04", "food_dough_roll_05", "food_dough_roll_06" }
 -- Proposals for how the tools sit (live layout, not balance): the pin's drawn length and the
 -- scoop's drawn height as shares of the pizza frame F; the dust stamps' opacity.
 local PIN_LENGTH = 0.6
 local SCOOP_HEIGHT = 0.32
+local LADLE_HEIGHT = 0.5
 local DUST_OPACITY = 0.55
 local DRAG_START = 6 -- pixels of travel before a press on the tub becomes a drag
 local HANDOFF = TweenInfo.new(0.1, Enum.EasingStyle.Linear) -- ball out, rolled key in, same oval
@@ -86,11 +102,22 @@ local function copyMake(m: any): any
 	for i, s in m.flour do
 		flour[i] = s
 	end
-	return { step = m.step, flour = flour, placed = m.placed, strokes = table.clone(m.strokes) }
+	local cheese = table.create(#m.cheese.strokes)
+	for i, s in m.cheese.strokes do
+		cheese[i] = table.clone(s)
+	end
+	return {
+		step = m.step,
+		flour = flour,
+		placed = m.placed,
+		strokes = table.clone(m.strokes),
+		sauce = { actions = table.clone(m.sauce.actions) },
+		cheese = { strokes = cheese },
+	}
 end
 
 local function signature(m: any): string
-	return string.format("%s|%d|%d|%s|%d", m.step, #m.flour, MakeDough.stampCount(m), tostring(m.placed), #m.strokes)
+	return string.format("%s|%d|%d|%s|%d|%d|%d|%d", m.step, #m.flour, MakeDough.stampCount(m), tostring(m.placed), #m.strokes, #m.sauce.actions, #m.cheese.strokes, MakeCheese.count(m.cheese))
 end
 
 -- What one action does to a make record (the server's rules, without the checks it makes).
@@ -110,9 +137,26 @@ local function applyOp(m: any, op: any)
 			table.remove(m.flour)
 		end
 	elseif op.action == "finishDough" then
+		m.step = "sauce"
+	elseif op.action == "pourSauce" then
+		table.insert(m.sauce.actions, { kind = "pour", x = op.args.x, y = op.args.y })
+	elseif op.action == "spreadSauce" then
+		table.insert(m.sauce.actions, { kind = "spread", points = op.args.points })
+	elseif op.action == "undoSauce" then
+		table.remove(m.sauce.actions)
+	elseif op.action == "finishSauce" then
+		m.step = "cheese"
+	elseif op.action == "addCheese" then
+		MakeCheese.add(m.cheese, op.args.points, op.args.newStroke == true or #m.cheese.strokes == 0)
+	elseif op.action == "undoCheese" then
+		table.remove(m.cheese.strokes)
+	elseif op.action == "finishCheese" then
 		m.step = "toppings"
 	end
 end
+
+-- The steps drawn on the board (the rest is the Topping view).
+local ON_BOARD = { dough = true, sauce = true, cheese = true }
 
 function Make.new(ctx: any, container: Frame)
 	local frame = Ui.new("Frame", { Name = "Make", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = container })
@@ -199,6 +243,21 @@ function Make.new(ctx: any, container: Frame)
 	Art.apply(scoop, "tool_flour_scoop")
 	local carried = Ui.new("ImageLabel", { Name = "CarriedBall", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 21, Visible = false, Parent = hand })
 	Art.apply(carried, "food_dough_ball")
+	-- The ladle in the hand: loaded (tipped) for a pour, empty for a spread; its bowl's centre
+	-- on the pointer.
+	local ladleCanvas = F * LADLE_HEIGHT / LADLE_SHARE_Y
+	local ladle = Ui.new("ImageLabel", {
+		Name = "Ladle",
+		BackgroundTransparency = 1,
+		AnchorPoint = LADLE_PIVOT,
+		Size = UDim2.fromOffset(ladleCanvas, ladleCanvas),
+		ZIndex = 21,
+		Visible = false,
+		Parent = hand,
+	})
+	Art.apply(ladle, "tool_ladle_loaded")
+	-- The player's sauce and cheese, between the dough and the hand.
+	local food = MakeLayers.new(dough, 5)
 
 	-- Tool column.
 	local function toolButton(name: string, art: string, col: number, row: number): ImageButton
@@ -230,6 +289,10 @@ function Make.new(ctx: any, container: Frame)
 		Parent = tub,
 	})
 	Art.apply(tubBall, "food_dough_ball")
+	-- The sauce and cheese steps' tools take the same two cells.
+	local pot = toolButton("SaucePot", "tool_sauce_pot", 0, 1)
+	local bowl = toolButton("CheeseBowl", "tool_cheese_bowl", 1, 1)
+	local pinRest: ImageLabel
 	do
 		local x, y = cell(0, 2)
 		local rest = Ui.new("ImageLabel", {
@@ -244,6 +307,7 @@ function Make.new(ctx: any, container: Frame)
 			Parent = dough,
 		})
 		Art.apply(rest, "tool_rolling_pin")
+		pinRest = rest
 	end
 
 	-- Step list: every step of this ticket in order. The current step sits on the nav's coral
@@ -345,8 +409,9 @@ function Make.new(ctx: any, container: Frame)
 
 	local current: any = nil
 	local queues: { [number]: { inFlight: any?, waiting: { any } } } = {}
-	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball", input, mouse, button, ... }
+	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball" | "ladle" | "pot" | "cheese", input, mouse, button, ... }
 	local finishing: number? = nil -- the pizza whose Next is on its way
+	local finishingFrom = "" -- and the step it leaves
 
 	local function queueOf(id: number)
 		local q = queues[id]
@@ -371,9 +436,11 @@ function Make.new(ctx: any, container: Frame)
 		return m
 	end
 
+	local FINISH = { finishDough = true, finishSauce = true, finishCheese = true }
+
 	-- An action that will never land: if it was Next, its button stops saying "Adding...".
 	local function dropped(id: number, op: any)
-		if op.action == "finishDough" and finishing == id then
+		if FINISH[op.action] and finishing == id then
 			finishing = nil
 		end
 	end
@@ -524,6 +591,26 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- The sauce field of a record, replayed once per change of its actions.
+	local fieldKey, fieldCache = nil :: string?, nil :: { number }?
+	local function sauceField(m: any): { number }
+		local parts = { tostring(current and current.id) }
+		for _, a in m.sauce.actions do
+			if a.kind == "pour" then
+				table.insert(parts, string.format("p%.4f,%.4f", a.x, a.y))
+			else
+				local first, last = a.points[1], a.points[#a.points]
+				table.insert(parts, string.format("s%d:%.4f,%.4f:%.4f,%.4f", #a.points, first.x, first.y, last.x, last.y))
+			end
+		end
+		local k = table.concat(parts, "|")
+		if k ~= fieldKey or not fieldCache then
+			fieldKey = k
+			fieldCache = (MakeSauce.field(m.sauce))
+		end
+		return fieldCache :: { number }
+	end
+
 	-- The record to draw (server + this client's actions) and the live drag's preview.
 	local function redraw()
 		if not current then
@@ -537,6 +624,26 @@ function Make.new(ctx: any, container: Frame)
 		drawFlour(m, if live and live.kind == "flour" then live.drag.points else nil)
 		drawDough(m, S)
 		tubBall.Visible = not m.placed and not (live and live.kind == "ball")
+		-- Sauce and cheese, on the dough as it is now (its shape is fixed once rolled).
+		if m.step == "dough" then
+			food.frame.Visible = false
+			return
+		end
+		food.frame.Visible = true
+		food:place(cx, cy, F, S)
+		local field = sauceField(m)
+		if live and live.kind == "ladle" and live.moved then
+			field = table.clone(field)
+			MakeSauce.spread(field, live.preview)
+		end
+		food:sauce(field, m.sauce.actions)
+		local pinches = MakeCheese.pinches(m.cheese)
+		if live and live.kind == "cheese" then
+			for _, p in live.pending do
+				table.insert(pinches, p)
+			end
+		end
+		food:cheese(pinches)
 	end
 
 	------------------------------------------------------------------------------------------
@@ -599,6 +706,151 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- Sauce and cheese are stored dough-local: the screen position mapped through the dough as
+	-- it is now.
+	local function toDoughLocal(position: Vector3): any
+		local p = toLocal(position)
+		return G.toDough(MakeDough.shape(shown(current)), { x = p.X, y = p.Y })
+	end
+
+	local ladleArt = ""
+	local function showLadle(position: Vector3?, loaded: boolean)
+		ladle.Visible = position ~= nil
+		if position then
+			local o = dough.AbsolutePosition
+			ladle.Position = UDim2.fromOffset(position.X - o.X, position.Y - o.Y)
+			local art = if loaded then "tool_ladle_loaded" else "tool_ladle_empty"
+			if art ~= ladleArt then
+				ladleArt = art
+				Art.apply(ladle, art)
+			end
+			-- Tipped to pour; flat on its back to spread.
+			ladle.Rotation = if loaded then 25 else -10
+		end
+	end
+
+	local function pourAt(q: any)
+		if not current then
+			return
+		end
+		local m = shown(current)
+		local args = { x = q.x, y = q.y }
+		if m.step == "sauce" and MakeSauce.validatePour(m.sauce, args) then
+			push("pourSauce", args)
+		end
+	end
+	-- A spread is checked here as the server will check it (it must cross sauce), so one that
+	-- would be refused is dropped instead of clearing the queue behind it.
+	local function sendSpread(points: { any })
+		if not current or #points < 2 then
+			return
+		end
+		local m = shown(current)
+		local args = { points = points }
+		if m.step == "sauce" and MakeSauce.validateSpread(m.sauce, args) then
+			push("spreadSauce", args)
+		end
+	end
+	local RECORD = 0.05 -- dough-local travel between recorded spread points
+	local function clampReach(q: any): any
+		local r = Config.Sauce.strokeReach
+		return { x = math.clamp(q.x, -r, r), y = math.clamp(q.y, -r, r) }
+	end
+	-- Adds a point to the held spread. A very long drag (maxPoints points or maxSpread of travel)
+	-- goes out as one spread and carries on as the next from its last point.
+	local function extendSpread(st: any, q: any)
+		local last = st.path[#st.path]
+		local seg = math.sqrt((q.x - last.x) ^ 2 + (q.y - last.y) ^ 2)
+		if st.length + seg > Config.Sauce.maxSpread then
+			sendSpread(st.path)
+			st.path, st.length = { last }, 0
+		end
+		table.insert(st.path, q)
+		st.length += seg
+		if #st.path >= Config.Sauce.maxPoints then
+			sendSpread(st.path)
+			st.path, st.length = { q }, 0
+		end
+	end
+	local function ladleAt(position: Vector3)
+		local st = live
+		if not st or st.kind ~= "ladle" or not current then
+			return
+		end
+		if not st.moved and (Vector2.new(position.X, position.Y) - st.start).Magnitude >= Config.Sauce.tapPixels then
+			st.moved = true
+		end
+		showLadle(position, not st.moved)
+		if st.moved then
+			local q = clampReach(toDoughLocal(position))
+			local last = st.path[#st.path]
+			if (q.x - last.x) ^ 2 + (q.y - last.y) ^ 2 >= RECORD * RECORD then
+				extendSpread(st, q)
+			end
+			st.preview = table.clone(st.path)
+			if st.preview[#st.preview] ~= q then
+				table.insert(st.preview, q)
+			end
+			redraw()
+		end
+	end
+
+	-- Cheese: pinches still allowed on this pizza (the server's cap), counting the unsent ones.
+	local function cheeseRoom(st: any): number
+		return PrepFood.MAX_PINCHES - MakeCheese.count(shown(current).cheese) - #st.pending
+	end
+	-- Sends the held sprinkle's unsent pinches: one batch if a batch gap has passed, or all of
+	-- them (release, a break in the stroke). A batch that would be refused is dropped, and the
+	-- next one starts a new stroke.
+	local function flushCheese(st: any, all: boolean)
+		while #st.pending > 0 and current do
+			if not all and os.clock() - st.lastFlush < Config.Cheese.batchGap then
+				return
+			end
+			local batch = {}
+			while #batch < Config.Cheese.batchSize and #st.pending > 0 do
+				table.insert(batch, table.remove(st.pending, 1))
+			end
+			local args = { newStroke = st.first, points = batch }
+			if MakeCheese.validate(shown(current).cheese, args) then
+				push("addCheese", args)
+				st.first = false
+			else
+				st.first = true
+			end
+			st.lastFlush = os.clock()
+			if not all then
+				return
+			end
+		end
+	end
+	local function cheeseAt(position: Vector3)
+		local st = live
+		if not st or st.kind ~= "cheese" or not current then
+			return
+		end
+		for _, p in st.sampler.feed(toDoughLocal(position)) do
+			if p.x * p.x + p.y * p.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH then
+				-- Out of reach: nothing lands, and the pinches after the gap are a new stroke
+				-- (the server checks the spacing within one).
+				st.gap = true
+			elseif cheeseRoom(st) > 0 then
+				if st.gap and st.any then
+					flushCheese(st, true)
+					st.first = true
+					st.any = false
+				end
+				st.gap = false
+				st.any = true
+				table.insert(st.pending, p)
+			end
+		end
+		flushCheese(st, false)
+		redraw()
+	end
+
+	local beginCheese: (InputObject) -> ()
+
 	local function endLive(commit: boolean, input: InputObject?)
 		local st = live
 		if not st then
@@ -608,6 +860,7 @@ function Make.new(ctx: any, container: Frame)
 		scoop.Visible = false
 		pin.Visible = false
 		carried.Visible = false
+		ladle.Visible = false
 		if st.kind == "flour" then
 			local batch = st.drag.close()
 			if commit and batch then
@@ -628,6 +881,35 @@ function Make.new(ctx: any, container: Frame)
 				if not st.dragged or p.Magnitude <= 1 / 0.9 then
 					placeBall()
 				end
+			end
+		elseif st.kind == "ladle" then
+			if commit and current then
+				if not st.moved then
+					-- A tap: one ladle where the press landed.
+					pourAt(st.q0)
+				else
+					if input then
+						local q = clampReach(toDoughLocal(input.Position))
+						local last = st.path[#st.path]
+						if q.x ~= last.x or q.y ~= last.y then
+							extendSpread(st, q)
+						end
+					end
+					sendSpread(st.path)
+				end
+			end
+		elseif st.kind == "pot" then
+			-- Dragged from the pot: pours where it is released, if that is on the dough.
+			if commit and input and st.dragged and current then
+				local q = toDoughLocal(input.Position)
+				if q.x * q.x + q.y * q.y <= G.CRUST * G.CRUST then
+					pourAt(q)
+				end
+			end
+		elseif st.kind == "cheese" then
+			-- Every pinch already drawn goes out; a ticket switch (commit false) drops them.
+			if commit then
+				flushCheese(st, true)
 			end
 		end
 		redraw()
@@ -659,7 +941,8 @@ function Make.new(ctx: any, container: Frame)
 	-- without being released, and Roblox may hand the new press the same InputObject, so its
 	-- identity can't tell); a finger's drag is stale once its touch ended. With no input, a
 	-- button was clicked: that click is a new press of mouse button 1. A stale flour drag keeps
-	-- the dust it laid; a stale roll or dough carry is dropped.
+	-- the dust it laid and a stale sprinkle its cheese; a stale roll, dough carry, pour or spread is
+	-- dropped.
 	local function stale(st: any, input: InputObject?): boolean
 		if st.mouse then
 			if input then
@@ -673,7 +956,7 @@ function Make.new(ctx: any, container: Frame)
 	local function dropStale(input: InputObject?)
 		local st = live
 		if st and stale(st, input) then
-			endLive(st.kind == "flour")
+			endLive(st.kind == "flour" or st.kind == "cheese")
 		end
 	end
 	-- Any new press, wherever it lands (a button, the tab bar), drops a stale drag before its
@@ -685,6 +968,13 @@ function Make.new(ctx: any, container: Frame)
 			dropStale(input)
 		end
 	end)
+
+	function beginCheese(input: InputObject)
+		live = hold("cheese", input)
+		live.sampler = PrepFood.sampler()
+		live.pending, live.first, live.any, live.gap, live.lastFlush = {}, true, false, false, -math.huge
+		cheeseAt(input.Position)
+	end
 
 	pad.InputBegan:Connect(function(input: InputObject)
 		if not isPress(input) or not current then
@@ -707,6 +997,34 @@ function Make.new(ctx: any, container: Frame)
 			live = hold("roll", input)
 			live.from, live.to, live.moved = p, p, false
 			rollAt(input.Position)
+		elseif shown(current).step == "sauce" then
+			-- Undecided until it moves tapPixels (a spread) or ends (a pour).
+			live = hold("ladle", input)
+			live.start = Vector2.new(input.Position.X, input.Position.Y)
+			live.q0 = clampReach(toDoughLocal(input.Position))
+			live.path, live.length, live.moved = { live.q0 }, 0, false
+			showLadle(input.Position, true)
+		elseif shown(current).step == "cheese" then
+			beginCheese(input)
+		end
+	end)
+	pot.InputBegan:Connect(function(input: InputObject)
+		if isPress(input) then
+			dropStale(input)
+		end
+		if isPress(input) and not live and current and shown(current).step == "sauce" then
+			live = hold("pot", input)
+			live.start, live.dragged = Vector2.new(input.Position.X, input.Position.Y), false
+			showLadle(input.Position, true)
+		end
+	end)
+	bowl.InputBegan:Connect(function(input: InputObject)
+		if isPress(input) then
+			dropStale(input)
+		end
+		if isPress(input) and not live and current and shown(current).step == "cheese" then
+			-- Cheese lands once the hand is over the dough.
+			beginCheese(input)
 		end
 	end)
 	crock.InputBegan:Connect(function(input: InputObject)
@@ -745,6 +1063,19 @@ function Make.new(ctx: any, container: Frame)
 		if not st or not ownsInput(input) then
 			return
 		end
+		if st.kind == "ladle" then
+			ladleAt(input.Position)
+			return
+		elseif st.kind == "pot" then
+			if (Vector2.new(input.Position.X, input.Position.Y) - st.start).Magnitude >= Config.Sauce.tapPixels then
+				st.dragged = true
+			end
+			showLadle(input.Position, true)
+			return
+		elseif st.kind == "cheese" then
+			cheeseAt(input.Position)
+			return
+		end
 		if st.kind == "flour" then
 			showScoop(input.Position)
 			flourAt(toLocal(input.Position))
@@ -775,17 +1106,29 @@ function Make.new(ctx: any, container: Frame)
 		endLive(true, input)
 	end)
 
-	-- Undo, inside the dough step only: the last roll, then the ball, then the last flour batch.
+	-- Undo, inside the current step: the dough step takes back the last roll, then the ball, then
+	-- the last flour batch; the sauce step the last pour or spread; the cheese step the last
+	-- sprinkle, all of it.
+	local function canUndo(m: any): boolean
+		if m.step == "dough" then
+			return #m.flour > 0 or m.placed
+		elseif m.step == "sauce" then
+			return #m.sauce.actions > 0
+		elseif m.step == "cheese" then
+			return #m.cheese.strokes > 0
+		end
+		return false
+	end
+	local UNDO = { dough = "undoDough", sauce = "undoSauce", cheese = "undoCheese" }
 	local function doUndo()
 		dropStale()
-		if live or not current or current.make.step ~= "dough" then
+		if live or not current then
 			return
 		end
 		local m = shown(current)
-		if #m.flour == 0 and not m.placed then
-			return
+		if canUndo(m) then
+			push(UNDO[m.step], {})
 		end
-		push("undoDough", {})
 	end
 	local undo = Widgets.button("Undo", doUndo, "secondary")
 	undo:setIcon("icon_undo")
@@ -798,18 +1141,30 @@ function Make.new(ctx: any, container: Frame)
 		undo.frame.ZIndex = 5
 		undo.frame.Parent = dough
 	end
-	-- Rail action for the dough step: on to sauce and cheese (added for the player until they are
-	-- hands-on steps). Shares the Make action slot with Topping's Send to oven.
-	local nextButton = Widgets.button("Next: sauce & cheese", function()
+	-- Rail action for the board's steps: on to the next step once this one's minimum is met.
+	-- Shares the Make action slot with Topping's Send to oven.
+	local function canFinish(m: any): boolean
+		if m.step == "dough" then
+			return MakeDough.canFinish(m)
+		elseif m.step == "sauce" then
+			return MakeSauce.canFinish(m.sauce)
+		elseif m.step == "cheese" then
+			return MakeCheese.canFinish(m.cheese)
+		end
+		return false
+	end
+	local NEXT = { dough = "finishDough", sauce = "finishSauce", cheese = "finishCheese" }
+	local nextButton = Widgets.button("Next: sauce", function()
 		dropStale()
 		if live or not current or finishing == current.id then
 			return
 		end
-		if not MakeDough.canFinish(shown(current)) then
+		local m = shown(current)
+		if not NEXT[m.step] or not canFinish(m) then
 			return
 		end
-		finishing = current.id
-		push("finishDough", { from = "dough" })
+		finishing, finishingFrom = current.id, m.step
+		push(NEXT[m.step], { from = m.step })
 	end)
 	nextButton.frame.Size = UDim2.fromScale(1, 1)
 	nextButton.frame.Visible = false
@@ -828,38 +1183,55 @@ function Make.new(ctx: any, container: Frame)
 			endLive(false)
 		end
 		current = focus
-		local inDough = current ~= nil and current.make.step == "dough"
-		if finishing and (not current or current.id ~= finishing or not inDough) then
+		-- The board shows the dough, sauce and cheese steps; the toppings step is the Topping
+		-- view. The server's step decides (a Next still on its way keeps the board).
+		local onBoard = current ~= nil and ON_BOARD[current.make.step] == true
+		if finishing and (not current or current.id ~= finishing or current.make.step ~= finishingFrom) then
 			finishing = nil
 		end
-		dough.Visible = inDough
-		toppingHolder.Visible = not inDough
-		nextButton.frame.Visible = inDough
-		toppings.sendButton.frame.Visible = not inDough
+		dough.Visible = onBoard
+		toppingHolder.Visible = not onBoard
+		nextButton.frame.Visible = onBoard
+		toppings.sendButton.frame.Visible = not onBoard
 		local customer = current and ctx.customer(snap, current.ticketId)
 		local recipe = customer and Recipes.ById[customer.order.recipe]
 		local m = if current then shown(current) else nil
+		local step = if m then m.step else "dough"
 		local phase = if m then MakeDough.phase(m) else "none"
-		local stepName = if phase == "done" then "toppings" elseif phase == "none" then "flour" else phase
+		local stepName = if step ~= "dough" then step elseif phase == "none" then "flour" else phase
 		local list = stepsFor(recipe)
 		local key = table.concat(list, ",") .. "|" .. stepName
-		if inDough and key ~= stepsKey then
+		if onBoard and key ~= stepsKey then
 			stepsKey = key
 			renderSteps(list, stepName)
 		end
-		if inDough and m then
-			undo:setEnabled(#m.flour > 0 or m.placed)
+		if onBoard and m then
+			-- Each step's own tools in the two tool cells.
+			local inDough = step == "dough"
+			crock.Visible, tub.Visible, pinRest.Visible = inDough, inDough, inDough
+			pot.Visible, bowl.Visible = not inDough, not inDough
+			undo:setEnabled(canUndo(m))
 			local busy = finishing ~= nil
-			nextButton:setEnabled(not busy and MakeDough.canFinish(m))
-			nextButton:setLabel(if busy then "Adding..." elseif compact then "Next" else "Next: sauce & cheese")
+			nextButton:setEnabled(not busy and ON_BOARD[step] == true and canFinish(m))
+			local nextLabel = if step == "dough" then "Next: sauce"
+				elseif step == "sauce" then "Next: cheese"
+				elseif recipe and #recipe.toppings > 0 then "Next: toppings"
+				else "Next: finish"
+			nextButton:setLabel(if busy then "Adding..." elseif compact then "Next" else nextLabel)
 			crock.ImageTransparency = if flourAllowed() then 0 else 0.45
 			tub.ImageTransparency = if phase == "dough" then 0 else 0.45
+			pot.ImageTransparency = if step == "sauce" then 0 else 0.45
+			bowl.ImageTransparency = if step == "cheese" then 0 else 0.45
 			redraw()
 		end
 	end
 
 	function station.tick(now: number)
 		toppings.tick(now)
+		local st = live
+		if st and st.kind == "cheese" then
+			flushCheese(st, false)
+		end
 	end
 
 	function station.setActive(active: boolean)
@@ -870,8 +1242,23 @@ function Make.new(ctx: any, container: Frame)
 
 	-- Why the rail's action is unavailable, on the hint strip.
 	function station.status(snap: any): any
-		if not current or current.make.step ~= "dough" then
+		if not current or not ON_BOARD[current.make.step] then
 			return toppings.status(snap)
+		end
+		local m = shown(current)
+		if m.step == "sauce" then
+			local pours = MakeSauce.counts(m.sauce)
+			if pours == 0 then
+				return { text = "Tap the dough to pour a ladle of sauce" }
+			elseif not MakeSauce.canFinish(m.sauce) then
+				return { text = "Drag across the sauce to spread it" }
+			end
+			return nil
+		elseif m.step == "cheese" then
+			if MakeCheese.count(m.cheese) == 0 then
+				return { text = "Drag over the sauce to sprinkle cheese" }
+			end
+			return nil
 		end
 		local phase = phaseOf()
 		if phase == "flour" then
@@ -887,6 +1274,37 @@ function Make.new(ctx: any, container: Frame)
 	-- First-shift pointer, one lesson per part of the dough step, then Topping's own.
 	function station.hint(snap: any): any
 		if not current then
+			return nil
+		end
+		local side = if compact then "left" else "below"
+		local toNext = if compact then "aboveLeft" else "left"
+		if current.make.step == "sauce" or current.make.step == "cheese" then
+			-- Until the step's first Next: what the sauce or cheese still needs, then Next.
+			local m = shown(current)
+			if m.step == "sauce" and not ctx.learned["Make.sauceNext"] then
+				local field, pours, spreadMet = MakeSauce.field(m.sauce)
+				local coverage, crust, off = MakeSauce.measure(field)
+				if pours == 0 then
+					return { target = pad, text = "Tap the dough to pour a ladle of sauce", from = side }
+				elseif pours < Config.Sauce.targetPours then
+					return { target = pad, text = string.format("Pour %d ladles in all, spread apart", Config.Sauce.targetPours), from = side }
+				elseif not spreadMet then
+					return { target = pad, text = "Drag across the sauce to spread it", from = side }
+				elseif off > Config.Sauce.spillAbove or crust > Config.Sauce.crustAbove then
+					return { target = undo.frame, text = "Sauce on the crust: tap Undo", from = "below" }
+				elseif coverage < Config.Sauce.bareBelow then
+					return { target = pad, text = "Spread it out to the crust, covering the bare spots", from = side }
+				end
+				return { target = nextButton.frame, text = "Sauce spread evenly: tap Next", from = toNext }
+			elseif m.step == "cheese" and not ctx.learned["Make.cheeseNext"] then
+				local _, inside, spread = PrepFood.cheeseScore(MakeCheese.pinches(m.cheese))
+				if inside < Config.Cheese.fewBelow then
+					return { target = pad, text = "Hold and drag over the sauce to sprinkle cheese", from = side }
+				elseif spread < Config.Cheese.bunchedBelow then
+					return { target = pad, text = "Sprinkle the bare parts too", from = side }
+				end
+				return { target = nextButton.frame, text = "Cheese all over: tap Next", from = toNext }
+			end
 			return nil
 		end
 		if current.make.step ~= "dough" then
@@ -908,9 +1326,8 @@ function Make.new(ctx: any, container: Frame)
 			-- Next works from the first roll, so until the first Next the pointer says what the
 			-- dough still needs and points at Next only when size and roundness get full marks.
 			local advice = if ctx.learned["Make.next"] then nil else MakeDough.rollAdvice(m)
-			local side = if compact then "left" else "below"
 			if advice == "ready" then
-				return { target = nextButton.frame, text = "Round and full size: tap Next", from = if compact then "aboveLeft" else "left" }
+				return { target = nextButton.frame, text = "Round and full size: tap Next", from = toNext }
 			elseif advice == "small" then
 				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = side }
 			elseif advice == "uneven" then

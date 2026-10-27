@@ -8,7 +8,9 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
+local MakeCheese = require(Shared.MakeCheese)
 local MakeDough = require(Shared.MakeDough)
+local MakeSauce = require(Shared.MakeSauce)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
 local CustomerLooks = require(script.Parent.CustomerLooks)
@@ -34,7 +36,8 @@ type Pizza = {
 	id: number,
 	ticketId: number,
 	stage: string, -- "topping" (the Make tab) | "oven" | "cutting" | "served"
-	-- The Make tab's dough steps (MakeDough); toppings only once make.step is "toppings".
+	-- The Make tab's steps (MakeDough's record: dough, then sauce, cheese and toppings); toppings
+	-- and Send to oven only once make.step is "toppings".
 	make: MakeDough.Make,
 	toppings: { Scoring.Piece },
 	slot: number?,
@@ -293,14 +296,20 @@ function Actions.takeOrder(shift: Shift, args: any): (boolean, string?)
 	return true, nil
 end
 
--- A pizza on the Make tab at its given step ("dough" or "toppings").
+local STEP_ORDER = { dough = 1, sauce = 2, cheese = 3, toppings = 4 }
+
+-- A pizza on the Make tab at its given step ("dough", "sauce", "cheese" or "toppings").
 local function makePizza(shift: Shift, id: any, step: string): (Pizza?, string?)
 	local pizza, err = getPizza(shift, id, "topping")
 	if not pizza then
 		return nil, err
 	end
-	if pizza.make.step ~= step then
-		return nil, if step == "dough" then "dough is done" else "dough not finished"
+	local at = pizza.make.step
+	if at ~= step then
+		if (STEP_ORDER[at] or 0) > STEP_ORDER[step] then
+			return nil, step .. " is done"
+		end
+		return nil, if at == "dough" and step == "toppings" then "dough not finished" else "not at the " .. step .. " step"
 	end
 	return pizza, nil
 end
@@ -370,9 +379,7 @@ function Actions.undoDough(shift: Shift, args: any): (boolean, string?)
 	return true, nil
 end
 
--- Make: the dough is done and the pizza moves on. Sauce and cheese are not hands-on yet: the
--- pizza goes straight to toppings with today's sauced and cheesed look. `from` guards a double
--- tap.
+-- Make: the dough is done and the pizza moves on to the sauce. `from` guards a double tap.
 function Actions.finishDough(shift: Shift, args: any): (boolean, string?)
 	if args.from ~= "dough" then
 		return false, "bad step"
@@ -383,6 +390,110 @@ function Actions.finishDough(shift: Shift, args: any): (boolean, string?)
 	end
 	if not MakeDough.canFinish(pizza.make) then
 		return false, "roll the dough first"
+	end
+	pizza.make.step = "sauce"
+	return true, nil
+end
+
+-- Make, sauce step: one ladle at a dough-local point on the dough.
+function Actions.pourSauce(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "sauce")
+	if not pizza then
+		return false, err
+	end
+	local action, reason = MakeSauce.validatePour(pizza.make.sauce, args)
+	if not action then
+		return false, reason
+	end
+	table.insert(pizza.make.sauce.actions, action)
+	return true, nil
+end
+
+-- Make, sauce step: one spread stroke, its dragged path (dough-local), sent whole on release.
+-- It must cross sauce.
+function Actions.spreadSauce(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "sauce")
+	if not pizza then
+		return false, err
+	end
+	local action, reason = MakeSauce.validateSpread(pizza.make.sauce, args)
+	if not action then
+		return false, reason
+	end
+	table.insert(pizza.make.sauce.actions, action)
+	return true, nil
+end
+
+-- Make, sauce step: takes back the last pour or spread.
+function Actions.undoSauce(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "sauce")
+	if not pizza then
+		return false, err
+	end
+	if #pizza.make.sauce.actions == 0 then
+		return false, "nothing to undo"
+	end
+	table.remove(pizza.make.sauce.actions)
+	return true, nil
+end
+
+-- Make: the sauce is done (a pour and a spread that moved sauce, at least) and the pizza moves
+-- on to the cheese.
+function Actions.finishSauce(shift: Shift, args: any): (boolean, string?)
+	if args.from ~= "sauce" then
+		return false, "bad step"
+	end
+	local pizza, err = makePizza(shift, args.pizzaId, "sauce")
+	if not pizza then
+		return false, err
+	end
+	if not MakeSauce.canFinish(pizza.make.sauce) then
+		return false, "pour and spread the sauce first"
+	end
+	pizza.make.step = "cheese"
+	return true, nil
+end
+
+-- Make, cheese step: one batch of a held sprinkle's pinches. The whole batch is checked first
+-- (MakeCheese.validate); a refused batch changes nothing, not even an empty stroke.
+function Actions.addCheese(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "cheese")
+	if not pizza then
+		return false, err
+	end
+	local points, newStroke, reason = MakeCheese.validate(pizza.make.cheese, args)
+	if not points then
+		return false, reason
+	end
+	MakeCheese.add(pizza.make.cheese, points, newStroke)
+	return true, nil
+end
+
+-- Make, cheese step: takes back the last sprinkle (every pinch of it).
+function Actions.undoCheese(shift: Shift, args: any): (boolean, string?)
+	local pizza, err = makePizza(shift, args.pizzaId, "cheese")
+	if not pizza then
+		return false, err
+	end
+	if #pizza.make.cheese.strokes == 0 then
+		return false, "nothing to undo"
+	end
+	table.remove(pizza.make.cheese.strokes)
+	return true, nil
+end
+
+-- Make: the cheese is done (one pinch at least) and the pizza moves on to its toppings, or
+-- straight to Send to oven on a ticket without any.
+function Actions.finishCheese(shift: Shift, args: any): (boolean, string?)
+	if args.from ~= "cheese" then
+		return false, "bad step"
+	end
+	local pizza, err = makePizza(shift, args.pizzaId, "cheese")
+	if not pizza then
+		return false, err
+	end
+	if not MakeCheese.canFinish(pizza.make.cheese) then
+		return false, "sprinkle some cheese first"
 	end
 	pizza.make.step = "toppings"
 	return true, nil

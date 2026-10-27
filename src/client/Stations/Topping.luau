@@ -13,8 +13,12 @@ local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
+local MakeCheese = require(Shared.MakeCheese)
+local MakeDough = require(Shared.MakeDough)
+local MakeSauce = require(Shared.MakeSauce)
 local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
+local MakeLayers = require(Parent.MakeLayers)
 local PizzaArt = require(Parent.PizzaArt)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
@@ -104,7 +108,12 @@ function Topping.new(ctx: any, container: Frame)
 	view.frame.Size = UDim2.fromOffset(pizzaD, pizzaD)
 	view.frame.ZIndex = 2
 	view.frame.Parent = frame
-	local empty = Ui.text({
+	-- The player's own rolled dough, sauce and cheese under the toppings, in place of the
+	-- generated pre-sauced base. Toppings still sit at pizza-local positions (round), so on an
+	-- oval dough they can land past its edge: the oval is not carried into toppings yet.
+	view.base.Visible = false
+	local food = MakeLayers.new(view.frame, 1)
+	local foodKey = ""	local empty = Ui.text({
 		Text = "Take an order to start a pizza",
 		FontFace = Theme.Font.display,
 		TextSize = if ctx.compact then 15 else 24,
@@ -498,6 +507,17 @@ function Topping.new(ctx: any, container: Frame)
 		send:setLabel(if busy then "Sending..." else "Send to oven")
 		undo:setEnabled(current ~= nil and not busy and #current.toppings > 0)
 		view:set(if current then ctx.withOptimistic(current) else nil, true)
+		if current then
+			local m = current.make
+			local k = string.format("%d|%d|%d|%d", current.id, #m.strokes, #m.sauce.actions, MakeCheese.count(m.cheese))
+			if k ~= foodKey then
+				foodKey = k
+				food:place(pizzaD / 2, pizzaD / 2, pizzaD, MakeDough.shape(m))
+				food:dough(true)
+				food:sauce((MakeSauce.field(m.sauce)), m.sauce.actions)
+				food:cheese(MakeCheese.pinches(m.cheese))
+			end
+		end
 		updatePick()
 		if not sending and current and view.frame.Rotation ~= 0 then
 			-- The send was refused: bring the pizza back.

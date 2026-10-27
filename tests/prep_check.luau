@@ -20,10 +20,12 @@ local function check(name: string, got: any, want: any)
 		table.insert(failures, string.format("%s: got %s, want %s", name, tostring(got), tostring(want)))
 	end
 end
+-- One check either way: a miss is one failure, with both values.
 local function near(name: string, got: number, want: number, tol: number?)
-	check(name, math.abs(got - want) <= (tol or 1e-9), true)
-	if math.abs(got - want) > (tol or 1e-9) then
-		table.insert(failures, string.format("  %s: %.9f vs %.9f", name, got, want))
+	if math.abs(got - want) <= (tol or 1e-9) then
+		passed += 1
+	else
+		table.insert(failures, string.format("%s: got %.9f, want %.9f (+-%g)", name, got, want, tol or 1e-9))
 	end
 end
 local function note(line: string)
@@ -392,8 +394,9 @@ local function server()
 	local self = { pizzas = {}, log = {}, biggest = 0, refusals = {} }
 	function self.receive(m)
 		local id = m.args.pizzaId
+		-- A pizza's record is kept only once an action on it is accepted: a refused first batch
+		-- leaves no record behind.
 		local p = self.pizzas[id] or { strokes = {}, step = "cheese" }
-		self.pizzas[id] = p
 		table.insert(self.log, m.action .. ":" .. id)
 		if p.step ~= "cheese" then
 			return false
@@ -406,6 +409,7 @@ local function server()
 				table.insert(self.refusals, why)
 				return false
 			end
+			self.pizzas[id] = p
 			if newStroke then
 				table.insert(p.strokes, {})
 			end
@@ -416,8 +420,10 @@ local function server()
 			end
 			p.batches = (p.batches or 0) + 1
 		elseif m.action == "undoCheese" then
+			self.pizzas[id] = p
 			table.remove(p.strokes)
 		elseif m.action == "advancePrep" then
+			self.pizzas[id] = p
 			p.step = "done"
 		end
 		return true
@@ -627,6 +633,9 @@ do
 	check("j: empty refused", send({}, false), false)
 	check("j: all refusals left state unchanged", snapshot(), before)
 	check("j: refusal reasons", table.concat(srv.refusals, ","), "spacing,spacing,finite,finite,bounds,empty")
+	-- A refused first batch on a pizza the server has not seen leaves no record of it.
+	check("j: refused first batch refused", srv.receive({ action = "addCheese", args = { pizzaId = 9, points = { { x = 2, y = 0 } }, newStroke = true } }), false)
+	check("j: refused first batch: no pizza record", srv.pizzas[9], nil)
 	-- A refused batch at the cap leaves the count where it was.
 	local cap = {}
 	for i = 1, F.MAX_PINCHES do

@@ -206,6 +206,14 @@ local Assets = {
 	food_dough_roll_05 = "rbxassetid://94822809031954",
 	food_dough_roll_06 = "rbxassetid://74281857814960",
 	tool_rolling_pin = "rbxassetid://87000234822762",
+	-- The same kit, uploaded 2026-10-27 byte-exact: the Make tab's sauce and cheese steps.
+	tool_sauce_pot = "rbxassetid://117862564891343",
+	tool_ladle_loaded = "rbxassetid://123643808874441",
+	tool_ladle_empty = "rbxassetid://85718758566468",
+	food_sauce_raw = "rbxassetid://99141428549445",
+	food_sauce_dollop = "rbxassetid://121541372225849",
+	tool_cheese_bowl = "rbxassetid://72993269606607",
+	food_cheese_raw = "rbxassetid://83704168156179",
 	-- Uploaded 2026-10-19 with the rest; no earlier entry.
 	topping_basil_baked = "rbxassetid://76051026541638",
 	topping_mushroom_baked = "rbxassetid://130710605399267",

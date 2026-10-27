@@ -8,7 +8,10 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
+local MakeCheese = require(ReplicatedStorage.Shared.MakeCheese)
 local MakeDough = require(ReplicatedStorage.Shared.MakeDough)
+local MakeSauce = require(ReplicatedStorage.Shared.MakeSauce)
+local PrepFood = require(ReplicatedStorage.Shared.PrepFood)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
 local CustomerLooks = require(script.Parent.CustomerLooks)
 local SaveService = require(script.Parent.SaveService)
@@ -84,7 +87,7 @@ end)
 -- backend, SaveBackend). Server-wide test settings are refused while anyone is on it.
 -- Test hooks: a clean Make dough step through the real actions (three flour sweeps, the ball
 -- pulled on, eight full rolls at 0, 90, 45 and 135 degrees: round, mean radius 1.03), then on
--- to toppings. `act` reports refusals.
+-- to the sauce. `act` reports refusals.
 local function cleanDough(act: (string, any) -> (), pizzaId: number)
 	local reach = Config.Make.flourReach
 	for _, y in { -0.45, 0, 0.45 } do
@@ -104,6 +107,47 @@ local function cleanDough(act: (string, any) -> (), pizzaId: number)
 		act("rollDough", { pizzaId = pizzaId, x1 = -1.2 * math.cos(a), y1 = -1.2 * math.sin(a), x2 = 1.2 * math.cos(a), y2 = 1.2 * math.sin(a) })
 	end
 	act("finishDough", { pizzaId = pizzaId, from = "dough" })
+end
+
+-- A clean sauce step: three ladles in a triangle at radius 0.4, spread in circles at radius 0.3,
+-- 0.5 and 0.7 (Sauce 97 in make_check), then on to the cheese.
+local function cleanSauce(act: (string, any) -> (), pizzaId: number)
+	for k = 0, 2 do
+		local a = math.pi / 2 + k * 2 * math.pi / 3
+		act("pourSauce", { pizzaId = pizzaId, x = 0.4 * math.cos(a), y = 0.4 * math.sin(a) })
+	end
+	for _, r in { 0.3, 0.5, 0.7 } do
+		local points = {}
+		for i = 0, 40 do
+			local a = 2 * math.pi * i / 40
+			table.insert(points, { x = r * math.cos(a), y = r * math.sin(a) })
+		end
+		act("spreadSauce", { pizzaId = pizzaId, points = points })
+	end
+	act("finishSauce", { pizzaId = pizzaId, from = "sauce" })
+end
+
+-- A clean cheese step: one pinch on each of the 24 sauce cells' centres (Cheese 100), each its
+-- own sprinkle, then on to the toppings.
+local function cleanCheese(act: (string, any) -> (), pizzaId: number)
+	for i = 1, PrepFood.SAUCE_CELLS do
+		local c = PrepFood.centroids[i]
+		act("addCheese", { pizzaId = pizzaId, newStroke = true, points = { { x = c.x, y = c.y } } })
+	end
+	act("finishCheese", { pizzaId = pizzaId, from = "cheese" })
+end
+
+-- Whatever of the Make steps the pizza still has before its toppings, done cleanly.
+local function cleanMake(act: (string, any) -> (), pizza: any)
+	if pizza.make.step == "dough" then
+		cleanDough(act, pizza.id)
+	end
+	if pizza.make.step == "sauce" then
+		cleanSauce(act, pizza.id)
+	end
+	if pizza.make.step == "cheese" then
+		cleanCheese(act, pizza.id)
+	end
 end
 
 local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true }
@@ -144,7 +188,8 @@ if RunService:IsStudio() then
 			end
 			for id, pz in session.shift.pizzas do
 				local mk = pz.make
-				table.insert(lines, string.format("pizza %d ticket=%d stage=%s make=%s flour=%d placed=%s rolls=%d toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, mk.step, MakeDough.stampCount(mk), tostring(mk.placed), #mk.strokes, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
+				local pours, spreads = MakeSauce.counts(mk.sauce)
+				table.insert(lines, string.format("pizza %d ticket=%d stage=%s make=%s flour=%d placed=%s rolls=%d pours=%d spreads=%d cheese=%d/%d toppings=%d cuts=%d slot=%s baked=%s", id, pz.ticketId, pz.stage, mk.step, MakeDough.stampCount(mk), tostring(mk.placed), #mk.strokes, pours, spreads, MakeCheese.count(mk.cheese), #mk.cheese.strokes, #pz.toppings, #pz.cuts, tostring(pz.slot), tostring(pz.bakeSeconds)))
 			end
 			local profile = SaveService.profiles[player]
 			if profile then
@@ -234,9 +279,7 @@ if RunService:IsStudio() then
 							continue
 						end
 						if pizza.stage == "topping" then
-							if pizza.make.step == "dough" then
-								cleanDough(act, pizza.id)
-							end
+							cleanMake(act, pizza)
 							for _, req in Recipes.ById[c.order.recipe].toppings do
 								for i = 1, req.count do
 									local t = (i - 0.5) / req.count
@@ -278,9 +321,7 @@ if RunService:IsStudio() then
 				end
 			end
 			local function top(pizza: any, recipeId: string, share: number)
-				if pizza.make.step == "dough" then
-					cleanDough(act, pizza.id)
-				end
+				cleanMake(act, pizza)
 				for _, req in Recipes.ById[recipeId].toppings do
 					for i = 1, math.round(req.count * share) do
 						local t = (i - 0.5) / req.count

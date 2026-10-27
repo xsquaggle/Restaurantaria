@@ -3,11 +3,14 @@
 -- roll it. Pure functions shared by the server (authoritative), the client (the live preview
 -- while a stroke is held) and the tests. Constants are Config.Make's proposals.
 --
--- Stored on a pizza as make = { step, flour, placed, strokes }:
---   step     "dough" while flouring, placing and rolling; "toppings" once the dough is done
+-- Stored on a pizza as make = { step, flour, placed, strokes, sauce, cheese }:
+--   step     "dough" while flouring, placing and rolling; then "sauce", "cheese" and
+--            "toppings" (the last step on every ticket, with or without toppings)
 --   flour    the committed flour strokes, each a list of pizza-local dust stamps
 --   placed   the dough ball is on the board (it always lands in the centre)
 --   strokes  the committed rolls, { x1, y1, x2, y2 } pizza-local press and release points
+--   sauce    MakeSauce's record, { actions }
+--   cheese   MakeCheese's record, { strokes }
 -- The dough's shape comes from the strokes alone (PrepGeometry.doughShape), so the grade and
 -- every drawing of the dough read the same oval.
 
@@ -18,7 +21,14 @@ local MakeDough = {}
 
 export type Vec = { x: number, y: number }
 export type Line = { x1: number, y1: number, x2: number, y2: number }
-export type Make = { step: string, flour: { { Vec } }, placed: boolean, strokes: { Line } }
+export type Make = {
+	step: string,
+	flour: { { Vec } },
+	placed: boolean,
+	strokes: { Line },
+	sauce: { actions: { any } },
+	cheese: { strokes: { { Vec } } },
+}
 export type Grade = { score: number, notes: { string }, detail: any? }
 
 local function finite(v: any, limit: number): boolean
@@ -38,7 +48,7 @@ function MakeDough.onBoard(p: Vec): boolean
 end
 
 function MakeDough.new(): Make
-	return { step = "dough", flour = {}, placed = false, strokes = {} }
+	return { step = "dough", flour = {}, placed = false, strokes = {}, sauce = { actions = {} }, cheese = { strokes = {} } }
 end
 
 function MakeDough.stampCount(make: Make): number

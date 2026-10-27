@@ -75,6 +75,69 @@ Config.Make = {
 	roundZero = 0.5,
 }
 
+-- The Make tab's sauce step (MakeSauce): tap the dough to pour a ladle, drag across the sauce to
+-- spread it. Every value is a proposal, not a balance decision. Units are dough-local (radius 0.95
+-- is the dough's edge, 0.84 the edible area's).
+Config.Sauce = {
+	-- The thickness field's grid: cells this far apart, out to this radius (past the dough's
+	-- edge, so spilled sauce lies on the board).
+	cell = 0.05,
+	extent = 1.2,
+	-- A pour spreads one ladle evenly over the cells within pourRadius of its point.
+	pourRadius = 0.3,
+	-- Spreading: the ladle's back is a disc of ladleRadius; every spreadStep of the path it
+	-- takes pick of the sauce under it and lays lay of its load back.
+	ladleRadius = 0.18,
+	spreadStep = 0.04,
+	pick = 0.5,
+	lay = 0.5,
+	-- A cell at least this thick counts as sauce for "the spread must cross sauce".
+	occupied = 0.05,
+	-- A press that moves this many pixels before release is a spread, otherwise a pour (plan
+	-- rev 6, D8).
+	tapPixels = 8,
+	targetPours = 3,
+	maxPours = 6,
+	maxSpreads = 30,
+	-- One spread's path: at most maxPoints points within strokeReach, at least minSpread and at
+	-- most maxSpread long (a bound on the server's replay work; a longer drag goes out as more
+	-- than one spread).
+	maxPoints = 64,
+	strokeReach = 1.6,
+	minSpread = 0.2,
+	maxSpread = 6,
+	-- The score: amount (pours against targetPours), coverage of the edible area, clean (sauce
+	-- on the crust band counts once, off the dough offWeight times).
+	amountWeight = 0.3,
+	coverWeight = 0.5,
+	cleanWeight = 0.2,
+	offWeight = 2,
+	-- Notes: coverage under bareBelow; more than crustAbove of the sauce on the crust band; more
+	-- than spillAbove off the dough.
+	bareBelow = 0.9,
+	crustAbove = 0.05,
+	spillAbove = 0.02,
+	-- Severe-coverage safeguard (plan rev 6, 5.3d): the Make score is held to ceilingFloor at
+	-- coverage ceilingFrom or less, not held at all from ceilingTo, evenly between.
+	ceilingFloor = 35,
+	ceilingFrom = 0.25,
+	ceilingTo = 0.75,
+}
+
+-- The Make tab's cheese step (PrepFood's pinch model, plan rev 6, 3.3): hold and drag to sprinkle,
+-- one pinch every PrepFood.PINCH_STEP of travel. Proposals.
+Config.Cheese = {
+	-- A batch the client sends: at most batchSize pinches, at most one batch every batchGap s
+	-- while a sprinkle is held (the rest go out on release).
+	batchSize = 8,
+	batchGap = 0.1,
+	-- Notes: fewer than fewBelow or more than manyAbove pinches on the edible area; spread under
+	-- bunchedBelow.
+	fewBelow = 20,
+	manyAbove = 28,
+	bunchedBelow = 0.7,
+}
+
 Config.Topping = {
 	maxPieces = 48,
 	-- Normalized pizza-local radius inside which a piece's centre may sit (1 = crust edge).

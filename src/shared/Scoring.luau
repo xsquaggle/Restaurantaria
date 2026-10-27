@@ -3,7 +3,9 @@
 -- Pizza-local coordinates are normalized: centre (0, 0), crust edge radius 1, x right, y down.
 
 local Config = require(script.Parent.Config)
+local MakeCheese = require(script.Parent.MakeCheese)
 local MakeDough = require(script.Parent.MakeDough)
+local MakeSauce = require(script.Parent.MakeSauce)
 local Recipes = require(script.Parent.Recipes)
 
 export type Piece = { ingredient: string, x: number, y: number }
@@ -108,21 +110,52 @@ function Scoring.toppings(recipe: Recipes.Recipe, pieces: { Piece }): Grade
 	return { score = math.floor(score + 0.5), notes = notes }
 end
 
--- The Make part of the order grade (proposal, 2026-10-26): the Dough score (flour inside it) and,
--- only when the ticket asks for toppings, the Toppings score, averaged. A cheese order is its
--- Dough score alone: no free topping score. Sauce and cheese are not graded until they are
--- hands-on. The order grade stays the four-part average with Make in Topping's place.
+-- The Make part of the order grade (proposal, 2026-10-27): the mean of its graded steps, Dough
+-- (flour inside it), Sauce, Cheese and, only when the ticket asks for toppings, Toppings. A
+-- cheese order has no Toppings part: no free score. Then the severe-coverage safeguard (plan
+-- rev 6, 5.3d) on sauce and on cheese: a mostly bare pizza holds the Make score to the ceiling of
+-- its coverage (35 at a quarter or less, none from three quarters). The step scores themselves
+-- are never changed. The order grade stays the four-part average with Make in Topping's place;
+-- the plan puts the ceilings on the whole order grade, which comes with the grade split.
 function Scoring.make(recipe: Recipes.Recipe, make: MakeDough.Make, pieces: { Piece }): Grade
 	local dough = MakeDough.grade(make)
-	local notes = table.clone(dough.notes)
-	if #recipe.toppings == 0 then
-		return { score = dough.score, notes = notes, detail = { dough = dough } }
+	local sauce = MakeSauce.grade(make.sauce or { actions = {} })
+	local cheese = MakeCheese.grade(make.cheese or { strokes = {} })
+	local parts = { dough.score, sauce.score, cheese.score }
+	local notes = {}
+	local detail: any = { dough = dough, sauce = sauce, cheese = cheese }
+	local toppings = nil
+	if #recipe.toppings > 0 then
+		toppings = Scoring.toppings(recipe, pieces)
+		table.insert(parts, toppings.score)
+		detail.toppings = toppings
 	end
-	local toppings = Scoring.toppings(recipe, pieces)
-	for _, n in toppings.notes do
-		table.insert(notes, n)
+	local sum = 0
+	for _, v in parts do
+		sum += v
 	end
-	return { score = math.floor((dough.score + toppings.score) / 2 + 0.5), notes = notes, detail = { dough = dough, toppings = toppings } }
+	local mean = math.floor(sum / #parts + 0.5 + 1e-9)
+	local score = mean
+	-- The lower ceiling sets the score; its note goes first, naming the defect.
+	local held: string? = nil
+	local sauceCap, cheeseCap = sauce.detail.ceiling, cheese.detail.ceiling
+	if sauceCap < score and sauceCap <= cheeseCap then
+		score = sauceCap
+		held = string.format("Most of the pizza has no sauce: Make held to %d", sauceCap)
+	elseif cheeseCap < score then
+		score = cheeseCap
+		held = string.format("Cheese bunched or missing: Make held to %d", cheeseCap)
+	end
+	if held then
+		table.insert(notes, held)
+	end
+	for _, list in { dough.notes, sauce.notes, cheese.notes, if toppings then toppings.notes else {} } do
+		for _, n in list do
+			table.insert(notes, n)
+		end
+	end
+	detail.mean = mean
+	return { score = score, notes = notes, detail = detail }
 end
 
 function Scoring.bakeState(target: number, seconds: number): string

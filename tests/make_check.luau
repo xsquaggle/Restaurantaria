@@ -412,10 +412,13 @@ note(string.format("roll advice: ten alternating %.4f x %.4f (big); six one way 
 
 note(string.format("dough grades: ball rolled once = %d; clean eight rolls = %d (mean radius %.4f, %.4f x %.4f)", g1.score, gc.score, gc.detail.meanRadius, gc.detail.major, gc.detail.minor))
 
--- 7. The Make part of the order grade: Dough alone on a cheese order (no free topping score);
--- Dough and Toppings averaged when the ticket has toppings.
+-- 7. The Make part of the order grade: the mean of Dough, Sauce, Cheese and (only when the ticket
+-- has toppings) Toppings; a cheese order has no free topping score. Here the sauce and cheese
+-- steps are empty (each 0; sauce_cheese_check covers them), so a cheese order is
+-- (44 + 0 + 0) / 3 = 14.67 -> 15 and a pepperoni order (44 + 0 + 0 + 100) / 4 = 36. Both coverage
+-- ceilings are 35, above those means, so neither holds them.
 local cheese = Recipes.ById.cheese
-check("make: cheese order = dough", Scoring.make(cheese, onceFloured, {}).score, 44)
+check("make: cheese order = mean of dough, sauce, cheese", Scoring.make(cheese, onceFloured, {}).score, 15)
 local pep = Recipes.ById.pepperoni
 local pieces = {}
 for i = 1, 8 do
@@ -424,8 +427,7 @@ for i = 1, 8 do
 end
 local tops = Scoring.toppings(pep, pieces).score
 check("make: pepperoni toppings perfect", tops, 100)
--- (44 + 100) / 2 = 72.
-check("make: pepperoni order = (dough + toppings) / 2", Scoring.make(pep, onceFloured, pieces).score, 72)
+check("make: pepperoni order = mean of four", Scoring.make(pep, onceFloured, pieces).score, 36)
 
 -- 8. Server actions: the dough step through ShiftService.apply; refusals change nothing.
 local pizza = { id = 9, ticketId = 1, stage = "topping", make = MakeDough.new(), toppings = {}, cuts = {} }
@@ -469,12 +471,20 @@ act("placeDough", { pizzaId = 9 })
 act("rollDough", { pizzaId = 9, x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 })
 serverRefused("finish from the wrong step", "finishDough", { pizzaId = 9, from = "toppings" }, "bad step")
 check("server: finish accepted", (act("finishDough", { pizzaId = 9, from = "dough" })), true)
-check("server: on to toppings", pizza.make.step, "toppings")
+check("server: on to the sauce", pizza.make.step, "sauce")
 serverRefused("finish twice", "finishDough", { pizzaId = 9, from = "dough" }, "dough is done")
 serverRefused("roll after", "rollDough", { pizzaId = 9, x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 }, "dough is done")
 serverRefused("undo dough after", "undoDough", { pizzaId = 9 }, "dough is done")
 serverRefused("flour after", "flour", { pizzaId = 9, points = { P(0, 0) } }, "dough is done")
 serverRefused("dough after", "placeDough", { pizzaId = 9 }, "dough is done")
+serverRefused("toppings at the sauce step", "placeTopping", { pizzaId = 9, ingredient = "pepperoni", x = 0, y = 0 }, "not at the toppings step")
+-- Through the sauce and cheese steps (sauce_cheese_check tests them).
+act("pourSauce", { pizzaId = 9, x = 0, y = 0 })
+act("spreadSauce", { pizzaId = 9, points = { P(-0.3, 0), P(0.3, 0) } })
+check("server: sauce finished", (act("finishSauce", { pizzaId = 9, from = "sauce" })), true)
+act("addCheese", { pizzaId = 9, newStroke = true, points = { P(0, 0) } })
+check("server: cheese finished", (act("finishCheese", { pizzaId = 9, from = "cheese" })), true)
+check("server: on to toppings", pizza.make.step, "toppings")
 check("server: toppings now", (act("placeTopping", { pizzaId = 9, ingredient = "pepperoni", x = 0, y = 0 })), false) -- not unlocked on this bare shift
 session.shift.ingredients = { "pepperoni" }
 check("server: topping placed", (act("placeTopping", { pizzaId = 9, ingredient = "pepperoni", x = 0, y = 0 })), true)
