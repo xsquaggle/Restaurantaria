@@ -18,9 +18,10 @@
 --    little off the grid (JITTER), so a thin trace reads as scattered specks, not a dot grid.
 --
 -- Material span (decided in slice 2, recorded in the hand-off): the 1024 px material maps cover
--- the dough-local square -1..1 (radius 1.0) in every view; the dough's edge is 0.95. Sauce off
--- the dough (radius past 0.95, out to the field's 1.2) is not drawn as material: the board shows
--- it only through the spill smear (sauce_board_spill_v2), placed from the recorded spill.
+-- the dough-local square -1..1 (radius 1.0) in every view; the dough's edge is 0.95 and no disc
+-- reaches past it. Sauce off the dough (radius past 0.95, out to the field's 1.2) is not drawn as
+-- material: the board shows it only through the spill smear (sauce_board_spill_v2), placed from
+-- the recorded spill.
 
 local Config = require(script.Parent.Config)
 local MakeSauce = require(script.Parent.MakeSauce)
@@ -143,10 +144,10 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 		x += (((i * 0.6180339887) % 1) - 0.5) * a
 		y += (((i * 0.7548776662) % 1) - 0.5) * a
 	end
-	-- Never past the material's span.
+	-- Never past the dough's edge (sauce off the dough shows only as the smear).
 	local reach = w / 2
 	local r = math.sqrt(x * x + y * y)
-	local limit = SauceCover.SPAN - reach
+	local limit = SauceCover.DOUGH - reach
 	if r > limit then
 		x, y = x * limit / r, y * limit / r
 	end

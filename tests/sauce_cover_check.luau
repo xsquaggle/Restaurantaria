@@ -150,8 +150,8 @@ for _, rec in records do
 	for _, d in discs do
 		local r = math.sqrt(d.x * d.x + d.y * d.y)
 		local home = math.sqrt((d.x - MakeSauce.xs[d.cell]) ^ 2 + (d.y - MakeSauce.ys[d.cell]) ^ 2)
-		-- Pulled in to the material's span (then the checks of where it sits do not apply).
-		local pulled = r >= SauceCover.SPAN - d.w / 2 - 1e-9
+		-- Pulled in to the dough's edge (then the checks of where it sits do not apply).
+		local pulled = r >= SauceCover.DOUGH - d.w / 2 - 1e-9
 		-- A speck sits within its jitter; an edge disc is pushed back toward its patch by at most
 		-- its radius plus half a cell; a full disc sits on its cell.
 		local allowed = 0
@@ -166,7 +166,7 @@ for _, rec in records do
 		if MakeSauce.rs[d.cell] > SauceCover.DOUGH + 1e-9 then
 			offDough += 1
 		end
-		if r + d.w / 2 > SauceCover.SPAN + 1e-9 or d.w ~= d.h then
+		if r + d.w / 2 > SauceCover.DOUGH + 1e-9 or d.w ~= d.h then
 			outside += 1
 		end
 		local u, v, uw, vh = SauceCover.uv(d)
@@ -207,7 +207,7 @@ for _, rec in records do
 		maxDeep = math.max(maxDeep, d.deep)
 	end
 	check(name .. ": every disc on a dough cell, near its centre", offDough, 0)
-	check(name .. ": no disc past the material span", outside, 0)
+	check(name .. ": no disc past the dough's edge", outside, 0)
 	check(name .. ": every disc samples its own place", badUv, 0)
 	check(name .. ": no disc on a bare cell", onBare, 0)
 	check(name .. ": edge reach and speck area = credit", badArea, 0)
