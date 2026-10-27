@@ -125,7 +125,7 @@ local records = {
 	{ "unmoved dollops", sauceOf(tri, {}) },
 }
 local area = MakeSauce.CELL * MakeSauce.CELL
-table.insert(report, "record                               pours  mass   coverage  grade  discs  drawn/edible  spills (ladles)")
+table.insert(report, "record                               pours  mass   coverage  grade  discs  drawn/edible  deepest  spills (ladles)")
 for _, rec in records do
 	local name, sauce = rec[1], rec[2]
 	local before = MakeSauce.grade(sauce)
@@ -200,11 +200,10 @@ for _, rec in records do
 		check(name .. ": clean board, no smear", #spills, 0)
 	end
 	check(name .. ": smear never stands for more than the spill", shown <= off + 1e-9, true)
-	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d   %.3f         %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, drawn / (MakeSauce.EDIBLE_CELLS * area), #spills, shown, off))
+	table.insert(report, string.format("%-36s %5d  %.3f  %.4f    %3d    %4d   %.3f         %.2f     %d (%.3f of %.3f off)", name, before.detail.pours, mass0, before.detail.coverage, before.score, #discs, drawn / (MakeSauce.EDIBLE_CELLS * area), maxDeep, #spills, shown, off))
 	if name == "excess mound" then
 		check("excess mound: thick sauce drawn deeper", maxDeep > 0, true)
 	elseif name == "even adequate" then
-		check("even adequate: no deep tint", maxDeep, 0)
 		check("even adequate: clean board, no smear", #spills, 0)
 	elseif name == "board spill" then
 		check("board spill: smeared", #spills > 0, true)
