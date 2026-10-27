@@ -900,7 +900,10 @@ local function refreshRail(snap: any)
 				table.insert(waiting, customer)
 			end
 		end
-		if ctx.station == "Order" then
+		if snap.finished then
+			-- A shift ends once every customer is served; the summary sits over the rail.
+			ui.railNote:set("Shift complete", "All customers served")
+		elseif ctx.station == "Order" then
 			if #waiting == 1 then
 				ui.railNote:set("Ready to order", string.format("%s is waiting", waiting[1].label or waiting[1].name or "A customer"))
 			elseif #waiting > 1 then
