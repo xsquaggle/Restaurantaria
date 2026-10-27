@@ -415,8 +415,9 @@ note(string.format("dough grades: ball rolled once = %d; clean eight rolls = %d 
 -- 7. The Make part of the order grade: the mean of Dough, Sauce, Cheese and (only when the ticket
 -- has toppings) Toppings; a cheese order has no free topping score. Here the sauce and cheese
 -- steps are empty (each 0; sauce_cheese_check covers them), so a cheese order is
--- (44 + 0 + 0) / 3 = 14.67 -> 15 and a pepperoni order (44 + 0 + 0 + 100) / 4 = 36. Both coverage
--- ceilings are 35, above those means, so neither holds them.
+-- (44 + 0 + 0) / 3 = 14.67 -> 15, under both coverage ceilings (35, nothing covered), so not
+-- held. A pepperoni order's mean is (44 + 0 + 0 + 100) / 4 = 36, over the empty sauce's ceiling of
+-- 35, so it is held to 35.
 local cheese = Recipes.ById.cheese
 check("make: cheese order = mean of dough, sauce, cheese", Scoring.make(cheese, onceFloured, {}).score, 15)
 local pep = Recipes.ById.pepperoni
@@ -427,7 +428,10 @@ for i = 1, 8 do
 end
 local tops = Scoring.toppings(pep, pieces).score
 check("make: pepperoni toppings perfect", tops, 100)
-check("make: pepperoni order = mean of four", Scoring.make(pep, onceFloured, pieces).score, 36)
+local gp = Scoring.make(pep, onceFloured, pieces)
+check("make: pepperoni order mean of four", gp.detail.mean, 36)
+check("make: pepperoni order held by the sauce ceiling", gp.score, 35)
+check("make: pepperoni hold noted", gp.notes[1], "Most of the pizza has no sauce: Make held to 35")
 
 -- 8. Server actions: the dough step through ShiftService.apply; refusals change nothing.
 local pizza = { id = 9, ticketId = 1, stage = "topping", make = MakeDough.new(), toppings = {}, cuts = {} }
