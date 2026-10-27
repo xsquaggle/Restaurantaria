@@ -196,7 +196,7 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- Drag to cut. Drags may start anywhere on the board, so a stroke that begins just off the
+	-- Drag to cut. Drags may start anywhere on the work surface, so a stroke that begins just off the
 	-- crust still counts. One stroke at a time: it belongs to the input that started it (the
 	-- mouse, or that one finger) and to the pizza it started on; other fingers are ignored and
 	-- a ticket or station change, or a resize of the pizza, cancels it without cutting. The drag
@@ -280,10 +280,20 @@ function Cut.new(ctx: any, container: Frame)
 		return st.input.UserInputState == Enum.UserInputState.End or st.input.UserInputState == Enum.UserInputState.Cancel
 	end
 
-	board.InputBegan:Connect(function(input: InputObject)
+	-- A press anywhere on the work surface starts a stroke (slice 3): on a phone the board leaves
+	-- only a few pixels around the crust, so a stroke may begin on the worktop beside the board
+	-- and still reach across the pizza. Undo keeps its own presses.
+	local function overUndo(position: Vector3): boolean
+		local at, size = undo.frame.AbsolutePosition, undo.frame.AbsoluteSize
+		return position.X >= at.X and position.X <= at.X + size.X and position.Y >= at.Y and position.Y <= at.Y + size.Y
+	end
+	frame.InputBegan:Connect(function(input: InputObject)
 		local isMouse = input.UserInputType == Enum.UserInputType.MouseButton1
 			or (IS_STUDIO and LocalPlayer:GetAttribute("RestaurantariaCutButton2") == true and input.UserInputType == Enum.UserInputType.MouseButton2)
 		if not isMouse and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		if overUndo(input.Position) then
 			return
 		end
 		if stroke and stale(stroke, input, isMouse) then
@@ -356,6 +366,13 @@ function Cut.new(ctx: any, container: Frame)
 				pts[i] = string.format("%.4f,%.4f", q.x, q.y)
 			end
 			trace("path " .. table.concat(pts, " "))
+			if st.assist then
+				-- And their outputs, which the live groove showed and the server stores.
+				for i, q in st.stream.out do
+					pts[i] = string.format("%.4f,%.4f", q.x, q.y)
+				end
+				trace("out " .. table.concat(pts, " "))
+			end
 			ctx.send("cut", { pizzaId = st.pizzaId, path = path }, function(ok, why)
 				trace(string.format("reply ok=%s %s", tostring(ok), tostring(why)))
 			end)
