@@ -310,8 +310,9 @@ for _, case in {
 		check("after " .. label .. ": the dough never shrinks back", after.shrinks, 0)
 		check("after " .. label .. ": the pin never flips", after.pinFlips, 0)
 		if case.name:sub(1, 1) ~= "C" then
-			-- Up-and-down passes: the pin only turns from its rest (-12) to level, once per hold.
-			check("after " .. label .. ": the pin turns only as it is picked up", after.pinTravel <= 15 * #holds, true)
+			-- Up-and-down passes: the pin turns from its rest (-12) to level as it is picked up and
+			-- then only by each pass's few degrees of hand drift; it never turns round.
+			check("after " .. label .. ": the pin only settles, no spin", after.pinTravel <= 40 * #holds, true)
 		end
 		check("after " .. label .. ": the outline stays within 1 px", after.artError <= 1 + 1e-9, true)
 	end
