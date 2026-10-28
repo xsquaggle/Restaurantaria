@@ -717,9 +717,12 @@ do
 		check("limit, long cut: finished at the limit", st.full == true, true)
 		check("limit, long cut: still a whole cut", cut ~= nil and cut.completeness >= 0.999, true)
 		check("limit, long cut: every shown output stays", outputsStay(shown, st.out), true)
-		local ok = ShiftService.apply(session, "cut", { pizzaId = 31, path = st.points })
+		-- Its own pizza: under the old rules the strokes above filled pizza 31's four cuts.
+		local whole = { id = 32, ticketId = 1, stage = "cutting", toppings = {}, cuts = {} }
+		session.shift.pizzas[32] = whole
+		local ok = ShiftService.apply(session, "cut", { pizzaId = 32, path = st.points })
 		check("limit, long cut: accepted", ok, true)
-		local stored = pizza.cuts[#pizza.cuts]
+		local stored = whole.cuts[#whole.cuts]
 		check("limit, long cut: stored path = payload = live groove", stored and same(stored.path, st.points) and same(st.points, st.out), true)
 		note(string.format("limit, long cut: %d samples, ends at %.3f,%.3f, completeness %.3f", #st.points, st.points[#st.points].x, st.points[#st.points].y, cut and cut.completeness or -1))
 	end
