@@ -407,6 +407,22 @@ if RunService:IsStudio() then
 				table.insert(rows, string.format("%02d %s %.3f,%.3f", i, t.ingredient, t.x, t.y))
 			end
 			return table.concat(rows, "\n")
+		elseif command == "cuts" then
+			-- value = pizzaId: each stored cut's path as the server keeps it, to set beside the
+			-- Cut trace's payload and live groove (Astra r17, D2).
+			local pizza = session.shift.pizzas[value]
+			if not pizza then
+				return "no such pizza"
+			end
+			local rows = { string.format("pizza %d stage=%s cuts=%d", pizza.id, pizza.stage, #pizza.cuts) }
+			for i, c in pizza.cuts do
+				local pts = table.create(#c.path)
+				for k, q in c.path do
+					pts[k] = string.format("%.4f,%.4f", q.x, q.y)
+				end
+				table.insert(rows, string.format("cut %d points=%d assisted=%s completeness=%.3f path %s", i, #c.path, tostring(c.assisted), c.completeness, table.concat(pts, " ")))
+			end
+			return table.concat(rows, "\n")
 		elseif command == "setBake" then
 			-- value = { slot, seconds }: make the pizza in that slot read as baked for `seconds`.
 			local id = session.shift.ovens[value[1]]

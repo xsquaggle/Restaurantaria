@@ -171,7 +171,7 @@ local function drive(S: any, on: boolean, events: { any })
 end
 
 -- 1. Replay equality and frozen outputs, assist off and on, every case on every dough.
-local equal, frozen, bounded, offRaw, total, tails, latchedCount, keptRaw = 0, 0, 0, 0, 0, 0, 0, 0
+local equal, frozen, bounded, offRaw, total, tails, finished, latchedCount, keptRaw = 0, 0, 0, 0, 0, 0, 0, 0, 0
 local cap = A.strength * A.deviation
 for _, d in DOUGHS do
 	for _, c in CASES do
@@ -183,6 +183,10 @@ for _, d in DOUGHS do
 			check(label .. ": at most maxPoints samples", #sent <= cfg.maxPoints, true)
 			if #sent == cfg.maxPoints then
 				tails += 1
+				if st.full then
+					finished += 1
+				end
+				check(label .. ": a stroke at the limit is finished", st.full == true, true)
 			end
 			-- The server's rebuild from the sent samples, and the batch replay.
 			local batch, f = CutStroke.assist(sent, d.S, on)
@@ -250,8 +254,8 @@ for _, d in DOUGHS do
 		end
 	end
 end
-note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d hit the %d-sample limit (finished there); the assist switched itself off in %d; the guard kept the raw path in %d",
-	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, latchedCount, keptRaw))
+note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d reached the %d-sample limit, %d finished there; the assist switched itself off in %d; the guard kept the raw path in %d",
+	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, finished, latchedCount, keptRaw))
 
 -- 2. Gates. Before 0.10 u of travel nothing is corrected.
 do
