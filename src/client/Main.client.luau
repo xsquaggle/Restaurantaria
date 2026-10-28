@@ -1263,14 +1263,15 @@ function ctx.showResult(ticketId: number)
 		fader:show(T.cardEnter * 0.6)
 		local coinScale = Motion.scale(coin)
 		coinScale.Scale = T.payFrom
-		task.delay(T.payDelay, function()
+		Motion.after(Motion.keyOf(coin, "land"), T.payDelay, function()
 			if toast.Parent then
 				Motion.pop(coinScale, T.payFrom, T.payPeak, T.payPop)
 				Motion.hook("impact", "order")
 			end
 		end)
 	end
-	task.delay(Theme.Motion.toastSeconds, function()
+	-- The card's whole life runs on the motion clock, the exit included.
+	Motion.after(Motion.keyOf(toast, "exit"), Theme.Motion.toastSeconds, function()
 		if not toast.Parent then
 			return
 		end

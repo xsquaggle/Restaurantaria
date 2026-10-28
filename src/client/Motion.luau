@@ -154,6 +154,12 @@ function Motion.stop(key: any, finish: boolean?)
 	end
 end
 
+-- Calls f once `seconds` have passed on the motion clock (so a held test clock holds it
+-- too). A new wait under the same key replaces the old one.
+function Motion.after(key: any, seconds: number, f: () -> ())
+	Motion.run(key, seconds, function(_p) end, f)
+end
+
 function Motion.isRunning(key: any): boolean
 	return running[key] ~= nil
 end
