@@ -228,8 +228,8 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local edge = Shine.edgeGlow(parent, {
 		colour = EDGE_LIGHT,
 		opacity = 0.62,
-		layers = if compact then 6 else 8,
-		step = if compact then 4 else 6,
+		layers = if compact then 10 else 14,
+		step = if compact then 2.5 else 3.5,
 		z = 22,
 	})
 	edge.setLevel(0)
@@ -895,12 +895,12 @@ local function starLight(show: Show, pr: Motion.Presentation?, count: number, se
 	local px = view.starHolder.Size.X.Offset
 	Shine.flare(pr, view.starHolder, {
 		at = CENTRE,
-		size = px * 2.6,
+		size = px * 3,
 		from = 0.6,
-		to = 2.2,
+		to = 2.4,
 		life = T.flare,
 		colour = Shine.TEAL,
-		peak = 0.1,
+		peak = 0.2,
 		z = view.star.ZIndex - 2,
 	})
 	Shine.ring(pr, view.starHolder, { at = CENTRE, from = px * 0.8, to = px * 2.8, life = 0.55, colour = Shine.TEAL, peak = 0, z = view.star.ZIndex - 1 })
@@ -1344,7 +1344,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	})
 	if lit then
 		local rim = { { 0.03, 0.05 }, { 0.975, 0.07 }, { 0.995, 0.5 }, { 0.006, 0.62 }, { 0.955, 0.965 }, { 0.07, 0.955 } }
-		local px = if view.compact then 32 else 48
+		local px = if view.compact then 44 else 68
 		for i, at in rim do
 			local gold = i % 2 == 0
 			Shine.twinkle(pr, view.card, {
@@ -1387,12 +1387,12 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 			if lit then
 				Shine.flare(pr, holder, {
 					at = CENTRE,
-					size = px * 1.6,
+					size = px * 2,
 					from = 0.5,
-					to = 1.7,
+					to = 1.8,
 					life = T.flare,
 					art = "fx_oven_glow",
-					peak = 0.2,
+					peak = 0.1,
 					z = emblem.ZIndex - 2,
 					delay = 0.12,
 				})
@@ -1452,13 +1452,13 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 				view.coinGlow.set(1 + 0.25 * e, T.coinGlowRest + (T.coinGlowCount - T.coinGlowRest) * e)
 			end)
 			local rng = Random.new(11)
-			local n = math.max(1, math.floor(coins.duration / 0.16))
+			local n = math.max(1, math.floor(coins.duration / 0.2))
 			for i = 0, n - 1 do
 				local a = rng:NextNumber(0, math.pi * 2)
 				local r = coinPx * rng:NextNumber(0.36, 0.5)
 				Shine.twinkle(pr, view.coinHolder, {
 					at = UDim2.new(0.5, math.cos(a) * r, 0.5, math.sin(a) * r),
-					size = coinPx * rng:NextNumber(0.42, 0.58),
+					size = coinPx * rng:NextNumber(0.6, 0.8),
 					colour = if i % 2 == 0 then Shine.WARM else Shine.GOLD,
 					halo = Shine.WARM,
 					z = zAbove(view.coin),
@@ -1496,10 +1496,10 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 			Shine.toss(pr, view.coinHolder, {
 				at = CENTRE,
 				count = MotionPlan.tossCount(show.model.coins),
-				size = coinPx * 0.42,
-				speed = coinPx * 5.5,
-				gravity = coinPx * 20,
-				spread = 130,
+				size = coinPx * 0.46,
+				speed = coinPx * 6.5,
+				gravity = coinPx * 22,
+				spread = 140,
 				edge = COIN_EDGE,
 				z = zAbove(view.coin, 2),
 				seed = 29,

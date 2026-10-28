@@ -246,10 +246,10 @@ end
 
 export type Glow = { root: GuiObject, set: (scale: number, transparency: number) -> () }
 
--- Stacked soft discs for a cool glow: radii grow as the square root, so the light falls off
--- softly from a bright middle.
-local DISCS = 6
-local DISC_ALPHA = 0.16
+-- Stacked soft discs for a cool glow: most of them small, so the light gathers in the middle
+-- and thins out toward a soft fringe (evenly spread discs read as a flat disc).
+local DISCS = 9
+local DISC_ALPHA = 0.12
 
 -- A soft round glow `px` across, centred on its Position, set to a scale and a transparency.
 -- With `art` (fx_oven_glow: a yellow core in an orange halo, tinted by `colour`) it is that
@@ -290,7 +290,7 @@ function Shine.glowShape(parent: Instance, px: number, colour: Color3, z: number
 	local scale = Ui.new("UIScale", { Scale = 1, Parent = root })
 	local discs: { Frame } = {}
 	for k = 1, DISCS do
-		local f = math.sqrt(k / DISCS)
+		local f = (k / DISCS) ^ 1.6
 		table.insert(
 			discs,
 			Ui.new("Frame", {
@@ -359,8 +359,10 @@ export type RaysOptions = {
 	z: number,
 }
 
--- Each ray is brightest near the centre and fades out along its length.
+-- Each ray is brightest near the centre and fades out along its length. A ray is a bright
+-- narrow beam inside a fainter wide one, so its sides fall off softly.
 local RAY_FADE = NumberSequence.new({ kp(0, 0), kp(0.45, 0.05), kp(1, 1) })
+local RAY_LAYERS = { { width = 1, light = 0.45 }, { width = 0.38, light = 0.75 } }
 
 -- Soft light rays round a centre, turning as a whole.
 function Shine.rays(parent: Instance, o: RaysOptions): Rays
@@ -375,7 +377,7 @@ function Shine.rays(parent: Instance, o: RaysOptions): Rays
 	})
 	local scale = Ui.new("UIScale", { Scale = 1, Parent = root })
 	local width = (o.width or 0.1) / 2 -- of the root's height (two radii)
-	local beams: { Frame } = {}
+	local beams: { { frame: Frame, light: number } } = {}
 	for i = 1, o.count do
 		local long = i % 2 == 1
 		-- Each arm turns one ray about the centre; the ray runs from the centre outward.
@@ -389,30 +391,31 @@ function Shine.rays(parent: Instance, o: RaysOptions): Rays
 			ZIndex = o.z,
 			Parent = root,
 		})
-		table.insert(
-			beams,
-			Ui.new("Frame", {
-				Name = "Ray",
-				BackgroundColor3 = o.colour,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(if long then 0.5 else 0.36, if long then width else width * 0.7),
-				ZIndex = o.z,
-				Parent = arm,
-			}, {
-				round(),
-				Ui.new("UIGradient", { Transparency = RAY_FADE }),
+		for _, layer in RAY_LAYERS do
+			table.insert(beams, {
+				light = layer.light,
+				frame = Ui.new("Frame", {
+					Name = "Ray",
+					BackgroundColor3 = o.colour,
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(if long then 0.5 else 0.36, (if long then width else width * 0.7) * layer.width),
+					ZIndex = o.z,
+					Parent = arm,
+				}, {
+					round(),
+					Ui.new("UIGradient", { Transparency = RAY_FADE }),
+				}),
 			})
-		)
+		end
 	end
 	return {
 		root = root,
 		setLevel = function(level: number)
-			local t = math.clamp(1 - o.opacity * level, 0, 1)
 			for _, beam in beams do
-				beam.BackgroundTransparency = t
+				beam.frame.BackgroundTransparency = math.clamp(1 - o.opacity * beam.light * level, 0, 1)
 			end
 		end,
 		setTurn = function(degrees: number)
