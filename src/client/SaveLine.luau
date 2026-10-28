@@ -11,7 +11,7 @@
 -- fade.
 --
 -- Stand-ins (declared, not supplied art): the spinner is an arc drawn with a UIStroke cut by
--- a UIGradient, and the check a disc with two rounded white strokes.
+-- a UIGradient over a faint ring, and the check a disc with two rounded white strokes.
 
 local Players = game:GetService("Players")
 
@@ -23,9 +23,11 @@ local Ui = require(script.Parent.Ui)
 
 local C = Theme.Colour
 local WHITE = Color3.new(1, 1, 1)
--- The spinner is oven-warm while it waits and turns basil green as it lands.
-local SPIN = C.oven
+-- The spinner is oven-warm while it waits (a deeper oven orange, so a thin arc reads on the
+-- cream card) and turns basil green as it lands. A faint full ring is its track.
+local SPIN = Color3.fromRGB(226, 128, 44)
 local DONE = C.basil
+local TRACK = 0.2
 -- The light that leaves the check: a fresh basil green.
 local DONE_LIGHT = Color3.fromRGB(122, 196, 98)
 local CENTRE = UDim2.fromScale(0.5, 0.5)
@@ -58,6 +60,7 @@ type Values = {
 	long: number,
 	letters: number, -- 0..1: how much of the waiting word shows
 	lifts: { number }, -- each letter's hop (0..1)
+	drop: number, -- 0..1: the waiting word sinking away as the save lands
 	word: number, -- 0..1: how much of the landed word shows
 	wordLift: number,
 	wordScale: number,
@@ -76,6 +79,7 @@ export type Line = {
 	spinner: Frame,
 	stroke: UIStroke,
 	gradient: UIGradient,
+	track: UIStroke,
 	disc: Frame,
 	discScale: UIScale,
 	arms: { Frame },
@@ -172,10 +176,13 @@ local function draw(line: Line)
 	local spinA = v.spin * alpha
 	line.spinner.Visible = spinA > 0.002
 	if line.spinner.Visible then
+		local colour = SPIN:Lerp(DONE, v.tint)
 		line.stroke.Transparency = 1 - spinA
-		line.stroke.Color = SPIN:Lerp(DONE, v.tint)
+		line.stroke.Color = colour
 		line.gradient.Rotation = v.turn
 		line.gradient.Transparency = arcSequence(v.arc)
+		line.track.Transparency = 1 - spinA * TRACK
+		line.track.Color = colour
 	end
 
 	local discA = v.discAlpha * alpha
@@ -195,7 +202,7 @@ local function draw(line: Line)
 	local letterA = v.letters * alpha
 	for i, letter in line.letters do
 		letter.Visible = letterA > 0.002
-		letter.Position = UDim2.new(0.5, x, 0.5, -(v.lifts[i] or 0) * line.size * T.saveWaveLift)
+		letter.Position = UDim2.new(0.5, x, 0.5, (v.drop * 0.3 - (v.lifts[i] or 0) * T.saveWaveLift) * line.size)
 		letter.TextTransparency = 1 - letterA
 		x += line.advances[i]
 	end
@@ -214,8 +221,8 @@ end
 -- `size` is the label's text size.
 function SaveLine.new(label: TextLabel, size: number): Line
 	local z = label.ZIndex
-	local px = math.round(size * 1.1)
-	local stroke = math.max(2, math.round(px * 0.13))
+	local px = math.round(size * 1.15)
+	local stroke = math.max(2, math.round(px * 0.14))
 	local root = Ui.new("Frame", {
 		Name = "Line",
 		BackgroundTransparency = 1,
@@ -233,7 +240,9 @@ function SaveLine.new(label: TextLabel, size: number): Line
 		ZIndex = z + 1,
 		Parent = root,
 	})
-	-- A stroke is drawn outside its frame: the ring's outer edge is the icon's.
+	-- A stroke is drawn outside its frame: the ring's outer edge is the icon's. The track is
+	-- the same ring, faint and whole, under the spinner's arc.
+	local track = Ui.new("UIStroke", { Thickness = stroke, Color = SPIN, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 	local spinner = Ui.new("Frame", {
 		Name = "Spinner",
 		BackgroundTransparency = 1,
@@ -246,11 +255,22 @@ function SaveLine.new(label: TextLabel, size: number): Line
 	}, {
 		Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
 	})
+	-- One frame can hold one stroke: the arc's frame sits on the track's.
+	local arc = Ui.new("Frame", {
+		Name = "Arc",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = z + 1,
+		Parent = spinner,
+	}, {
+		Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+	})
+	track.Parent = spinner
 	local ring = Ui.new("UIStroke", {
 		Thickness = stroke,
 		Color = SPIN,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-		Parent = spinner,
+		Parent = arc,
 	})
 	local gradient = Ui.new("UIGradient", { Parent = ring })
 	local disc = Ui.new("Frame", {
@@ -308,6 +328,7 @@ function SaveLine.new(label: TextLabel, size: number): Line
 		spinner = spinner,
 		stroke = ring,
 		gradient = gradient,
+		track = track,
 		disc = disc,
 		discScale = Ui.new("UIScale", { Parent = disc }),
 		arms = arms,
@@ -332,6 +353,7 @@ function SaveLine.new(label: TextLabel, size: number): Line
 			long = 0,
 			letters = 0,
 			lifts = {},
+			drop = 0,
 			word = 0,
 			wordLift = 0,
 			wordScale = 1,
@@ -508,12 +530,15 @@ local function land(line: Line, fromSpinner: boolean, delay: number)
 		v.short, v.long = MotionPlan.checkDraw((at - T.saveCheckAt) / T.saveCheck, CHECK_SPLIT)
 		local h = (at - T.saveWordAt) / T.saveHop
 		if h >= 0 then
-			local k = math.min(h / 0.25, 1)
+			-- The waiting word sinks and fades first; the new word comes in as it rises, so
+			-- the two never sit on top of each other.
 			if fromSpinner then
-				v.letters = 1 - k
+				local out = math.min(h / 0.16, 1)
+				v.letters = 1 - out
+				v.drop = MotionPlan.easeOut(out)
 				v.width = line.waitW + (line.wordW - line.waitW) * MotionPlan.easeInOut(h / T.saveSlide)
 			end
-			v.word = MotionPlan.easeOut(k)
+			v.word = MotionPlan.easeOut(math.clamp((h - 0.12) / 0.2, 0, 1))
 			v.wordLift, v.wordScale = MotionPlan.hop(h)
 		end
 		if not lit and at >= T.saveCheckAt + 0.1 then
@@ -574,6 +599,7 @@ function SaveLine.set(line: Line, tone: string, text: string, colour: Color3, cu
 		v.short = 0
 		v.long = 0
 		v.letters = 1
+		v.drop = 0
 		v.word = 0
 		v.wordLift = 0
 		v.wordScale = 1

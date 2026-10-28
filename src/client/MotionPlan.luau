@@ -133,12 +133,12 @@ MotionPlan.T = {
 	-- the card's top edge, thrown up and out, slowed by the air and fluttering down. Speeds
 	-- and sizes are for the desktop card (560 px wide) and scale with the card.
 	confettiAt = 0.06, -- seconds after the panel starts to land
-	confetti = 40, -- pieces (the phone card throws fewer)
-	confettiCompact = 26,
-	confettiSpeed = 980, -- px a second they leave at, at most
+	confetti = 46, -- pieces (the phone card throws fewer)
+	confettiCompact = 30,
+	confettiSpeed = 1040, -- px a second they leave at, at most
 	confettiDrag = 3.1, -- how fast the air slows them (1/s)
 	confettiFall = 250, -- px a second they flutter down at, at most
-	confettiSize = 16, -- px: the length of an average piece
+	confettiSize = 20, -- px: the length of an average piece
 	confettiLife = 2.5,
 	confettiFront = 0.35, -- share of pieces in front of the card; the rest fly behind it
 	-- The save line (Lawson 2026-10-28). While the save runs, "Saving..." waves letter by
@@ -151,8 +151,8 @@ MotionPlan.T = {
 	saveWaveRest = 0.36, -- seconds the line rests between waves
 	saveWaveLift = 0.24, -- how high a letter hops, in text heights
 	saveTurn = 0.9, -- seconds per turn of the spinner
-	saveArcMin = 0.2, -- the spinner's arc, as a share of its ring, breathing between these
-	saveArcMax = 0.7,
+	saveArcMin = 0.25, -- the spinner's arc, as a share of its ring, breathing between these
+	saveArcMax = 0.72,
 	saveBreath = 1.6, -- seconds per breath of the arc
 	saveWhirl = 0.34, -- seconds the spinner whirls and closes into a ring as the save lands
 	saveWhirlTurns = 1.25, -- extra turns while it whirls
