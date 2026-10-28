@@ -202,11 +202,12 @@ for _, d in DOUGHS do
 			if f.latched then
 				latchedCount += 1
 			end
-			-- Every output once shown stays (only an open tail at maxPoints may follow the pointer).
+			-- Every output once shown stays, the last one too (a full stroke records nothing more;
+			-- until slice 6 the sample at maxPoints followed the pointer).
 			local stays = true
 			for _, snap in shown do
 				for i, p in snap do
-					if i < cfg.maxPoints and (p.x ~= st.out[i].x or p.y ~= st.out[i].y) then
+					if p.x ~= st.out[i].x or p.y ~= st.out[i].y then
 						stays = false
 					end
 				end
@@ -249,7 +250,7 @@ for _, d in DOUGHS do
 		end
 	end
 end
-note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d hit the %d-sample limit (open tail); the assist switched itself off in %d; the guard kept the raw path in %d",
+note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d hit the %d-sample limit (finished there); the assist switched itself off in %d; the guard kept the raw path in %d",
 	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, latchedCount, keptRaw))
 
 -- 2. Gates. Before 0.10 u of travel nothing is corrected.
@@ -525,7 +526,198 @@ do
 	check("server: more than maxPoints refused", okL, false)
 end
 
--- 9. The sweep: 3,456 strokes, every one graded with the assist off and on from the same raw
+-- 9. The sample limit (Astra r17, D2). The build she reviewed let a full stream's last sample
+-- follow the pointer (replicated below as recordBefore, for paths that stay inside the accepted
+-- range): the segment from sample 47 to that moving tail could cross dough the cutter went
+-- around, with the assist off. Now a full stream is finished: what was recorded stays, nothing
+-- more is added (the release neither), and the live groove, the payload and the server's stored
+-- path are that one list. The "before" rows are expected to show the fault. The wobble seed is
+-- put back afterwards, so the sweep below draws the same strokes as before this section existed.
+do
+	local savedSeed = seed
+	local function qp(p: any): any
+		return P(CutStroke.quantize(p.x), CutStroke.quantize(p.y))
+	end
+	-- The stream as it was: a sample each spacing (and the release), and once maxPoints were
+	-- recorded the last sample moved to each new one. limit = nil records without a limit.
+	local function recordBefore(events: { any }, limit: number?): { any }
+		local pts = { qp(events[1]) }
+		for i = 2, #events do
+			local p, last = events[i], pts[#pts]
+			local dist = math.sqrt((p.x - last.x) ^ 2 + (p.y - last.y) ^ 2)
+			if dist >= cfg.spacing or (i == #events and dist > 1e-4) then
+				if limit and #pts >= limit then
+					pts[#pts] = qp(p)
+				else
+					table.insert(pts, qp(p))
+				end
+			end
+		end
+		return pts
+	end
+	local function same(a: { any }, b: { any }): boolean
+		return ser(a) == ser(b)
+	end
+	local function prefix(a: { any }, n: number): { any }
+		return table.move(a, 1, math.min(n, #a), 1, {})
+	end
+	-- How many consecutive samples are joined across dough (the grade's own clip).
+	local function crossings(S: any, pts: { any }): number
+		local n = 0
+		for i = 2, #pts do
+			if Scoring.clipToDough(S, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) ~= nil then
+				n += 1
+			end
+		end
+		return n
+	end
+	local function longest(pts: { any }): number
+		local m = 0
+		for i = 2, #pts do
+			m = math.max(m, math.sqrt((pts[i].x - pts[i - 1].x) ^ 2 + (pts[i].y - pts[i - 1].y) ^ 2))
+		end
+		return m
+	end
+	local function outputsStay(shown: { any }, final: { any }): boolean
+		for _, snap in shown do
+			for i, p in snap do
+				if p.x ~= final[i].x or p.y ~= final[i].y then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	-- The replica is the stream itself on every path that never reaches the limit.
+	local agree = 0
+	for _, d in DOUGHS do
+		for _, c in CASES do
+			local events = c.make(d.S)
+			local st = drive(d.S, false, events)
+			if not st.full and not st.closed and #st.points < cfg.maxPoints then
+				local inside = true
+				for _, e in events do
+					inside = inside and math.abs(e.x) <= CutStroke.RANGE and math.abs(e.y) <= CutStroke.RANGE
+				end
+				if inside then
+					check("limit: replica = stream under the limit (" .. d.name .. " / " .. c.name .. ")", same(recordBefore(events, cfg.maxPoints), st.points), true)
+					agree += 1
+				end
+			end
+		end
+	end
+	check("limit: the replica is checked on some paths", agree > 10, true)
+
+	-- Her fixture: 47 samples left of the dough (sawing at x = -1.2), then around the pizza on a
+	-- semicircle of radius 1.2, outside every dough here, ending right of it.
+	local around = {}
+	for i = 0, 45 do
+		table.insert(around, P(-1.2, if i % 2 == 0 then 0.5 else 0.42))
+	end
+	table.insert(around, P(-1.2, 0))
+	for k = 1, 90 do
+		local a = math.pi + math.pi * k / 90
+		table.insert(around, P(1.2 * math.cos(a), 1.2 * math.sin(a)))
+	end
+	local pizza = { id = 31, ticketId = 1, stage = "cutting", toppings = {}, cuts = {} }
+	local session = { shift = { pizzas = { [31] = pizza }, cutAssist = false } } :: any
+	for _, d in DOUGHS do
+		local label = "around the pizza / " .. d.name
+		local before = recordBefore(around, cfg.maxPoints)
+		local unlimited = recordBefore(around, nil)
+		check(label .. ": before, sample 47 is where her fixture puts it", same({ before[47] }, { P(-1.2, 0) }), true)
+		check(label .. ": before, the tail ends at the release, right of the dough", same({ before[#before] }, { qp(around[#around]) }), true)
+		check(label .. ": before, the last segment crosses the dough", crossings(d.S, before) > 0, true)
+		check(label .. ": before, the cutter never crossed it", crossings(d.S, unlimited), 0)
+		if d.name == "round" then
+			local cut = CutStroke.grade(before, d.S, false)
+			check(label .. ": before, it grades as a cut", cut ~= nil, true)
+			note(string.format("limit, her fixture (before): %d samples; the segment from sample 47 to the tail crosses the round dough and grades as a cut, completeness %.2f, straightness %.2f, though the cutter went around the pizza", #before, cut and cut.completeness or -1, cut and cut.straightness or -1))
+		end
+		local st, shown = drive(d.S, false, around)
+		check(label .. ": after, 48 samples", #st.points, cfg.maxPoints)
+		check(label .. ": after, finished", st.full == true and CutStroke.stopped ~= nil and CutStroke.stopped(st), true)
+		check(label .. ": after, exactly the first 48 samples the cutter made", same(st.points, prefix(unlimited, cfg.maxPoints)), true)
+		check(label .. ": after, no segment crosses the dough", crossings(d.S, st.points), 0)
+		check(label .. ": after, no cut", CutStroke.grade(st.points, d.S, false), nil)
+		check(label .. ": after, every shown output stays", outputsStay(shown, st.out), true)
+		check(label .. ": after, the live groove is the payload", same(st.out, st.points), true)
+		local cutsBefore = #pizza.cuts
+		local ok = ShiftService.apply(session, "cut", { pizzaId = 31, path = st.points })
+		check(label .. ": after, the server refuses it too", ok, false)
+		check(label .. ": after, and stores nothing", #pizza.cuts, cutsBefore)
+	end
+
+	-- 47, 48, 49 and many more samples: a stroke along y = 0.3 that saws back and forth (every
+	-- event a sample, 0.0711 apart), released at its last event.
+	local function saw(n: number): { any }
+		local pts = {}
+		local x, dir = -1.5, 1
+		for _ = 1, n do
+			table.insert(pts, P(x, 0.3))
+			if x + dir * 0.0711 > 1.5 or x + dir * 0.0711 < -1.5 then
+				dir = -dir
+			end
+			x += dir * 0.0711
+		end
+		return pts
+	end
+	for _, n in { 47, 48, 49, 60, 200 } do
+		local events = saw(n)
+		local label = string.format("limit, %d events", n)
+		local st, shown = drive(Scoring.ROUND, false, events)
+		check(label .. ": samples", #st.points, math.min(n, cfg.maxPoints))
+		check(label .. ": finished only at the limit", st.full == true, n >= cfg.maxPoints)
+		check(label .. ": the samples are the first events, unmoved", same(st.points, recordBefore(prefix(events, cfg.maxPoints), nil)), true)
+		check(label .. ": every shown output stays", outputsStay(shown, st.out), true)
+		if n > cfg.maxPoints then
+			local before = recordBefore(events, cfg.maxPoints)
+			check(label .. ": before, sample 48 had moved to the release", same({ before[cfg.maxPoints] }, { qp(events[n]) }), true)
+			check(label .. ": after, sample 48 is event 48, not the release", same({ st.points[cfg.maxPoints] }, { qp(events[cfg.maxPoints]) }), true)
+			-- A release after the limit adds or moves nothing.
+			local held = ser(st.points)
+			CutStroke.record(st, P(0, -0.9), true)
+			check(label .. ": a later release changes nothing", ser(st.points), held)
+		end
+	end
+
+	-- Circles: the pointer circles on the dough (radius 0.6, events 0.03 apart, a sample every
+	-- third) about two and a half times and lets go opposite sample 47.
+	do
+		local events = {}
+		for k = 0, 326 do
+			local a = k * 0.05
+			table.insert(events, P(0.6 * math.cos(a), 0.6 * math.sin(a)))
+		end
+		local st, shown = drive(Scoring.ROUND, false, events)
+		local before = recordBefore(events, cfg.maxPoints)
+		check("limit, circles: finished at the limit", st.full == true, true)
+		check("limit, circles: the first 48 samples the cutter made", same(st.points, prefix(recordBefore(events, nil), cfg.maxPoints)), true)
+		check("limit, circles: every shown output stays", outputsStay(shown, st.out), true)
+		check("limit, circles: no sample joined across the circle", longest(st.points) < 0.11, true)
+		check("limit, circles: before, the tail jumped across it", longest(before) > 0.5, true)
+		note(string.format("limit, circles: longest segment %.3f (before %.3f, the jump from sample 47 to the tail)", longest(st.points), longest(before)))
+	end
+
+	-- A legitimate long cut, corner to corner across the whole range: it reaches the limit past
+	-- the far crust, so the cut is whole; the server stores exactly the sent samples.
+	do
+		local events = line(-1.58, -1.58, 1.58, 1.58, 0.02, 0)
+		local st, shown = drive(Scoring.ROUND, false, events)
+		local cut = CutStroke.grade(st.points, Scoring.ROUND, false)
+		check("limit, long cut: finished at the limit", st.full == true, true)
+		check("limit, long cut: still a whole cut", cut ~= nil and cut.completeness >= 0.999, true)
+		check("limit, long cut: every shown output stays", outputsStay(shown, st.out), true)
+		local ok = ShiftService.apply(session, "cut", { pizzaId = 31, path = st.points })
+		check("limit, long cut: accepted", ok, true)
+		local stored = pizza.cuts[#pizza.cuts]
+		check("limit, long cut: stored path = payload = live groove", stored and same(stored.path, st.points) and same(st.points, st.out), true)
+		note(string.format("limit, long cut: %d samples, ends at %.3f,%.3f, completeness %.3f", #st.points, st.points[#st.points].x, st.points[#st.points].y, cut and cut.completeness or -1))
+	end
+	seed = savedSeed
+end
+
+-- 10. The sweep: 3,456 strokes, every one graded with the assist off and on from the same raw
 -- samples. 4 doughs x 12 directions x 4 offsets x 3 shapes (wobble, bow, bow with wobble) x 3
 -- lengths (0.55, 1.0 and 1.25 of the half chord each way) x 2 starts (straight in, or a bent
 -- lead-in across the worktop). The assist must never refuse a stroke the raw path passes, never

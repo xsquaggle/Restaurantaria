@@ -188,7 +188,8 @@ Config.Cut = {
 	-- Most points one cut's path may carry. Since slice 3 (2026-10-27) the client records the
 	-- drag as at most this many samples, one each `spacing` cut units (CutStroke), and sends
 	-- exactly those; nothing is resampled. 0.07 lets a straight drag cross the whole accepted
-	-- range (3.2 units) in 47 steps; past maxPoints the last sample follows the pointer.
+	-- range (3.2 units) in 47 steps; at maxPoints the stroke is finished and records nothing
+	-- more until the next press.
 	-- Proposal: 0.07 = 26 px at 1920x1080 and 6 px on a 667x375 phone.
 	maxPoints = 48,
 	spacing = 0.07,

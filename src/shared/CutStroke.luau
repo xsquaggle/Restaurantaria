@@ -8,8 +8,10 @@
 --    each time the pointer has moved at least Config.Cut.spacing from the last one, the points
 --    where the drag leaves and re-enters the accepted range (+-RANGE), and the release point.
 --    A recorded sample is never moved, thinned or resampled. At Config.Cut.maxPoints samples
---    the stream is full and its last sample becomes the open tail: it follows the pointer until
---    release, and only its own output changes. This exact list is what the client sends and the
+--    the stream is full: the stroke is finished there and nothing more is recorded until the
+--    next press (the Cut station lifts the cutter so the stop shows). It used to let its last
+--    sample follow the pointer instead, which could draw and grade a chord across dough the
+--    cutter never crossed (Astra r17, D2). This exact list is what the client sends and the
 --    server grades.
 -- 2. The assist (Config.Cut.assist; off unless the shift has it on). Each sample's output is a
 --    function of the raw samples up to it and nothing later, computed once and kept, so the
@@ -93,20 +95,6 @@ function CutStroke.filter(S: Mat2, on: boolean): Filter
 		latched = nil,
 		last = { x = 0, y = 0 },
 		reason = nil,
-	}
-end
-
-function CutStroke.clone(f: Filter): Filter
-	return {
-		S = f.S,
-		Si = f.Si,
-		on = f.on,
-		raw = table.clone(f.raw),
-		out = table.clone(f.out),
-		travel = f.travel,
-		latched = f.latched,
-		last = f.last,
-		reason = f.reason,
 	}
 end
 
@@ -281,11 +269,11 @@ end
 export type Stream = {
 	S: Mat2,
 	filter: Filter,
-	before: Filter?, -- the filter before the open tail was pushed (full stream)
 	points: { Point }, -- raw samples
 	out: { Point }, -- their outputs (assisted, or the raw samples when off)
 	outside: Point?, -- where the path left the accepted range, while it is outside
 	closed: boolean, -- the path came back in across the dough; nothing more is recorded
+	full: boolean, -- maxPoints samples recorded; nothing more is recorded
 	dirty: boolean, -- samples added since the groove was last drawn
 }
 
@@ -311,21 +299,13 @@ local function rangeExit(a: Point, b: Point): Point
 end
 
 local function add(st: Stream, p: Point)
-	p = q(p)
-	local n = #st.points
-	if n >= Config.Cut.maxPoints then
-		-- Full: the last sample is the open tail and follows the pointer; earlier outputs stay.
-		local f = CutStroke.clone(st.before :: Filter)
-		st.points[n] = p
-		st.out[n] = CutStroke.push(f, p)
-		st.filter = f
-	else
-		if n + 1 == Config.Cut.maxPoints then
-			st.before = CutStroke.clone(st.filter)
-		end
-		table.insert(st.points, p)
-		table.insert(st.out, CutStroke.push(st.filter, p))
+	if st.full then
+		return
 	end
+	p = q(p)
+	table.insert(st.points, p)
+	table.insert(st.out, CutStroke.push(st.filter, p))
+	st.full = #st.points >= Config.Cut.maxPoints
 	st.dirty = true
 end
 
@@ -334,11 +314,11 @@ function CutStroke.stream(S: Mat2, on: boolean, start: Point): Stream
 	local st: Stream = {
 		S = S,
 		filter = CutStroke.filter(S, on),
-		before = nil,
 		points = {},
 		out = {},
 		outside = nil,
 		closed = false,
+		full = false,
 		dirty = false,
 	}
 	add(st, { x = math.clamp(start.x, -CutStroke.RANGE, CutStroke.RANGE), y = math.clamp(start.y, -CutStroke.RANGE, CutStroke.RANGE) })
@@ -347,7 +327,7 @@ end
 
 -- Records the pointer's pizza-local position (not clamped). `final` is the release.
 function CutStroke.record(st: Stream, raw: Point, final: boolean?)
-	if st.closed then
+	if CutStroke.stopped(st) then
 		return
 	end
 	local last = st.points[#st.points]
@@ -379,6 +359,12 @@ function CutStroke.record(st: Stream, raw: Point, final: boolean?)
 	if dist >= Config.Cut.spacing or (final and dist > 1e-4) then
 		add(st, raw)
 	end
+end
+
+-- True once the stroke records nothing more: full (maxPoints samples), or closed by a jump back
+-- across the dough. The path stays as recorded and is what the release sends.
+function CutStroke.stopped(st: Stream): boolean
+	return st.closed or st.full
 end
 
 -- The correction the newest sample got (frame units), for the cutter's contact point.

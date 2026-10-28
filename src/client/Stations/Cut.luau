@@ -13,6 +13,8 @@ local CutStroke = require(Shared.CutStroke)
 local Art = require(Shared.Art)
 local Assets = require(Shared.Assets)
 local Parent = script.Parent.Parent
+local Motion = require(Parent.Motion)
+local MotionPlan = require(Parent.MotionPlan)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
@@ -132,7 +134,8 @@ function Cut.new(ctx: any, container: Frame)
 
 	-- The cutter: the generated wheel on its handle, resting on the board right of the
 	-- pizza. While cutting it follows the pointer, its handle trailing the stroke and the
-	-- wheel spinning with the distance rolled, then it glides back to rest.
+	-- wheel spinning with the distance rolled, then it glides back to rest. When the stroke
+	-- records nothing more (lift, below) it lifts off the pizza until the release.
 	local wheelD = pizzaSize * 0.3
 	local handleH = pizzaSize * 0.62
 	local handle = Assets.Meta.cutterHandle
@@ -173,6 +176,19 @@ function Cut.new(ctx: any, container: Frame)
 	local GLIDE = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local PICK = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local lastPoint: Vector2? = nil
+	-- A stroke that records nothing more (CutStroke.stopped: the sample limit, or a jump back
+	-- across the dough) lifts the cutter off the pizza (Astra r17, D2): it grows a little, its
+	-- wheel turns see-through and stops rolling, and the hint asks to let go, so the groove
+	-- visibly ends where the cut ends. Letting go places exactly that cut; another cut needs a
+	-- new press. Scale, wheel transparency and time are proposals.
+	local LIFT_SCALE = 1.1
+	local LIFT_WHEEL = 0.4
+	local LIFT_TIME = 0.14
+	local cutterScale = Motion.scale(cutter)
+	local liftKey = {}
+	local lifted = false
+	-- The hint's own text while the lift's text shows (refresh keeps it current).
+	local guideRest: string? = nil
 
 	local function toStation(position: Vector3): Vector2
 		-- Keep the whole wheel inside the station so its edge never clips at the panel.
@@ -191,7 +207,9 @@ function Cut.new(ctx: any, container: Frame)
 				local target = math.deg(math.atan2(d.X, -d.Y))
 				local delta = (target - cutter.Rotation + 180) % 360 - 180
 				cutter.Rotation += delta * 0.35
-				wheel.Rotation += math.deg(d.Magnitude / (wheelD / 2))
+				if not lifted then
+					wheel.Rotation += math.deg(d.Magnitude / (wheelD / 2))
+				end
 			end
 		end
 	end
@@ -255,10 +273,47 @@ function Cut.new(ctx: any, container: Frame)
 		local size = st.view[2]
 		return point + Vector2.new(c.x * size.X / 2, c.y * size.Y / 2)
 	end
+	-- Scale and wheel transparency from where they are to (scale, wheel) over `duration`.
+	local function liftTo(scale: number, wheelTransparency: number, duration: number)
+		if Motion.reduced() then
+			Motion.stop(liftKey)
+			cutterScale.Scale, wheel.ImageTransparency = scale, wheelTransparency
+			return
+		end
+		local fromScale, fromWheel = cutterScale.Scale, wheel.ImageTransparency
+		Motion.run(liftKey, duration, function(t: number)
+			local e = MotionPlan.easeOut(t)
+			cutterScale.Scale = fromScale + (scale - fromScale) * e
+			wheel.ImageTransparency = fromWheel + (wheelTransparency - fromWheel) * e
+		end)
+	end
+	local function lift(st: Stroke)
+		if lifted then
+			return
+		end
+		lifted = true
+		guideRest = guide.Text
+		guide.Text = "Let go to\nfinish the cut"
+		liftTo(LIFT_SCALE, LIFT_WHEEL, LIFT_TIME)
+		trace(string.format("stopped %s points=%d", if st.stream.full then "full" else "closed", #st.stream.points))
+	end
+	-- Back down as it glides home.
+	local function land()
+		if not lifted then
+			return
+		end
+		lifted = false
+		if guideRest then
+			guide.Text = guideRest
+			guideRest = nil
+		end
+		liftTo(1, 0, GLIDE.Time)
+	end
 	local function endStroke()
 		stroke, lastPoint = nil, nil
 		Ui.clear(preview)
 		handleImg.ImageTransparency = 0
+		land()
 		TweenService:Create(cutter, GLIDE, { Position = rest, Rotation = REST_ANGLE }):Play()
 	end
 	local function cancelStroke(reason: string)
@@ -332,6 +387,9 @@ function Cut.new(ctx: any, container: Frame)
 		if (st.mouse and input.UserInputType == Enum.UserInputType.MouseMovement) or (not st.mouse and input == st.input) then
 			local p = rawLocal(input.Position, st.view)
 			CutStroke.record(st.stream, { x = p.X, y = p.Y })
+			if CutStroke.stopped(st.stream) then
+				lift(st)
+			end
 			follow(contact(st, toStation(input.Position)))
 		end
 	end)
@@ -401,7 +459,12 @@ function Cut.new(ctx: any, container: Frame)
 			local customer = ctx.customer(snap, current.ticketId)
 			local cuts = #current.cuts
 			-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
-			guide.Text = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
+			local text = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
+			if lifted then
+				guideRest = text
+			else
+				guide.Text = text
+			end
 			guideCard.Visible = true
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)
