@@ -70,7 +70,8 @@ function Cut.new(ctx: any, container: Frame)
 	local current: any = nil
 
 	-- Live cut count on Astra's hint chip (A21), so it reads over the busy backdrop. Same width
-	-- as Undo, clear of the pizza.
+	-- as Undo, clear of the pizza. It holds two lines, and on a phone each fits only about ten
+	-- characters, so every hint here is two short lines.
 	local guideSize = if ctx.compact then 18 else 22
 	local guidePad = if ctx.compact then 8 else 12
 	local guideH = guideSize * 2 + guidePad * 2 + 4
@@ -293,7 +294,7 @@ function Cut.new(ctx: any, container: Frame)
 		end
 		lifted = true
 		guideRest = guide.Text
-		guide.Text = "Let go to\nfinish the cut"
+		guide.Text = "Let go\nto finish"
 		liftTo(LIFT_SCALE, LIFT_WHEEL, LIFT_TIME)
 		trace(string.format("stopped %s points=%d", if st.stream.full then "full" else "closed", #st.stream.points))
 	end
@@ -438,7 +439,7 @@ function Cut.new(ctx: any, container: Frame)
 			end)
 		else
 			trace(string.format("refused locally: %s length=%.3f points=%d", tostring(reason), pathLength(path), #path))
-			guide.Text = "Drag all the way\nacross the pizza"
+			guide.Text = "Cut all the\nway across"
 			task.delay(1.5, ctx.refresh)
 		end
 	end)
