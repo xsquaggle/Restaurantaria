@@ -141,6 +141,11 @@ MotionPlan.T = {
 	confettiSize = 20, -- px: the length of an average piece
 	confettiLife = 2.5,
 	confettiFront = 0.35, -- share of pieces in front of the card; the rest fly behind it
+	confettiDragLow = 0.85, -- each piece's drag is the burst's times a share between these
+	confettiDragHigh = 1.2,
+	-- On a short screen (a phone, where the card nearly fills the height) the burst keeps at
+	-- least this share of its upward speed when it is squashed to the room above the card.
+	confettiLiftMin = 0.35,
 	-- The save line (Lawson 2026-10-28). While the save runs, "Saving..." waves letter by
 	-- letter (each letter hops in turn, then the line rests) beside a spinner whose arc
 	-- breathes as it turns. When the save lands the spinner whirls and closes into a ring, the
@@ -434,6 +439,31 @@ end
 function MotionPlan.confetti(t: number, vx: number, vy: number, drag: number, gravity: number): (number, number)
 	local e = 1 - math.exp(-drag * t)
 	return vx / drag * e, vy / drag * e + gravity / drag * (t - e / drag)
+end
+
+-- How high a piece thrown straight up at `speed` px a second rises before it turns, slowed by
+-- `drag` and falling at no more than `fall` px a second (gravity = fall * drag).
+function MotionPlan.confettiRise(speed: number, drag: number, fall: number): number
+	return speed / drag - fall / drag * math.log(1 + speed / fall)
+end
+
+-- The share of its upward speed a burst keeps so that its highest piece (thrown straight up
+-- at `speed` with the least `drag`) stays within `room` px: 1 when there is room, less on a
+-- short screen, never under T.confettiLiftMin.
+function MotionPlan.confettiLift(room: number, speed: number, drag: number, fall: number): number
+	if MotionPlan.confettiRise(speed, drag, fall) <= room then
+		return 1
+	end
+	local lo, hi = 0, 1
+	for _ = 1, 30 do
+		local mid = (lo + hi) / 2
+		if MotionPlan.confettiRise(speed * mid, drag, fall) <= room then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	return math.max(lo, MotionPlan.T.confettiLiftMin)
 end
 
 -- Letter i (from 1) of an n-letter waiting word at `t` seconds: how far it has hopped (0 at

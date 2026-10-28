@@ -359,6 +359,23 @@ do
 	local xb, yb = MotionPlan.confetti(3.1, 300, -900, 3, 750)
 	check("confetti: drifts out no further than speed / drag", xa < 100 and xb >= xa, true)
 	check("confetti: falls at about gravity / drag", math.abs((yb - ya) / 0.1 - 250) < 5, true)
+	-- The rise matches the path's highest point, and a short screen squashes the burst so its
+	-- highest piece stays on screen (Studio iphone_7: about 93 px above the line).
+	local peak = 0
+	for i = 1, 400 do
+		local _, y = MotionPlan.confetti(i / 400, 0, -900, 3, 750)
+		peak = math.min(peak, y)
+	end
+	check("confetti: rise is the path's top", math.abs(MotionPlan.confettiRise(900, 3, 250) + peak) < 0.5, true)
+	check("confetti: nothing thrown, no rise", near(MotionPlan.confettiRise(0, 3, 250), 0), true)
+	local hdLow = T.confettiDrag * T.confettiDragLow
+	check("confetti: room enough keeps the burst", MotionPlan.confettiLift(380, T.confettiSpeed, hdLow, T.confettiFall), 1)
+	local k = 420 / 560
+	local lift = MotionPlan.confettiLift(93, T.confettiSpeed * k, hdLow, T.confettiFall * k)
+	check("confetti: a short screen squashes it", lift < 0.8 and lift > T.confettiLiftMin, true)
+	check("confetti: squashed to the room", math.abs(MotionPlan.confettiRise(T.confettiSpeed * k * lift, hdLow, T.confettiFall * k) - 93) < 0.5, true)
+	check("confetti: never squashed flat", MotionPlan.confettiLift(-40, T.confettiSpeed, hdLow, T.confettiFall), T.confettiLiftMin)
+	check("confetti: drag spread around the burst's", T.confettiDragLow < 1 and T.confettiDragHigh > 1, true)
 
 	-- The waiting word: each letter hops in turn, the line rests between waves, and no letter
 	-- ever dips below the line.

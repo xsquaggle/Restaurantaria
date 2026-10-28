@@ -695,6 +695,7 @@ export type ConfettiOptions = {
 	frontShare: number, -- share of the pieces in front
 	seed: number, -- the same burst every time
 	delay: number?,
+	room: number?, -- px of screen above the line: a burst that would rise higher is squashed to it
 }
 
 -- Paper in the pizzeria's colours (tomato, cheese, the XP teal, cream, oven orange, basil),
@@ -742,6 +743,9 @@ end
 -- pieces are drawn shapes (no confetti art has been supplied).
 function Shine.confetti(pr: Owner, host: Instance, o: ConfettiOptions)
 	local rng = Random.new(o.seed)
+	local T = MotionPlan.T
+	-- Only the upward speed is squashed, so a short screen keeps the burst's sideways spread.
+	local lift = if o.room then MotionPlan.confettiLift(o.room, o.speed, o.drag * T.confettiDragLow, o.fall) else 1
 	for _ = 1, o.count do
 		local piece = pickPiece(rng)
 		local front = rng:NextNumber() < o.frontShare
@@ -801,8 +805,8 @@ function Shine.confetti(pr: Owner, host: Instance, o: ConfettiOptions)
 		local fan = math.rad(if front then 64 else 46)
 		local a = -math.pi / 2 + (u - 0.5) * 2 * fan + math.rad(rng:NextNumber(-14, 14))
 		local speed = o.speed * rng:NextNumber(0.5, 1)
-		local vx, vy = math.cos(a) * speed, math.sin(a) * speed
-		local drag = o.drag * rng:NextNumber(0.85, 1.2)
+		local vx, vy = math.cos(a) * speed, math.sin(a) * speed * lift
+		local drag = o.drag * rng:NextNumber(T.confettiDragLow, T.confettiDragHigh)
 		local gravity = o.fall * drag
 		local sway = len * rng:NextNumber(0.6, 1.6)
 		local swayRate = rng:NextNumber(3.5, 6.5)

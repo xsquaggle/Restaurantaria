@@ -16,6 +16,8 @@
 -- (slice 5: Astra r15 motion brief, retuned and lit for Lawson's 2026-10-28 direction), which
 -- always ends on those same final values.
 
+local GuiService = game:GetService("GuiService")
+
 local Art = require(game:GetService("ReplicatedStorage").Shared.Art)
 local Assets = require(game:GetService("ReplicatedStorage").Shared.Assets)
 local Motion = require(script.Parent.Motion)
@@ -853,25 +855,33 @@ end
 local function confetti(show: Show)
 	local card = show.view.card
 	local host = card.Parent
-	if show.closed or not host then
+	if show.closed or not host or not host:IsA("GuiObject") then
 		return
 	end
 	local T = Motion.T
 	local w, h = card.Size.X.Offset, card.Size.Y.Offset
 	local k = w / 560
+	local lineY = math.round(-h / 2 + h * 0.1)
+	-- The room above the line up to the top of the screen (the card is centred in its layer,
+	-- whose gui may start below the top bar): on a phone the card nearly fills the height, so
+	-- the burst is squashed to fit rather than thrown off the top.
+	local screen = host:FindFirstAncestorWhichIsA("ScreenGui")
+	local top = if screen and not screen.IgnoreGuiInset then GuiService:GetGuiInset().Y else 0
+	local size = T.confettiSize * k
 	Shine.confetti(nil, host, {
-		at = UDim2.new(0.5, 0, 0.5, math.round(-h / 2 + h * 0.1)),
+		at = UDim2.new(0.5, 0, 0.5, lineY),
 		width = w * 0.8,
 		count = if show.view.compact then T.confettiCompact else T.confetti,
 		speed = T.confettiSpeed * k,
 		drag = T.confettiDrag,
 		fall = T.confettiFall * k,
-		size = T.confettiSize * k,
+		size = size,
 		life = T.confettiLife,
 		back = card.ZIndex - 1,
 		front = card.ZIndex + 1,
 		frontShare = T.confettiFront,
 		seed = 23,
+		room = host.AbsolutePosition.Y + host.AbsoluteSize.Y / 2 + lineY + top - size,
 	})
 end
 
