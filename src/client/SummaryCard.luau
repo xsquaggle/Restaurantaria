@@ -453,13 +453,14 @@ export type Show = {
 	phases: { MotionPlan.Phase },
 }
 
--- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp.
+-- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp. The caption rounds
+-- down like the counting award label, so the two always add up.
 local function fillAt(view: View, bar: any, segments: { MotionPlan.Segment }, p: number)
 	local rank, fraction = MotionPlan.xpAt(segments, p)
 	setFill(view, fraction)
 	view.rank.Text = string.format("Rank %d", rank)
 	if view.caption then
-		view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 0.5), bar.need, rank + 1)
+		view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 1e-6), bar.need, rank + 1)
 	end
 end
 
