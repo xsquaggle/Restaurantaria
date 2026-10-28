@@ -1170,13 +1170,25 @@ function ctx.showResult(ticketId: number)
 	local inset = 0
 	if served then
 		inset = thumb + 8
+		-- The served pizza redraws its layers whenever its size changes (the card's entry pop
+		-- changes it every frame), so it sits in its own group and the card's fade covers it
+		-- as one. A few px of margin so nothing at the pizza's edge is clipped.
+		local margin = 4
+		local group = Ui.new("CanvasGroup", {
+			Name = "ThumbnailGroup",
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, margin, 0, -margin),
+			Size = UDim2.fromOffset(thumb + margin * 2, thumb + margin * 2),
+			ZIndex = 10,
+			Parent = head,
+		})
 		local pic = Widgets.pizza()
 		pic.frame.Name = "Thumbnail"
-		pic.frame.AnchorPoint = Vector2.new(1, 0)
-		pic.frame.Position = UDim2.fromScale(1, 0)
+		pic.frame.Position = UDim2.fromOffset(margin, margin)
 		pic.frame.Size = UDim2.fromOffset(thumb, thumb)
 		pic.frame.ZIndex = 10
-		pic.frame.Parent = head
+		pic.frame.Parent = group
 		local seconds = served.bakeSeconds or 0
 		pic:set(served, Widgets.doneness(seconds), ctx.ovenStatus(customer.order.bake, seconds).burnt)
 	end

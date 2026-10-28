@@ -247,9 +247,11 @@ function Motion.rest(gui: GuiObject)
 	end
 end
 
--- Group fade. A fader reads the resting transparency of every image, text and stroke under
--- `root` (and root itself) once, when it is made: hide() makes them all transparent at once,
--- show() fades them back to rest, rest() puts them back at once.
+-- Group fade. A fader reads the resting transparency of every image, text, stroke and
+-- visible background under `root` (and root itself) once, when it is made: hide() makes them
+-- all transparent at once, show() fades them back to rest, rest() puts them back at once.
+-- A CanvasGroup fades as one (its GroupTransparency) and is not looked inside, so content
+-- that redraws itself (a pizza thumbnail) is covered by the group's fade.
 export type Fader = {
 	hide: (Fader) -> (),
 	show: (Fader, number, (() -> ())?) -> (),
@@ -261,6 +263,13 @@ export type Fader = {
 function Motion.fader(root: GuiObject): Fader
 	local parts: { { inst: Instance, prop: string, rest: number } } = {}
 	local function collect(inst: Instance)
+		if inst:IsA("CanvasGroup") then
+			table.insert(parts, { inst = inst, prop = "GroupTransparency", rest = inst.GroupTransparency })
+			return
+		end
+		if inst:IsA("GuiObject") and inst.BackgroundTransparency < 1 then
+			table.insert(parts, { inst = inst, prop = "BackgroundTransparency", rest = inst.BackgroundTransparency })
+		end
 		if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
 			table.insert(parts, { inst = inst, prop = "ImageTransparency", rest = inst.ImageTransparency })
 		end
@@ -271,11 +280,11 @@ function Motion.fader(root: GuiObject): Fader
 		if inst:IsA("UIStroke") then
 			table.insert(parts, { inst = inst, prop = "Transparency", rest = inst.Transparency })
 		end
+		for _, child in inst:GetChildren() do
+			collect(child)
+		end
 	end
 	collect(root)
-	for _, d in root:GetDescendants() do
-		collect(d)
-	end
 	local key = keyOf(root, "fade")
 	local function set(e: number)
 		for _, part in parts do
