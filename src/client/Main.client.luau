@@ -15,6 +15,7 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Scoring = require(Shared.Scoring)
 local Remote = require(script.Parent.Remote)
+local Motion = require(script.Parent.Motion)
 local ResultLines = require(script.Parent.ResultLines)
 local StationLayout = require(script.Parent.StationLayout)
 local SummaryCard = require(script.Parent.SummaryCard)
@@ -36,7 +37,6 @@ local STATION_LABEL = { Topping = "Make" }
 
 local C = Theme.Colour
 local NAV_SLIDE = TweenInfo.new(Theme.Motion.station, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local NAV_POP = TweenInfo.new(Theme.Motion.nudge, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 -- The empty rail's note away from Order (QA-006 copy).
 local RAIL_NOTE = {
 	Topping = "Go to Order to start a pizza",
@@ -98,6 +98,11 @@ local ctx: any = {
 	learned = {},
 	-- Summary presentation per shift (SummaryLines.presentation); outlives layout rebuilds.
 	presented = {},
+	-- The summary card's running reward presentation (SummaryCard.show) and what it was
+	-- built for; outlives layout rebuilds so a rebuild can end it first.
+	summaryShow = nil :: any,
+	summaryShape = nil :: string?,
+	summarySnap = nil :: any,
 }
 
 function ctx.send(action: string, args: any, done: any)
@@ -716,7 +721,21 @@ local function buildLayout()
 		-- The badge sits at the tab's top right, over the bar's upper edge.
 		local b = badge(bar, badgeSize)
 		b.Position = UDim2.fromOffset(edge + tabW * i - badgeSize * 0.7, badgeSize * 0.42)
+		-- The station press cue (Motion.press): the tab's icon and label dip at once on touch
+		-- or click and settle back on release; the hit area never moves.
+		hit.MouseButton1Down:Connect(function()
+			Motion.press(pop)
+		end)
+		hit.MouseButton1Up:Connect(function()
+			Motion.release(pop)
+		end)
+		hit.MouseLeave:Connect(function()
+			if pop.Scale < 1 then
+				Motion.release(pop)
+			end
+		end)
 		hit.Activated:Connect(function()
+			Motion.release(pop)
 			ctx.switchTo(name)
 		end)
 		tabs[name] = { label = label, icon = icon, stroke = stroke, badge = b, pop = pop, x = centreX }
@@ -746,6 +765,13 @@ local function buildLayout()
 		ZIndex = 20,
 		Parent = root,
 	})
+	-- A tap anywhere on the summary skips its reward motion to the final values (Astra r15
+	-- motion brief 6); it never presses the action or touches the save.
+	summary.Activated:Connect(function()
+		if ctx.summaryShow and SummaryCard.playing(ctx.summaryShow) then
+			SummaryCard.finish(ctx.summaryShow)
+		end
+	end)
 
 	-- The shift summary dims and blocks the HUD too, so the modal covers the whole screen.
 	-- Only needed when the HUD lives in the top bar's own ScreenGui, which draws above the
@@ -857,9 +883,8 @@ end
 function ctx.nudge(name: string)
 	if ui and ctx.station ~= name then
 		-- The destination tab's icon and label pop once.
-		local pop = ui.tabs[name].pop
-		pop.Scale = 1.18
-		TweenService:Create(pop, NAV_POP, { Scale = 1 }):Play()
+		-- Through Motion, which owns the same scale as the tab's press cue.
+		Motion.pop(ui.tabs[name].pop, 1.18, 0.98, Theme.Motion.nudge)
 	end
 end
 
@@ -985,12 +1010,41 @@ local function refreshSummary(snap: any)
 	ui.hudScrim.Visible = snap.finished == true
 	-- Rebuilt when the save result arrives, which can be after the shift ends.
 	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.settlement), tostring(snap.saveMessage)) else nil
-	if not snap.finished or ui.summaryShift == key then
+	if not snap.finished then
+		-- The shift moved on: the old card's motion ends with it.
+		if ctx.summaryShow then
+			SummaryCard.finish(ctx.summaryShow)
+			ctx.summaryShow = nil
+		end
+		return
+	end
+	if ui.summaryShift == key then
 		return
 	end
 	ui.summaryShift = key
-	Ui.clear(summary)
 	local area = ui.root.AbsoluteSize
+	-- Why this card is being built (play-once presentation state, kept in ctx outside the UI
+	-- that buildLayout rebuilds, keyed by shift): only the first showing of a shift fades the
+	-- scrim in, reveals its earnings and counts its XP; the save's acceptance fills the bar
+	-- once; a resize or late notification shows the final state at once.
+	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank)
+	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
+	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
+	local model = SummaryLines.model(snap, Config.Rewards.xpPerRank)
+	-- A save result for the card already on screen updates it in place, so a count or fill
+	-- in progress carries on; anything that changes the card's rows or size rebuilds it.
+	local shape = string.format("%s|%dx%d|%s|%s|%s", tostring(snap.shiftId), area.X, area.Y, tostring(ctx.compact), tostring(model.bar ~= nil), tostring(model.bonus > 0))
+	local card = summary:FindFirstChild("Card")
+	if ctx.summaryShow and ctx.summaryShape == shape and card and ctx.summaryShow.view.card == card then
+		SummaryCard.update(ctx.summaryShow, model, cue)
+		ctx.summarySnap = snap
+		return
+	end
+	if ctx.summaryShow then
+		SummaryCard.finish(ctx.summaryShow)
+		ctx.summaryShow = nil
+	end
+	Ui.clear(summary)
 	local scrim = Ui.new("ImageLabel", {
 		Name = "Scrim",
 		BackgroundTransparency = 1,
@@ -1001,29 +1055,29 @@ local function refreshSummary(snap: any)
 		Parent = summary,
 	})
 	Art.apply(scrim, "ui_scrim")
-	-- Why this card is being built (play-once presentation state, kept in ctx outside the UI
-	-- that buildLayout rebuilds, keyed by shift): only the first build of a shift fades the
-	-- scrim in and may reveal its earnings; a save result, resize or late notification shows
-	-- the final state at once.
-	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank)
-	if cue.revealEarnings then
+	if cue.revealEarnings and not Motion.reduced() then
 		TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
 	else
 		scrim.ImageTransparency = 0.55
 	end
-	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
-	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
-	local model = SummaryLines.model(snap, Config.Rewards.xpPerRank)
+	ctx.summarySnap = snap
 	local view = SummaryCard.build(summary, area, ctx.compact, model, function()
+		-- The press completes the presentation and continues once (motion brief 6).
+		if ctx.summaryShow then
+			SummaryCard.finish(ctx.summaryShow)
+		end
 		-- The server starts the next shift only once this one's rewards are settled; the
-		-- button is a standby while the save runs and "Retry save" after a failed one.
-		if snap.settlement == "retry" then
+		-- button is a standby while the save runs and "Retry save" after a failed one. The
+		-- latest snapshot decides, since the card may have been updated in place.
+		local latest = ctx.summarySnap
+		if latest.settlement == "retry" then
 			ctx.send("retrySave", {})
-		elseif SummaryLines.settled(snap) then
+		elseif SummaryLines.settled(latest) then
 			ctx.send("newShift", {})
 		end
 	end)
-	SummaryCard.present(view, model, cue)
+	ctx.summaryShape = shape
+	ctx.summaryShow = SummaryCard.show(view, model, cue)
 end
 
 function ctx.showResult(ticketId: number)
@@ -1049,6 +1103,10 @@ function ctx.showResult(ticketId: number)
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Assets.Meta.card.slice,
 		SliceScale = if compact then 0.5 else 0.7,
+		-- Centred on the rail's top edge (the same resting place), so the entry pop grows
+		-- from the card's middle.
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
 		Size = UDim2.fromOffset(width, thumb + padY * 2),
 		ZIndex = 9,
 		Parent = ui.toastHolder,
@@ -1150,6 +1208,7 @@ function ctx.showResult(ticketId: number)
 	local pay = Ui.new("Frame", { Name = "Pay", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, payLines * (partSize + 4) + 4), LayoutOrder = 2, ZIndex = 10, Parent = content })
 	Ui.new("Frame", { Name = "Rule", BackgroundColor3 = C.mutedInk, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 10, Parent = pay })
 	local coin = Ui.new("ImageLabel", {
+		Name = "Coin",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
 		Position = UDim2.fromOffset(0, 5),
@@ -1188,10 +1247,39 @@ function ctx.showResult(ticketId: number)
 	end
 	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	fit()
+	-- A per-order gain is a modest accent (motion brief 1a): the card settles in with one
+	-- small overshoot, then the coin lands; it fades out where it rests. Reduced motion: no
+	-- movement.
+	local T = Motion.T
+	local fader = Motion.fader(toast)
+	if not Motion.reduced() then
+		local cardScale = Motion.scale(toast)
+		Motion.pop(cardScale, T.cardFrom, T.cardPeak, T.cardEnter)
+		Motion.settle(toast, T.cardRise, T.cardEnter)
+		fader:hide()
+		fader:show(T.cardEnter * 0.6)
+		local coinScale = Motion.scale(coin)
+		coinScale.Scale = T.payFrom
+		task.delay(T.payDelay, function()
+			if toast.Parent then
+				Motion.pop(coinScale, T.payFrom, T.payPeak, T.payPop)
+				Motion.hook("impact", "order")
+			end
+		end)
+	end
 	task.delay(Theme.Motion.toastSeconds, function()
-		if toast.Parent then
-			toast:Destroy()
+		if not toast.Parent then
+			return
 		end
+		if Motion.reduced() then
+			toast:Destroy()
+			return
+		end
+		fader:out(T.cardExit, function()
+			if toast.Parent then
+				toast:Destroy()
+			end
+		end)
 	end)
 end
 

@@ -8,11 +8,13 @@
 --
 -- Layout and presentation are separate so the card can be re-skinned or animated without
 -- touching the values: SummaryCard.build lays the card out at its final size and returns the
--- live parts; SummaryCard.present puts the model's final values in them. Motion (panel
--- settle, coin count-up, XP fill) belongs in present and must end on the same final values.
+-- live parts; SummaryCard.show puts the model's values in them and plays the reward motion
+-- (slice 5, Astra r15 motion brief), which always ends on those same final values.
 
 local Art = require(game:GetService("ReplicatedStorage").Shared.Art)
 local Assets = require(game:GetService("ReplicatedStorage").Shared.Assets)
+local Motion = require(script.Parent.Motion)
+local MotionPlan = require(script.Parent.MotionPlan)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local Widgets = require(script.Parent.Widgets)
@@ -29,6 +31,13 @@ SummaryCard.TIGHT_HEIGHT = 292
 export type View = {
 	tight: boolean, -- built in the small-height fallback (root under TIGHT_HEIGHT)
 	card: ImageLabel,
+	-- The groups the reward motion moves. Each sits centred in a fixed-size holder, so a
+	-- pop or a settle never moves the rows around it.
+	header: Frame,
+	earned: Frame,
+	bonus: TextLabel?,
+	xp: Frame,
+	left: Frame,
 	coins: TextLabel,
 	xpEarned: TextLabel,
 	rank: TextLabel,
@@ -86,6 +95,23 @@ local function icon(parent: Instance, art: string, px: number, order: number): I
 	})
 	Art.apply(label, art)
 	return label
+end
+
+-- Moves a fixed-size row's contents into a centred "Group" frame of the same size, so the
+-- group can scale and settle inside the row while the list layout keeps the row still.
+local function lift(holder: Frame): Frame
+	local group = Ui.new("Frame", {
+		Name = "Group",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+	})
+	for _, child in holder:GetChildren() do
+		child.Parent = group
+	end
+	group.Parent = holder
+	return group
 end
 
 -- A column of text lines that is as wide as its widest line.
@@ -165,6 +191,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	line(headText, "Day", Theme.Font.bodyBold, size("subtitle", compact), C.mutedInk, 2).Text = if model.day
 		then string.format("Day %d · %s", model.day, served)
 		else served
+	local headGroup = lift(head)
 
 	-- 2. Earned coins: the shift's whole reward (snap.tips), in the HUD's currency.
 	local earnH = if compact then 44 else 64
@@ -173,32 +200,42 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local earnText = column(earned, 2)
 	line(earnText, "Label", Theme.Font.bodyBold, size("earnedLabel", compact), C.mutedInk, 1).Text = "Earned this shift"
 	local coins = line(earnText, "Coins", Theme.Font.display, size("coins", compact), C.tomato, 2)
+	local earnGroup = lift(earned)
 
 	-- The one-time tutorial bonus: its own line, never added to the earned coins.
+	local bonus: TextLabel? = nil
 	if model.bonus > 0 then
-		local bonus = line(content, "TutorialBonus", Theme.Font.display, size("bonus", compact), C.tomato, 3)
-		bonus.Text = string.format("Tutorial bonus: +%d coin%s", model.bonus, if model.bonus == 1 then "" else "s")
+		bonus = line(content, "TutorialBonus", Theme.Font.display, size("bonus", compact), C.tomato, 3)
 	end
 
 	-- 3. XP block: earned XP and rank, then the bar against the real per-rank threshold.
+	-- The block's height is worked out here, not left to AutomaticSize, so its group can rise
+	-- inside it without the save line and the button moving.
 	local xpW = math.min(innerW, if compact then innerW else 440)
-	local xpBlock = Ui.new("Frame", {
+	local xpPad = if compact then 2 else 4
+	local xpRowH = if compact then 24 else 30
+	local trackH = if compact then 26 else 36
+	local captionH = size("caption", compact) + 4
+	local xpH = xpRowH + (if model.bar then xpPad + trackH + (if tight then 0 else xpPad + captionH) else 0)
+	local xpHolder = Ui.new("Frame", {
 		Name = "Xp",
 		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.fromOffset(xpW, 0),
+		Size = UDim2.fromOffset(xpW, xpH),
 		LayoutOrder = 4,
 		Parent = content,
-	}, {
-		Ui.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, if compact then 2 else 4) }),
 	})
-	local xpRowH = if compact then 24 else 30
+	local xpBlock = Ui.new("Frame", {
+		Name = "Group",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		Parent = xpHolder,
+	}, {
+		Ui.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, xpPad) }),
+	})
 	local xpRow = Ui.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, xpRowH), LayoutOrder = 1, Parent = xpBlock })
 	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left, 6)
-	-- A pending qualifier ("· save pending") needs more of the row; the rank then has no
-	-- rank-up words (those wait for the save).
-	local leftShare = if model.xpLabel and string.find(model.xpLabel, "·") then 0.7 else 0.5
-	left.Size = UDim2.fromScale(leftShare, 1)
 	icon(left, "icon_xp_star", xpRowH, 1)
 	local xpEarned = line(left, "Earned", Theme.Font.display, size("xp", compact), C.ink, 2)
 	local rank = Ui.text({
@@ -209,7 +246,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromScale(1 - leftShare, 1),
+		Size = UDim2.fromScale(0.5, 1),
 		Parent = xpRow,
 	})
 	local caption: TextLabel? = nil
@@ -218,7 +255,6 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	if model.bar then
 		-- Track and fill per Astra's manifest (Assets.Meta.xpTrack / xpFill).
 		local meta, fillMeta = Assets.Meta.xpTrack, Assets.Meta.xpFill
-		local trackH = if compact then 26 else 36
 		local s = trackH / meta.height
 		local track = Ui.new("ImageLabel", {
 			Name = "Track",
@@ -260,8 +296,8 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 			TextSize = size("caption", compact),
 			TextColor3 = C.mutedInk,
 			TextXAlignment = Enum.TextXAlignment.Right,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			Size = UDim2.new(1, 0, 0, 0),
+			TextWrapped = false,
+			Size = UDim2.new(1, 0, 0, captionH),
 			LayoutOrder = 3,
 			Parent = xpBlock,
 		})
@@ -309,6 +345,11 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	return {
 		tight = tight,
 		card = card,
+		header = headGroup,
+		earned = earnGroup,
+		bonus = bonus,
+		xp = xpBlock,
+		left = left,
 		coins = coins,
 		xpEarned = xpEarned,
 		rank = rank,
@@ -320,35 +361,354 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	}
 end
 
--- Shows the model's final values. The hook for motion: a count-up sets view.coins from 0 to
--- model.coins, an XP fill moves view.fillClip from bar.fromXp to bar.toXp (both are within
--- the same rank unless bar.rankUp). Whatever runs here must finish on these values and must
--- never decide when the action is available: that comes from model.action alone. With
--- GuiService.ReducedMotionEnabled, set the final values at once (what this does today).
--- `cue` (SummaryLines.presentation, kept by Main outside the rebuilt UI) says why the card was
--- built: only cue.revealEarnings may count the coins up and only cue.advanceXp may fill the
--- bar, each once per shift; "rebuild" shows final values. No motion is built yet (slice 5).
-function SummaryCard.present(view: View, model: any, cue: any?)
-	local _ = cue
-	view.coins.Text = string.format("%d coin%s", model.coins, if model.coins == 1 then "" else "s")
+
+------------------------------------------------------------------------------------------
+-- Values. writeValues puts the model's final values in the card; writeStatus the save line
+-- and the action, which always show the current save state at once (never after a motion).
+
+local function coinText(n: number): string
+	return string.format("%d coin%s", n, if n == 1 then "" else "s")
+end
+
+-- "+30 XP · save pending" -> " · save pending": what the counting label keeps after "+n XP".
+local function xpSuffix(model: any): string
+	local base = string.format("+%d XP", model.xpEarned)
+	local label = model.xpLabel or base
+	return if string.sub(label, 1, #base) == base then string.sub(label, #base + 1) else ""
+end
+
+local function setFill(view: View, fraction: number)
+	local clip = view.fillClip
+	if clip then
+		local w = math.round(view.fillWidth * math.clamp(fraction, 0, 1))
+		clip.Size = UDim2.fromOffset(w, clip.Size.Y.Offset)
+		-- At zero the fill is hidden outright, so no sliver of its cap shows.
+		clip.Visible = w > 0
+	end
+end
+
+local function writeXpLabel(view: View, model: any)
 	view.xpEarned.Text = model.xpLabel or string.format("+%d XP", model.xpEarned)
+	-- A pending qualifier ("· save pending") needs more of the row; the rank then has no
+	-- rank-up words (those wait for the save).
+	local leftShare = if model.xpLabel and string.find(model.xpLabel, "·") then 0.7 else 0.5
+	view.left.Size = UDim2.fromScale(leftShare, 1)
+	view.rank.Size = UDim2.fromScale(1 - leftShare, 1)
+end
+
+local function writeBar(view: View, model: any)
 	view.rank.Text = if model.rank
 		then string.format("Rank %d%s", model.rank, if model.bar and model.bar.rankUp then " · Rank up!" else "")
 		else ""
-	if model.bar and view.fillClip then
-		local w = math.round(view.fillWidth * model.bar.fraction)
-		view.fillClip.Size = UDim2.fromOffset(w, view.fillClip.Size.Y.Offset)
-		-- At zero the fill is hidden outright, so no sliver of its cap shows.
-		view.fillClip.Visible = w > 0
+	if model.bar then
+		setFill(view, model.bar.fraction)
 	end
 	if view.caption then
 		view.caption.Text = model.xpCaption or ""
 	end
+end
+
+local function writeStatus(view: View, model: any)
 	view.status.Text = model.status
 	view.status.TextColor3 = TONE[model.tone] or C.mutedInk
 	view.button:setLabel(model.action.label)
 	-- Waiting for the save is an automatic wait: the mint standby, no emphasis, no press.
 	view.button:setStandby(model.action.mode == "standby")
+end
+
+local function writeValues(view: View, model: any)
+	view.coins.Text = coinText(model.coins)
+	if view.bonus then
+		view.bonus.Text = string.format("Tutorial bonus: +%d coin%s", model.bonus, if model.bonus == 1 then "" else "s")
+	end
+	writeXpLabel(view, model)
+	writeBar(view, model)
+	writeStatus(view, model)
+end
+
+------------------------------------------------------------------------------------------
+-- The reward presentation (Astra r15 motion brief, section 4). A Show holds one card's
+-- presentation; Main keeps it outside the rebuilt UI. It only observes the save state: the
+-- status line and the action follow the model at once, and nothing here decides when the
+-- action is available (that is model.action alone).
+--
+-- `cue` (SummaryLines.presentation) says why the card is shown: only cue.revealEarnings
+-- plays the entry, coin impact, coin count and XP count (once per shift), and only
+-- cue.advanceXp fills the bar, from the real pre-shift progress to the accepted total,
+-- across rank thresholds. Anything else shows final values. Reduced motion shows final
+-- values with a short fade on the first showing only.
+
+export type Show = {
+	view: View,
+	model: any,
+	pr: Motion.Presentation?,
+	xpStarted: boolean, -- the XP phase has begun (a later acceptance fills at once)
+	xpLabelDone: boolean, -- the XP label has finished counting (or never counts)
+	fillWanted: boolean, -- the award was accepted; the XP phase fills the bar
+	filling: boolean,
+	-- The fill started its own presentation (no entry running), so it ends it too.
+	fillOnly: boolean,
+	-- The entry's timeline has ended while the fill still runs: the fill ends it.
+	endAfterFill: boolean,
+	phases: { MotionPlan.Phase },
+}
+
+local function fillDuration(model: any): number
+	local T = Motion.T
+	return MotionPlan.countDuration(model.xpEarned, T.xpCount, T.xpCountMin, T.xpCountMax)
+end
+
+-- Fills the bar from bar.fromXp to bar.toXp over `duration` under the show's presentation
+-- (or a new one), carrying overflow into the next rank; ends on the model's final bar.
+local function fill(show: Show, duration: number)
+	local view, model = show.view, show.model
+	local bar = model.bar
+	if not bar or not view.fillClip or show.filling then
+		return
+	end
+	show.filling = true
+	local pr = show.pr
+	if not pr or not pr.alive then
+		pr = Motion.presentation()
+		show.pr = pr
+		show.fillOnly = true
+	end
+	local presentation = pr :: Motion.Presentation
+	local key = Motion.keyOf(view.fillClip :: Frame, "fill")
+	presentation:own(key, function()
+		show.filling = false
+		writeBar(view, show.model)
+	end)
+	local segments = MotionPlan.xpSegments(bar.fromXp, bar.toXp, bar.need)
+	Motion.run(key, duration, function(p)
+		local rank, fraction = MotionPlan.xpAt(segments, MotionPlan.easeOut(p))
+		setFill(view, fraction)
+		view.rank.Text = string.format("Rank %d", rank)
+		if view.caption then
+			view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 0.5), bar.need, rank + 1)
+		end
+	end, function()
+		show.filling = false
+		writeBar(view, show.model)
+		Motion.hook("complete", "xp")
+		if show.fillOnly or show.endAfterFill then
+			presentation:finish()
+		end
+	end)
+end
+
+function SummaryCard.show(view: View, model: any, cue: any?): Show
+	local show: Show = {
+		view = view,
+		model = model,
+		pr = nil,
+		xpStarted = false,
+		xpLabelDone = false,
+		fillWanted = false,
+		filling = false,
+		fillOnly = false,
+		endAfterFill = false,
+		phases = {},
+	}
+	writeValues(view, model)
+	local reveal = cue ~= nil and cue.revealEarnings == true
+	local advance = cue ~= nil and cue.advanceXp == true and model.bar ~= nil and model.bar.counted == true
+	local reduced = Motion.reduced()
+	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, advance, reduced)
+	show.phases = phases
+	if #phases == 0 then
+		show.xpStarted = true
+		show.xpLabelDone = true
+		return show
+	end
+	local T = Motion.T
+	local pr = Motion.presentation()
+	show.pr = pr
+	local cardScale = Motion.scale(view.card)
+	local function phase(name: string): MotionPlan.Phase?
+		return MotionPlan.find(phases, name)
+	end
+
+	if reduced then
+		-- A short fade of the whole card; every value is final already.
+		local f = Motion.fader(view.card)
+		pr:own(f.key, function()
+			f:rest()
+		end)
+		f:hide()
+		f:show(T.reducedFade)
+		show.xpStarted = true
+		show.xpLabelDone = true
+		pr:at(T.reducedFade, function()
+			pr:finish()
+		end)
+		return show
+	end
+
+	if reveal then
+		-- Everything that arrives later waits hidden in its resting place.
+		local headFade, earnFade, xpFade = Motion.fader(view.header), Motion.fader(view.earned), Motion.fader(view.xp)
+		local bonusFade = if view.bonus then Motion.fader(view.bonus) else nil
+		local earnScale = Motion.scale(view.earned)
+		pr:own(cardScale, function()
+			cardScale.Scale = 1
+		end)
+		pr:own(Motion.keyOf(view.card, "settle"), function()
+			Motion.rest(view.card)
+		end)
+		pr:own(Motion.keyOf(view.header, "settle"), function()
+			Motion.rest(view.header)
+		end)
+		pr:own(Motion.keyOf(view.earned, "settle"), function()
+			Motion.rest(view.earned)
+		end)
+		pr:own(Motion.keyOf(view.xp, "settle"), function()
+			Motion.rest(view.xp)
+		end)
+		pr:own(earnScale, function()
+			earnScale.Scale = 1
+		end)
+		for _, f in { headFade, earnFade, xpFade, bonusFade } do
+			local fader = f :: Motion.Fader
+			pr:own(fader.key, function()
+				fader:rest()
+			end)
+			fader:hide()
+		end
+		local coinKey = Motion.keyOf(view.coins, "count")
+		local xpKey = Motion.keyOf(view.xpEarned, "count")
+		pr:own(coinKey, function()
+			view.coins.Text = coinText(show.model.coins)
+		end)
+		pr:own(xpKey, function()
+			writeXpLabel(view, show.model)
+		end)
+		view.coins.Text = coinText(0)
+		view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
+
+		-- Panel enter: 0.96 -> 1.01 -> 1.00 with a small upward settle.
+		Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
+		Motion.settle(view.card, T.panelRise, T.panelEnter)
+		Motion.hook("impact", "panel")
+		local heading = phase("heading") :: MotionPlan.Phase
+		pr:at(heading.start, function()
+			headFade:show(heading.duration)
+			Motion.settle(view.header, T.headingRise, heading.duration)
+		end)
+		local impact = phase("impact") :: MotionPlan.Phase
+		pr:at(impact.start, function()
+			-- The coin group lands from a few px above with one overshoot.
+			earnFade:show(impact.duration * 0.6)
+			Motion.pop(earnScale, T.impactFrom, T.impactPeak, impact.duration)
+			Motion.settle(view.earned, -T.impactDrop, impact.duration)
+			Motion.hook("impact", "coins")
+		end)
+		local coins = phase("coins")
+		if coins then
+			pr:at(coins.start, function()
+				Motion.count(coinKey, show.model.coins, coins.duration, function(n)
+					view.coins.Text = coinText(n)
+				end, "coinTick", function()
+					Motion.hook("complete", "coins")
+				end)
+			end)
+		end
+		local bonus = phase("bonus")
+		if bonus and bonusFade then
+			pr:at(bonus.start, function()
+				bonusFade:show(bonus.duration)
+			end)
+		end
+		local arrive = phase("xpArrive") :: MotionPlan.Phase
+		pr:at(arrive.start, function()
+			show.xpStarted = true
+			if not phase("xpCount") then
+				show.xpLabelDone = true
+				writeXpLabel(view, show.model)
+			end
+			xpFade:show(arrive.duration)
+			Motion.settle(view.xp, T.xpRise, arrive.duration)
+		end)
+		local count = phase("xpCount")
+		local countStart = arrive.start + arrive.duration
+		if count then
+			pr:at(count.start, function()
+				Motion.count(xpKey, show.model.xpEarned, count.duration, function(n)
+					view.xpEarned.Text = string.format("+%d XP", n) .. xpSuffix(show.model)
+				end, "xpTick", function()
+					show.xpLabelDone = true
+					writeXpLabel(view, show.model)
+				end)
+			end)
+		end
+		show.fillWanted = advance
+		pr:at(countStart, function()
+			if show.fillWanted then
+				fill(show, fillDuration(show.model))
+			end
+		end)
+		pr:at(MotionPlan.total(phases), function()
+			if show.filling then
+				show.endAfterFill = true
+			else
+				pr:finish()
+			end
+		end)
+	else
+		-- The award was accepted after the first showing: the bar alone fills, once.
+		show.xpStarted = true
+		show.xpLabelDone = true
+		fill(show, fillDuration(model))
+	end
+	return show
+end
+
+-- A newer snapshot of the same shift and layout (the save result): the save line and the
+-- action change at once; values a running count owns finish on the new model by themselves.
+-- An award accepted now fills the bar, during the XP phase or straight away after it.
+function SummaryCard.update(show: Show, model: any, cue: any?)
+	show.model = model
+	local view = show.view
+	writeStatus(view, model)
+	local running = show.pr ~= nil and (show.pr :: Motion.Presentation).alive
+	if view.bonus then
+		view.bonus.Text = string.format("Tutorial bonus: +%d coin%s", model.bonus, if model.bonus == 1 then "" else "s")
+	end
+	if not running then
+		view.coins.Text = coinText(model.coins)
+	end
+	-- The XP label follows the new model unless its count is running (the count picks the
+	-- new wording up itself) or is still to come (the label waits hidden at zero).
+	if not running or show.xpLabelDone then
+		writeXpLabel(view, model)
+	end
+	local advance = cue ~= nil and cue.advanceXp == true and model.bar ~= nil and model.bar.counted == true
+	if advance and not Motion.reduced() then
+		if show.xpStarted then
+			fill(show, fillDuration(model))
+		else
+			show.fillWanted = true
+		end
+		return
+	end
+	if not show.filling then
+		writeBar(view, model)
+	end
+end
+
+-- Skip (tap anywhere on the summary, or the action): every value final at once, every
+-- effect stopped. It never touches saving or awards anything.
+function SummaryCard.finish(show: Show)
+	local pr = show.pr
+	if pr and pr.alive then
+		pr:finish()
+	end
+	show.filling = false
+	writeValues(show.view, show.model)
+end
+
+function SummaryCard.playing(show: Show?): boolean
+	return show ~= nil and show.pr ~= nil and (show.pr :: Motion.Presentation).alive
 end
 
 return SummaryCard

@@ -17,6 +17,7 @@ local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
 local CutStroke = require(Shared.CutStroke)
 local MakeLayers = require(script.Parent.MakeLayers)
+local Motion = require(script.Parent.Motion)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local PizzaArt = require(script.Parent.PizzaArt)
@@ -47,8 +48,6 @@ export type Button = {
 }
 
 local BUTTON_STATES = { "idle", "pressed", "disabled", "highlighted" }
-local PRESS_IN = TweenInfo.new(Theme.Motion.press, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local PRESS_OUT = TweenInfo.new(Theme.Motion.release + 0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local preloaded = false
 
 function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | "secondary")?): Button
@@ -215,14 +214,15 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		if self.enabled and not self.standby then
 			pressed = true
 			render()
-			TweenService:Create(press, PRESS_IN, { Scale = 0.96 }):Play()
+			-- The shared press (Motion): 0.97 in 70 ms; the hit target stays still.
+			Motion.press(press)
 		end
 	end)
 	local function release()
 		if pressed then
 			pressed = false
 			render()
-			TweenService:Create(press, PRESS_OUT, { Scale = 1 }):Play()
+			Motion.release(press)
 		end
 	end
 	hit.MouseButton1Up:Connect(release)
