@@ -41,7 +41,8 @@ local CONTACT = 0.85
 
 -- text and legend are shown by the hint strip; an empty text points without a line.
 -- pointer "arrow" points at the target without a tap (no halo, no press).
-export type Hint = { target: GuiObject?, text: string, from: string?, pointer: string?, legend: { { icon: string, text: string } }? }
+-- clear: controls the glove must not cover (it moves to a clear side, or stays away).
+export type Hint = { target: GuiObject?, text: string, from: string?, pointer: string?, legend: { { icon: string, text: string } }?, clear: { GuiObject }? }
 
 -- `avoid` is a control strip (the tab bar) the glove must not cover.
 function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
@@ -131,6 +132,47 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 				end
 			end
 			local gap = 6
+			-- Controls the glove must leave uncovered (hint.clear, e.g. Make's tool column and
+			-- Undo; Astra r14: the glove covered the cheese bowl on phones). Keep the side when
+			-- it is clear, else take the first clear side on screen; when no side is clear the
+			-- glove stays away and the halo alone marks the target, with the text in the strip.
+			local glove = true
+			if hint.clear then
+				local function rectFor(side: string): (Vector2, Vector2)
+					local c = if side == "left" then Vector2.new(p.X - gap - handSize / 2, p.Y + s.Y / 2)
+						elseif side == "right" then Vector2.new(p.X + s.X + gap + handSize / 2, p.Y + s.Y / 2)
+						elseif side == "above" then Vector2.new(p.X + s.X / 2, p.Y - gap - handSize / 2)
+						elseif side == "aboveLeft" then Vector2.new(p.X + gap - handSize * 0.35, p.Y + gap - handSize * 0.35)
+						else Vector2.new(p.X + s.X / 2, p.Y + s.Y + gap + handSize / 2)
+					local half = Vector2.new(handSize / 2, handSize / 2)
+					return c - half, c + half
+				end
+				local function clearSide(side: string): boolean
+					local a, b = rectFor(side)
+					if a.X < 0 or a.Y < 0 or b.X > area.X or b.Y > area.Y then
+						return false
+					end
+					for _, other in hint.clear :: { GuiObject } do
+						if other.Visible and other ~= t then
+							local op, os = other.AbsolutePosition - origin, other.AbsoluteSize
+							-- 2 px of slack so a glove that only grazes an edge still counts as clear.
+							if a.X < op.X + os.X - 2 and b.X > op.X + 2 and a.Y < op.Y + os.Y - 2 and b.Y > op.Y + 2 then
+								return false
+							end
+						end
+					end
+					return true
+				end
+				if not clearSide(from) then
+					glove = false
+					for _, side in { "right", "left", "above", "below" } do
+						if side ~= from and clearSide(side) then
+							from, glove = side, true
+							break
+						end
+					end
+				end
+			end
 			tipAt = if from == "left" then Vector2.new(p.X - gap, p.Y + s.Y / 2)
 				elseif from == "right" then Vector2.new(p.X + s.X + gap, p.Y + s.Y / 2)
 				elseif from == "above" then Vector2.new(p.X + s.X / 2, p.Y - gap)
@@ -145,6 +187,7 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 			local reach = math.sin(now * 5) * 0.5 + 0.5
 			local bob = towards * reach * (if compact then 4 else 6) - towards * 6
 			pivot.Position = UDim2.fromOffset(tipAt.X + bob.X, tipAt.Y + bob.Y)
+			pivot.Visible = glove
 			hand.Visible = tapping and reach < CONTACT
 			pressed.Visible = tapping and reach >= CONTACT
 			pivot.Rotation = ROTATION[from]

@@ -19,6 +19,7 @@ DEFAULT_CHECKS = [
     "tests/save_settlement_check.luau",
     "tests/save_backend_check.luau",
     "tests/summary_lines_check.luau",
+    "tests/layout_result_check.luau",
     "tests/prep_check.luau",
     "tests/cut_check.luau",
     "tests/cut_replay_check.luau",

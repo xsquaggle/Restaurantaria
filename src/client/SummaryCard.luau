@@ -21,7 +21,13 @@ local C = Theme.Colour
 
 local SummaryCard = {}
 
+-- Below this root height the card drops, in Astra's order (Message 15 ask 3), the optional
+-- row (none is built yet), the emblem art and the bar caption, and tightens its spacing, so
+-- the required reward, save and action rows keep the text floors.
+SummaryCard.TIGHT_HEIGHT = 292
+
 export type View = {
+	tight: boolean, -- built in the small-height fallback (root under TIGHT_HEIGHT)
 	card: ImageLabel,
 	coins: TextLabel,
 	xpEarned: TextLabel,
@@ -113,9 +119,10 @@ end
 -- Lays the card out inside `parent` (the full-screen summary layer) for `model`. The card is
 -- as tall as its content, up to the screen. onAction runs for the action button.
 function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, model: any, onAction: () -> ()): View
+	local tight = area.Y < SummaryCard.TIGHT_HEIGHT
 	local cardW = math.min(if compact then 420 else 560, area.X - 24)
 	local padX = if compact then 22 else 36
-	local padY = if compact then 12 else 24
+	local padY = if tight then 8 elseif compact then 12 else 24
 	local innerW = cardW - padX * 2
 	local card = Ui.new("ImageLabel", {
 		Name = "Card",
@@ -141,15 +148,17 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	}, {
 		Ui.new("UIListLayout", {
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, if compact then 4 else 12),
+			Padding = UDim.new(0, if tight then 2 elseif compact then 4 else 12),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
 
 	-- 1. Emblem, title and the completed day.
-	local headH = if compact then 44 else 72
+	local headH = if tight then 40 elseif compact then 44 else 72
 	local head = row(content, "Header", headH, 1)
-	icon(head, "icon_shift_complete", headH, 1)
+	if not tight then
+		icon(head, "icon_shift_complete", headH, 1)
+	end
 	local headText = column(head, 2)
 	line(headText, "Title", Theme.Font.display, size("title", compact), C.ink, 1).Text = "Shift complete!"
 	local served = string.format("%d customer%s served", model.served, if model.served == 1 then "" else "s")
@@ -186,7 +195,10 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local xpRowH = if compact then 24 else 30
 	local xpRow = Ui.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, xpRowH), LayoutOrder = 1, Parent = xpBlock })
 	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left, 6)
-	left.Size = UDim2.fromScale(0.5, 1)
+	-- A pending qualifier ("· save pending") needs more of the row; the rank then has no
+	-- rank-up words (those wait for the save).
+	local leftShare = if model.xpLabel and string.find(model.xpLabel, "·") then 0.7 else 0.5
+	left.Size = UDim2.fromScale(leftShare, 1)
 	icon(left, "icon_xp_star", xpRowH, 1)
 	local xpEarned = line(left, "Earned", Theme.Font.display, size("xp", compact), C.ink, 2)
 	local rank = Ui.text({
@@ -197,7 +209,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromScale(1 - leftShare, 1),
 		Parent = xpRow,
 	})
 	local caption: TextLabel? = nil
@@ -242,7 +254,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 			Parent = fillClip,
 		})
 		Art.apply(fill, "ui_xp_fill")
-		caption = Ui.text({
+		caption = if tight then nil else Ui.text({
 			Name = "Caption",
 			FontFace = Theme.Font.bodyBold,
 			TextSize = size("caption", compact),
@@ -268,7 +280,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	})
 
 	-- 5. The continuation action.
-	local buttonH = if compact then 56 else 72
+	local buttonH = if tight then 48 elseif compact then 56 else 72
 	local holder = Ui.new("Frame", { Name = "Action", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, buttonH), LayoutOrder = 6, Parent = content })
 	local button = Widgets.button(model.action.label, onAction)
 	-- One stable path whatever the label says (Root.Summary.Card.Content.Action.ActionButton).
@@ -295,6 +307,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	fit()
 
 	return {
+		tight = tight,
 		card = card,
 		coins = coins,
 		xpEarned = xpEarned,
@@ -311,12 +324,14 @@ end
 -- model.coins, an XP fill moves view.fillClip from bar.fromXp to bar.toXp (both are within
 -- the same rank unless bar.rankUp). Whatever runs here must finish on these values and must
 -- never decide when the action is available: that comes from model.action alone. With
--- GuiService.ReducedMotionEnabled, set the final values at once (what this does today). The
--- card is rebuilt when the save result arrives, so motion must only play for a new shift
--- (the caller already fades the scrim only once per shift) and never pays or repeats.
-function SummaryCard.present(view: View, model: any)
+-- GuiService.ReducedMotionEnabled, set the final values at once (what this does today).
+-- `cue` (SummaryLines.presentation, kept by Main outside the rebuilt UI) says why the card was
+-- built: only cue.revealEarnings may count the coins up and only cue.advanceXp may fill the
+-- bar, each once per shift; "rebuild" shows final values. No motion is built yet (slice 5).
+function SummaryCard.present(view: View, model: any, cue: any?)
+	local _ = cue
 	view.coins.Text = string.format("%d coin%s", model.coins, if model.coins == 1 then "" else "s")
-	view.xpEarned.Text = string.format("+%d XP", model.xpEarned)
+	view.xpEarned.Text = model.xpLabel or string.format("+%d XP", model.xpEarned)
 	view.rank.Text = if model.rank
 		then string.format("Rank %d%s", model.rank, if model.bar and model.bar.rankUp then " · Rank up!" else "")
 		else ""

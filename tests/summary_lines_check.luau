@@ -75,7 +75,8 @@ check("model pending: bar at saved xp", m.bar and m.bar.into, 40)
 check("model pending: need = xpPerRank", m.bar and m.bar.need, 100)
 check("model pending: caption", m.xpCaption, "Before this shift: 40 / 100 XP to Rank 2")
 check("model pending: standby", m.action.mode, "standby")
-check("model pending: label stays Next shift", m.action.label, "Next shift")
+check("model pending: standby says wait", m.action.label, "Please wait")
+check("model pending: xp label pending", m.xpLabel, "+30 XP · save pending")
 check("model pending: one status", m.status, "Saving...")
 check("model pending: tone", m.tone, "pending")
 
@@ -88,6 +89,8 @@ check("model saved: to", m.bar and m.bar.toXp, 70)
 check("model saved: no rank up", m.bar and m.bar.rankUp, false)
 check("model saved: caption", m.xpCaption, "70 / 100 XP to Rank 2")
 check("model saved: ready", m.action.mode, "ready")
+check("model saved: label", m.action.label, "Next shift")
+check("model saved: xp label plain", m.xpLabel, "+30 XP")
 check("model saved: tone", m.tone, "saved")
 
 m = SummaryLines.model(snap("saved", true, 120, 30), 100)
@@ -105,11 +108,15 @@ check("model retry: action", m.action.mode, "retry")
 check("model retry: label", m.action.label, "Retry save")
 check("model retry: not counted", m.bar and m.bar.counted, false)
 check("model retry: tone", m.tone, "warn")
+check("model retry: xp label pending", m.xpLabel, "+30 XP · save pending")
 
 m = SummaryLines.model(snap("session", true, 70, 30), 100)
 check("model session: ready", m.action.mode, "ready")
 check("model session: tone", m.tone, "warn")
 check("model session: status", m.status, "Progress not saved")
+check("model session counted: xp label plain", m.xpLabel, "+30 XP")
+m = SummaryLines.model(snap("session", false, 40, 30), 100)
+check("model session uncounted: xp label", m.xpLabel, "+30 XP · not saved")
 
 m = SummaryLines.model(snap("saved", true, 0, 0), 100)
 check("model zero: fraction", m.bar and m.bar.fraction, 0)
@@ -130,6 +137,41 @@ check("model day fallback pending", SummaryLines.model(old, 100).day, 3)
 old = snap("saved", true, 70, 30)
 old.day, old.completedShiftDay = nil, nil
 check("model day fallback saved", SummaryLines.model(old, 100).day, 3)
+
+-- Zero XP earned: no qualifier while pending.
+m = SummaryLines.model(snap("pending", false, 40, 0), 100)
+check("model pending zero: xp label", m.xpLabel, "+0 XP")
+
+-- Play-once presentation cues (motion brief rule 1): keyed by shift, outside the UI.
+local state = {}
+local function cue(settlement: string, recorded: boolean, id: string): any
+	local sn = snap(settlement, recorded, if recorded then 70 else 40, 30)
+	sn.shiftId = id
+	return SummaryLines.presentation(state, sn, 100)
+end
+local c = cue("pending", false, "A")
+check("cue first: reason", c.reason, "first")
+check("cue first: reveal", c.revealEarnings, true)
+check("cue first pending: no xp advance", c.advanceXp, false)
+c = cue("pending", false, "A")
+check("cue repeat pending: rebuild", c.reason, "rebuild")
+check("cue repeat pending: no reveal", c.revealEarnings, false)
+c = cue("retry", false, "A")
+check("cue retry: rebuild", c.reason, "rebuild")
+c = cue("saved", true, "A")
+check("cue saved: settled", c.reason, "settled")
+check("cue saved: advance xp once", c.advanceXp, true)
+check("cue saved: no second reveal", c.revealEarnings, false)
+c = cue("saved", true, "A")
+check("cue duplicate saved: rebuild", c.reason, "rebuild")
+check("cue duplicate saved: no advance", c.advanceXp, false)
+c = cue("saved", true, "B")
+check("cue new shift saved at once: first", c.reason, "first")
+check("cue new shift saved at once: reveal", c.revealEarnings, true)
+check("cue new shift saved at once: advance", c.advanceXp, true)
+c = cue("saved", true, "B")
+check("cue resize after: rebuild", c.reason, "rebuild")
+check("cue resize after: no advance", c.advanceXp, false)
 
 local report = string.format("summary lines checks: %d passed, %d failed", passed, #failures)
 if #failures > 0 then

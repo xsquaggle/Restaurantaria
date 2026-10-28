@@ -112,7 +112,10 @@ local Assets = {
 	icon_nav_order_selected = "rbxassetid://104587797480629",
 	-- Dough subject (Astra response 6) in place of the tomato.
 	icon_nav_topping_idle = "rbxassetid://87487309691466",
-	icon_nav_topping_selected = "rbxassetid://112384285693498",
+	-- Selected Make tab: Astra's icon_nav_make_selected_v2 (r14, 128x128, uploaded byte-exact
+	-- from her original, sha256 753e4c53...702c) in place of the earlier white dough, kept below.
+	icon_nav_topping_selected = "rbxassetid://124937179099160",
+	icon_nav_topping_selected_r6 = "rbxassetid://112384285693498",
 	icon_oven_white = "rbxassetid://81918378805088",
 	icon_slices_4 = "rbxassetid://90427064086595",
 	icon_slices_6 = "rbxassetid://137097938639592",

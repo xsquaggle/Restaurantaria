@@ -13,6 +13,7 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
+local StationLayout = require(Parent.StationLayout)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
@@ -22,9 +23,6 @@ local Bake = {}
 
 local OVEN = Assets.Meta.oven
 local NEEDLE = Assets.Meta.needle
--- The pizza on the rack: share of the window it spans, and how much flatter than round it
--- is drawn to sit in the oven's perspective.
-local PIZZA_SPAN, PIZZA_FLATTEN = 0.82, 0.58
 local NEEDLE_EASE = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local GLOW_PULSE = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 
@@ -169,18 +167,23 @@ function Bake.new(ctx: any, container: Frame)
 			Parent = window,
 		})
 		Art.apply(glow, "fx_oven_glow")
+		-- The pizza on the rack (StationLayout.OVEN, the same framing for every pizza): flattened
+		-- for the oven's perspective, but less than before slice 4, so a thin oval stays readable
+		-- as itself, and kept whole inside the window.
 		local view = Widgets.pizza()
 		local aspect = view.frame:FindFirstChildOfClass("UIAspectRatioConstraint") :: UIAspectRatioConstraint
-		aspect.AspectRatio = 1 / PIZZA_FLATTEN
+		aspect.AspectRatio = 1 / StationLayout.OVEN.flatten
+		local pizzaW, pizzaH = StationLayout.ovenPizza(ovenW * OVEN.window.w, ovenH * OVEN.window.h)
 		view.frame.AnchorPoint = Vector2.new(0.5, 0.5)
-		view.frame.Position = UDim2.fromScale(0.5, 0.58)
-		view.frame.Size = UDim2.fromScale(PIZZA_SPAN, 1)
+		view.frame.Position = UDim2.fromScale(0.5, StationLayout.OVEN.centreY)
+		view.frame.Size = UDim2.fromOffset(pizzaW, pizzaH)
 		view.frame.ZIndex = 3
 		view.frame.Parent = window
-		-- Window glass over the pizza: reflections and a little steam.
+		-- Window glass over the pizza: reflections and a little steam, lighter than before so it
+		-- does not wash out the food.
 		local glass = Ui.new("ImageLabel", {
 			BackgroundTransparency = 1,
-			ImageTransparency = 0.35,
+			ImageTransparency = StationLayout.OVEN.glassTransparency,
 			ScaleType = Enum.ScaleType.Stretch,
 			Size = UDim2.fromScale(1, 1),
 			ZIndex = 4,

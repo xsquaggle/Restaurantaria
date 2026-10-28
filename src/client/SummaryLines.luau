@@ -47,6 +47,9 @@ export type Model = {
 	coins: number,
 	bonus: number,
 	xpEarned: number,
+	-- The earned-XP label: "+30 XP", or "+30 XP · save pending" while the bar still shows the
+	-- profile from before this shift (Astra r15 QA 3), "+30 XP · not saved" in session-only play.
+	xpLabel: string,
 	rank: number?,
 	bar: XpBar?, -- nil: XP and rank show as text only (no threshold or profile XP to hand)
 	xpCaption: string?,
@@ -98,6 +101,10 @@ function SummaryLines.model(snap: any, xpPerRank: number?): Model
 			caption = "Before this shift: " .. caption
 		end
 	end
+	local xpLabel = string.format("+%d XP", earned)
+	if earned > 0 and not (bar and bar.counted) and snap.recorded ~= true then
+		xpLabel ..= if snap.settlement == "session" then " · not saved" else " · save pending"
+	end
 	local tone = if snap.settlement == "saved" then "saved" elseif settled or snap.settlement == "retry" then "warn" else "pending"
 	return {
 		day = day,
@@ -105,6 +112,7 @@ function SummaryLines.model(snap: any, xpPerRank: number?): Model
 		coins = snap.tips or 0,
 		bonus = snap.tutorialBonus or 0,
 		xpEarned = earned,
+		xpLabel = xpLabel,
 		rank = if bar then bar.rank else profile.rank,
 		bar = bar,
 		xpCaption = caption,
@@ -112,8 +120,34 @@ function SummaryLines.model(snap: any, xpPerRank: number?): Model
 		tone = tone,
 		action = if snap.settlement == "retry" then { label = "Retry save", mode = "retry" }
 			elseif settled then { label = "Next shift", mode = "ready" }
-			else { label = "Next shift", mode = "standby" },
+			-- Astra r15 QA 2: the standby says it is a wait while the status line says Saving.
+			else { label = "Please wait", mode = "standby" },
 	}
+end
+
+-- Play-once presentation state (Astra r15 motion brief, rule 1). Main keeps one `state`
+-- table outside the rebuilt UI and asks here, on every summary build, why the card is being
+-- built: "first" (this shift's summary appears for the first time: earnings may be revealed),
+-- "settled" (the save has just confirmed this shift's XP: the XP may advance, once) or
+-- "rebuild" (anything else: a resize, a repeated or late notification). Keyed by shift id,
+-- so a retry, reopen or duplicate never replays a reward. Motion is not built yet: today the
+-- card shows final values for every reason.
+export type Cue = { reason: string, revealEarnings: boolean, advanceXp: boolean }
+
+function SummaryLines.presentation(state: { [string]: any }, snap: any, xpPerRank: number?): Cue
+	local key = tostring(snap.shiftId)
+	local seen = state[key]
+	local bar = SummaryLines.bar((snap.profile or {}).xp, snap.xp or 0, snap.recorded == true, xpPerRank)
+	local counted = bar ~= nil and bar.counted
+	if not seen then
+		state[key] = { xpCounted = counted }
+		return { reason = "first", revealEarnings = true, advanceXp = counted }
+	end
+	if counted and not seen.xpCounted then
+		seen.xpCounted = true
+		return { reason = "settled", revealEarnings = false, advanceXp = true }
+	end
+	return { reason = "rebuild", revealEarnings = false, advanceXp = false }
 end
 
 return SummaryLines

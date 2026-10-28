@@ -15,6 +15,8 @@ local Assets = require(Shared.Assets)
 local Config = require(Shared.Config)
 local Scoring = require(Shared.Scoring)
 local Remote = require(script.Parent.Remote)
+local ResultLines = require(script.Parent.ResultLines)
+local StationLayout = require(script.Parent.StationLayout)
 local SummaryCard = require(script.Parent.SummaryCard)
 local SummaryLines = require(script.Parent.SummaryLines)
 local Theme = require(script.Parent.Theme)
@@ -94,6 +96,8 @@ local ctx: any = {
 	connections = {},
 	-- Stations whose first-shift pointer is done (see Tutorial).
 	learned = {},
+	-- Summary presentation per shift (SummaryLines.presentation); outlives layout rebuilds.
+	presented = {},
 }
 
 function ctx.send(action: string, args: any, done: any)
@@ -318,7 +322,7 @@ local function buildLayout()
 	local railW = if compact then math.max(math.round(size.X * 0.27), 180) else math.clamp(math.round(size.X * 0.24), 280, 460)
 	-- A reserved hint strip runs between the work surface and the tab bar, so tutorial
 	-- instructions and status reasons never cover food, ovens, trays or controls.
-	local stripH = if compact then 34 else math.clamp(math.round(size.Y * 0.05), 40, 56)
+	local stripH = StationLayout.hintStripHeight(compact, size.Y)
 	local stationH = size.Y - top - navH - stripH
 	-- Phones run the rail down beside the tab bar (which centres under the station) so the
 	-- ticket has room for its requirement icons; wide screens keep the full-width tab row.
@@ -719,13 +723,14 @@ local function buildLayout()
 	end
 	local navSelected = selected
 
-	-- Results appear top-centre over the work surface and never take input, so they can't
-	-- cover or swallow a tap meant for a button or the pizza.
+	-- Results hang in the rail where the served ticket hung, over the next ticket for a few
+	-- seconds, never over the work surface: the next pizza, its slice counter and the ovens
+	-- stay in view (Astra r14, phone capture 14). They never take input.
 	local toastHolder = Ui.new("Frame", {
+		Name = "Results",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(ctx.stationSize.X / 2, top + 8),
-		Size = UDim2.fromOffset(math.min(if compact then 340 else 440, ctx.stationSize.X - 32), 0),
+		Position = UDim2.fromOffset(size.X - railW + pad, top + pad + drop),
+		Size = UDim2.fromOffset(railW - pad * 2, 0),
 		ZIndex = 9,
 		Parent = root,
 	})
@@ -787,7 +792,6 @@ local function buildLayout()
 		toastHolder = toastHolder,
 		summary = summary,
 		summaryShift = nil,
-		summaryShiftId = nil,
 	}
 	ctx.switchTo(ctx.station, true)
 end
@@ -997,12 +1001,15 @@ local function refreshSummary(snap: any)
 		Parent = summary,
 	})
 	Art.apply(scrim, "ui_scrim")
-	-- The scrim fades in once per shift; a rebuild for the save result keeps it as it is.
-	if ui.summaryShiftId == snap.shiftId then
-		scrim.ImageTransparency = 0.55
-	else
-		ui.summaryShiftId = snap.shiftId
+	-- Why this card is being built (play-once presentation state, kept in ctx outside the UI
+	-- that buildLayout rebuilds, keyed by shift): only the first build of a shift fades the
+	-- scrim in and may reveal its earnings; a save result, resize or late notification shows
+	-- the final state at once.
+	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank)
+	if cue.revealEarnings then
 		TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
+	else
+		scrim.ImageTransparency = 0.55
 	end
 	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
 	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
@@ -1016,7 +1023,7 @@ local function refreshSummary(snap: any)
 			ctx.send("newShift", {})
 		end
 	end)
-	SummaryCard.present(view, model)
+	SummaryCard.present(view, model, cue)
 end
 
 function ctx.showResult(ticketId: number)
@@ -1025,42 +1032,42 @@ function ctx.showResult(ticketId: number)
 	if not ui or not customer or not customer.result then
 		return
 	end
-	local r = customer.result
+	-- Wording from ResultLines (offline-checked); the layout below draws it. Pay (coins, and
+	-- Service where it moves the coins only) is its own row apart from the grade's parts.
+	local model = ResultLines.model(customer.result, customer.label)
 	Ui.clear(ui.toastHolder)
-	-- Up to three notes, one part at a time (each part's first note, then its second...), so
-	-- a Make with several notes never hides "Burnt" or a cut note.
-	local notes = {}
-	local parts = { r.make, r.bake, r.cut, r.wait }
-	local round = 1
-	while #notes < 3 do
-		local added = false
-		for _, part in parts do
-			local n = part.notes[round]
-			if n and #notes < 3 then
-				table.insert(notes, n)
-				added = true
-			end
-		end
-		if not added then
-			break
-		end
-		round += 1
-	end
 	local compact = ctx.compact
+	local width = ui.toastHolder.Size.X.Offset
+	local padX, padY = if compact then 10 else 16, if compact then 8 else 12
+	local titleSize = if compact then 18 else 24
+	local partSize = if compact then 16 else 18
+	local noteSize = if compact then 14 else 16
+	local thumb = if compact then 56 else 72
 	local toast = Ui.new("ImageLabel", {
+		Name = "Result",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Slice,
 		SliceCenter = Assets.Meta.card.slice,
 		SliceScale = if compact then 0.5 else 0.7,
-		-- Tall enough for the thumbnail too.
-		Size = UDim2.new(1, 0, 0, math.max((if compact then 66 else 76) + math.max(#notes, 1) * (if compact then 17 else 20), (if compact then 56 else 72) + 16)),
+		Size = UDim2.fromOffset(width, thumb + padY * 2),
 		ZIndex = 9,
 		Parent = ui.toastHolder,
 	})
 	Art.apply(toast, "ui_card_result")
-	-- The served pizza itself as a thumbnail (56 px on phones, 72 px wide screens; Astra r13's
-	-- result view): its own dough, sauce, cheese, toppings, bake state and cuts.
-	local thumb = if compact then 56 else 72
+	local content = Ui.new("Frame", {
+		Name = "Content",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(padX, padY),
+		Size = UDim2.fromOffset(width - padX * 2, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ZIndex = 10,
+		Parent = toast,
+	}, {
+		Ui.new("UIListLayout", { Padding = UDim.new(0, if compact then 4 else 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	-- Head: the grade and its parts on the left, the served pizza on the right (56 px on
+	-- phones, 72 px on wide screens; Astra r13's result view).
+	local head = Ui.new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, thumb), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1, ZIndex = 10, Parent = content })
 	local served = nil
 	for _, p in snap.pizzas do
 		if p.ticketId == ticketId then
@@ -1073,58 +1080,106 @@ function ctx.showResult(ticketId: number)
 		local pic = Widgets.pizza()
 		pic.frame.Name = "Thumbnail"
 		pic.frame.AnchorPoint = Vector2.new(1, 0)
-		pic.frame.Position = UDim2.new(1, -10, 0, 8)
+		pic.frame.Position = UDim2.fromScale(1, 0)
 		pic.frame.Size = UDim2.fromOffset(thumb, thumb)
 		pic.frame.ZIndex = 10
-		pic.frame.Parent = toast
+		pic.frame.Parent = head
 		local seconds = served.bakeSeconds or 0
 		pic:set(served, Widgets.doneness(seconds), ctx.ovenStatus(customer.order.bake, seconds).burnt)
 	end
-	Ui.text({
-		-- The order's reward in coins, like the summary (r.tip is the whole reward, not a tip part).
-		Text = string.format("%s · %d%% · +%d coin%s", customer.label, r.overall, r.tip, if r.tip == 1 then "" else "s"),
-		FontFace = Theme.Font.display,
-		TextSize = if ctx.compact then 18 else 24,
-		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(1, -24 - inset, 0, 28),
-		ZIndex = 10,
-		Parent = toast,
-	})
-	Ui.text({
-		-- The split join keeps service out of the grade (it moves the coins only), so it is named
-		-- last as Service; the earlier average join shows Wait first, as before.
-		Text = if r.join == "split"
-			then string.format("Make %d · Bake %d · Cut %d · Service %d", r.make.score, r.bake.score, r.cut.score, r.wait.score)
-			else string.format("Wait %d · Make %d · Bake %d · Cut %d", r.wait.score, r.make.score, r.bake.score, r.cut.score),
-		FontFace = Theme.Font.bodySemi,
-		TextSize = if ctx.compact then 14 else 18,
-		Position = UDim2.fromOffset(12, if ctx.compact then 36 else 40),
-		Size = UDim2.new(1, -24 - inset, 0, 22),
-		ZIndex = 10,
-		Parent = toast,
-	})
-	local noteTop = if ctx.compact then 60 else 68
-	local noteLabel = Ui.text({
-		Text = if #notes > 0 then table.concat(notes, "\n") else "Perfect!",
-		FontFace = Theme.Font.body,
-		TextSize = if ctx.compact then 14 else 16,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(12, noteTop),
-		Size = UDim2.new(1, -24 - inset, 0, 0),
+	local left = Ui.new("Frame", {
+		Name = "Grade",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -inset, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 10,
-		Parent = toast,
+		Parent = head,
+	}, {
+		Ui.new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	-- A long note (a held-grade note beside the thumbnail) wraps to more lines than the notes
-	-- count allows for: the label grows with its text, and the card grows with the label, so no
-	-- line is cut off. (A fixed-height label drops the lines that do not fit.)
-	local baseHeight = toast.Size.Y.Offset
-	local function fitNotes()
-		local need = noteTop + math.ceil(noteLabel.AbsoluteSize.Y) + (if ctx.compact then 14 else 16)
-		toast.Size = UDim2.new(1, 0, 0, math.max(baseHeight, need))
+	Ui.text({
+		Name = "Title",
+		Text = model.title,
+		FontFace = Theme.Font.display,
+		TextSize = titleSize,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextWrapped = false,
+		Size = UDim2.new(1, 0, 0, titleSize + 6),
+		LayoutOrder = 1,
+		ZIndex = 10,
+		Parent = left,
+	})
+	-- The grade's parts as short rows: one per line on phones, one row of cells on wide screens.
+	local parts = Ui.new("Frame", {
+		Name = "Parts",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		ZIndex = 10,
+		Parent = left,
+	}, {
+		if compact
+			then Ui.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder })
+			else Ui.new("UIGridLayout", { CellPadding = UDim2.fromOffset(0, 0), CellSize = UDim2.new(1 / #model.parts, 0, 0, partSize + 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	for i, part in model.parts do
+		Ui.text({
+			Name = part.name,
+			Text = string.format("%s %d", part.name, part.score),
+			FontFace = Theme.Font.bodySemi,
+			TextSize = partSize,
+			TextWrapped = false,
+			Size = UDim2.new(1, 0, 0, partSize + 2),
+			LayoutOrder = i,
+			ZIndex = 10,
+			Parent = parts,
+		})
 	end
-	noteLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitNotes)
-	fitNotes()
+	-- Pay: what the order earned, apart from the grade (Astra r14 QA 6).
+	local pay = Ui.new("Frame", { Name = "Pay", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, partSize + 8), LayoutOrder = 2, ZIndex = 10, Parent = content })
+	Ui.new("Frame", { Name = "Rule", BackgroundColor3 = C.mutedInk, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 10, Parent = pay })
+	local coin = Ui.new("ImageLabel", {
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 2),
+		Size = UDim2.fromOffset(partSize + 2, partSize + 2),
+		ZIndex = 10,
+		Parent = pay,
+	})
+	Art.apply(coin, "icon_coin")
+	Ui.text({
+		Name = "Text",
+		Text = model.pay,
+		FontFace = Theme.Font.bodySemi,
+		TextSize = partSize,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, partSize + 8, 0.5, 2),
+		Size = UDim2.new(1, -(partSize + 8), 0, partSize + 4),
+		ZIndex = 10,
+		Parent = pay,
+	})
+	Ui.text({
+		Name = "Notes",
+		Text = if #model.notes > 0 then table.concat(model.notes, "\n") else "Perfect!",
+		FontFace = Theme.Font.body,
+		TextSize = noteSize,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 3,
+		ZIndex = 10,
+		Parent = content,
+	})
+	-- The card grows with its content (a long note wraps to more lines), so no line is cut off.
+	local function fit()
+		toast.Size = UDim2.fromOffset(width, math.ceil(content.AbsoluteSize.Y) + padY * 2 + (if compact then 4 else 6))
+	end
+	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	fit()
 	task.delay(Theme.Motion.toastSeconds, function()
 		if toast.Parent then
 			toast:Destroy()

@@ -43,6 +43,7 @@ local PrepFood = require(Shared.PrepFood)
 local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
 local MakeLayers = require(Parent.MakeLayers)
+local StationLayout = require(Parent.StationLayout)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
@@ -62,7 +63,6 @@ local DUST_SHARE = 0.8633 -- fx_flour_dust alpha width / canvas
 local CLUMP_SHARE = 0.8789
 local SCOOP_SHARE_Y = 0.877 -- tool_flour_scoop alpha height / canvas
 local LADLE_SHARE_Y = 0.859375 -- tool_ladle_loaded / _empty alpha height / canvas
-local LADLE_PIVOT = Vector2.new(0.49963, 0.74373) -- the bowl's centre (interactionPivot)
 local ROLLS = { "food_dough_roll_01", "food_dough_roll_02", "food_dough_roll_03", "food_dough_roll_04", "food_dough_roll_05", "food_dough_roll_06" }
 -- Proposals for how the tools sit (live layout, not balance): the pin's drawn length and the
 -- scoop's drawn height as shares of the pizza frame F; the dust stamps' opacity.
@@ -170,18 +170,13 @@ function Make.new(ctx: any, container: Frame)
 	local area = ctx.stationSize :: Vector2
 	local W, H = area.X, area.Y
 	local compact = ctx.compact
-	local margin = if compact then 6 else math.clamp(math.round(H * 0.03), 6, 24)
-	local gap = if compact then 4 else math.max(4, math.round(W * 0.01))
-	local cellH = (H - margin * 2 - gap * 2) / 3
-	local cellW = cellH * 76 / 62
-	local gridW = cellW * 2 + gap
-	-- The board meets the station's top and bottom on a phone (station 209 px: frame 188, the
-	-- plan's 190 needs the hint strip's 3 px, not taken here).
-	local matMax = math.min(H - (if compact then 0 else margin * 2), W - gridW - margin * 3)
-	local F = math.floor(matMax * 0.9) -- the pizza frame: radius 1 in pizza-local units
-	local mat = math.ceil(F / 0.9 - 1e-9)
-	local left = margin * 2 + gridW
-	local cx, cy = left + (W - margin - left) / 2, H / 2
+	-- The numbers live in StationLayout (offline-checked): on a 667x375 phone the station is
+	-- 212 px tall, so the board meets its top and bottom with the agreed 190 px pizza frame and
+	-- a 212 px mat.
+	local L = StationLayout.make(W, H, compact)
+	local margin, gap, cellW, cellH, gridW = L.margin, L.gap, L.cellW, L.cellH, L.gridW
+	local F, mat = L.F, L.mat
+	local cx, cy = L.cx, L.cy
 	local function cell(col: number, row: number): (number, number)
 		return margin + col * (cellW + gap), margin + row * (cellH + gap)
 	end
@@ -208,6 +203,34 @@ function Make.new(ctx: any, container: Frame)
 		ZIndex = 1,
 		Parent = dough,
 	})
+	-- Rolling target (Astra r15): a faint band over the full-size range (Config.Make sizeFullLow
+	-- to sizeFullHigh of the frame radius, the dough's mean semi-axis that Size grades) with a
+	-- thin line at 1.00, behind the dough, shown only while rolling. A code-drawn stand-in
+	-- until her P1 ring art arrives; it follows the scored numbers, so the hint can name its
+	-- "inner guide edge". Not a perfect-dough mark: roundness and flour are graded apart.
+	local guide = Ui.new("Frame", { Name = "RollGuide", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Visible = false, Parent = dough })
+	do
+		local R = F / 2
+		local low, high = Config.Make.sizeFullLow, Config.Make.sizeFullHigh
+		local function ring(name: string, radius: number, thickness: number, transparency: number)
+			-- A UIStroke grows outward from its frame's edge.
+			Ui.new("Frame", {
+				Name = name,
+				BackgroundTransparency = 1,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(cx, cy),
+				Size = UDim2.fromOffset(radius * 2, radius * 2),
+				ZIndex = 2,
+				Parent = guide,
+			}, {
+				Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				Ui.new("UIStroke", { Color = C.paper, Thickness = thickness, Transparency = transparency }),
+			})
+		end
+		ring("Band", low * R, (high - low) * R, 0.55)
+		local line = if compact then 1 else 2
+		ring("Line", R - line / 2, line, 0.15)
+	end
 	local dustLayer = Ui.new("Frame", { Name = "Flour", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = dough })
 	local ball = Ui.new("ImageLabel", { Name = "Ball", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 4, Visible = false, Parent = dough })
 	Art.apply(ball, "food_dough_ball")
@@ -233,9 +256,9 @@ function Make.new(ctx: any, container: Frame)
 	local scoop = Ui.new("ImageLabel", {
 		Name = "Scoop",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.75),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(scoopCanvas, scoopCanvas),
-		Rotation = -20,
+		Rotation = StationLayout.SCOOP_TILT,
 		ZIndex = 21,
 		Visible = false,
 		Parent = hand,
@@ -244,12 +267,12 @@ function Make.new(ctx: any, container: Frame)
 	local carried = Ui.new("ImageLabel", { Name = "CarriedBall", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 21, Visible = false, Parent = hand })
 	Art.apply(carried, "food_dough_ball")
 	-- The ladle in the hand: loaded (tipped) for a pour, empty for a spread; its bowl's centre
-	-- on the pointer.
+	-- on the pointer at either tilt (StationLayout.toolCentre).
 	local ladleCanvas = F * LADLE_HEIGHT / LADLE_SHARE_Y
 	local ladle = Ui.new("ImageLabel", {
 		Name = "Ladle",
 		BackgroundTransparency = 1,
-		AnchorPoint = LADLE_PIVOT,
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(ladleCanvas, ladleCanvas),
 		ZIndex = 21,
 		Visible = false,
@@ -610,6 +633,7 @@ function Make.new(ctx: any, container: Frame)
 		drawFlour(m, if live and live.kind == "flour" then live.drag.points else nil)
 		drawDough(m, S)
 		tubBall.Visible = not m.placed and not (live and live.kind == "ball")
+		guide.Visible = m.step == "dough" and m.placed
 		-- Sauce and cheese, on the dough as it is now (its shape is fixed once rolled).
 		if m.step == "dough" then
 			food.frame.Visible = false
@@ -669,8 +693,11 @@ function Make.new(ctx: any, container: Frame)
 	local function showScoop(position: Vector3?)
 		scoop.Visible = position ~= nil
 		if position then
+			-- Astra's contact anchor (the floury bowl) on the pointer, turned with the scoop.
 			local o = dough.AbsolutePosition
-			scoop.Position = UDim2.fromOffset(position.X - o.X, position.Y - o.Y)
+			local a = StationLayout.SCOOP_CONTACT
+			local x, y = StationLayout.toolCentre(position.X - o.X, position.Y - o.Y, scoopCanvas, scoopCanvas, a.x, a.y, StationLayout.SCOOP_TILT)
+			scoop.Position = UDim2.fromOffset(x, y)
 		end
 	end
 
@@ -703,15 +730,18 @@ function Make.new(ctx: any, container: Frame)
 	local function showLadle(position: Vector3?, loaded: boolean)
 		ladle.Visible = position ~= nil
 		if position then
+			-- Tipped to pour; flat on its back to spread. The bowl stays on the pointer either way.
+			local tilt = if loaded then StationLayout.LADLE_POUR else StationLayout.LADLE_SPREAD
 			local o = dough.AbsolutePosition
-			ladle.Position = UDim2.fromOffset(position.X - o.X, position.Y - o.Y)
+			local a = StationLayout.LADLE_CONTACT
+			local x, y = StationLayout.toolCentre(position.X - o.X, position.Y - o.Y, ladleCanvas, ladleCanvas, a.x, a.y, tilt)
+			ladle.Position = UDim2.fromOffset(x, y)
+			ladle.Rotation = tilt
 			local art = if loaded then "tool_ladle_loaded" else "tool_ladle_empty"
 			if art ~= ladleArt then
 				ladleArt = art
 				Art.apply(ladle, art)
 			end
-			-- Tipped to pour; flat on its back to spread.
-			ladle.Rotation = if loaded then 25 else -10
 		end
 	end
 
@@ -1257,8 +1287,18 @@ function Make.new(ctx: any, container: Frame)
 		return nil
 	end
 
-	-- First-shift pointer, one lesson per part of the dough step, then Topping's own.
+	-- First-shift pointer, one lesson per part of the dough step, then Topping's own. The
+	-- glove keeps clear of the tool column, the step label and Undo (Tutorial's hint.clear).
+	local keepClear = { stepsBox, crock, tub, pot, bowl, pinRest, undo.frame }
+	local hintFor: (any) -> any
 	function station.hint(snap: any): any
+		local h = hintFor(snap)
+		if h and current and current.make.step ~= "toppings" then
+			h.clear = keepClear
+		end
+		return h
+	end
+	function hintFor(snap: any): any
 		if not current then
 			return nil
 		end
@@ -1317,7 +1357,7 @@ function Make.new(ctx: any, container: Frame)
 			if advice == "ready" then
 				return { target = nextButton.frame, text = "Round and full size: tap Next", from = toNext }
 			elseif advice == "small" then
-				return { target = pad, text = "Keep rolling until the dough reaches the rim", from = side }
+				return { target = pad, text = "Keep rolling until the dough reaches the inner guide edge", from = side }
 			elseif advice == "uneven" then
 				return { target = pad, text = "Roll along the short side to even it out", from = side }
 			elseif advice == "big" then

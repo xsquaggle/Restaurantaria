@@ -366,7 +366,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	layers.frame = frame
 
 	-- Where the dough is drawn: centre (px in the parent), pizza frame F (px, its width), dough
-	-- shape S and the view's flatten (the oven's 0.58; 1 elsewhere).
+	-- shape S and the view's flatten (the oven's, StationLayout.OVEN; 1 elsewhere).
 	function layers.place(_self: Layers, x: number, y: number, frameSize: number, shape: any, flatten: number?)
 		local f = flatten or 1
 		local k = key(shape, frameSize) .. string.format("|%.2f,%.2f|%.3f", x, y, f)

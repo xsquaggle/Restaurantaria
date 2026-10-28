@@ -1207,7 +1207,7 @@ function Widgets.hintStrip(width: number, height: number, compact: boolean): Hin
 	Art.preload({ "ui_hint_chip" })
 	local frame = Ui.new("Frame", { Name = "Hints", BackgroundTransparency = 1, Size = UDim2.fromOffset(width, height) })
 	-- Side padding is the manifest's (16 / 24 px). Its 12 / 18 px top and bottom do not fit
-	-- the reserved band (34 px on phones), so a single line is centred in the band instead.
+	-- the reserved band (31 px on phones), so a single line is centred in the band instead.
 	local padX = if compact then 16 else 24
 	local textSize = if compact then 16 else 18
 	local keyTextSize = 16
