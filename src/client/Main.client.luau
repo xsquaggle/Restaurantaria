@@ -782,7 +782,7 @@ local function buildLayout()
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Stretch,
-		ImageTransparency = 0.55,
+		ImageTransparency = Motion.T.scrim,
 		Size = UDim2.new(1, 0, 0, if hudInTopbar then inset.Min.Y + hudH else 0),
 		Visible = false,
 		ZIndex = 50,
@@ -1060,12 +1060,12 @@ local function refreshSummary(snap: any)
 	})
 	Art.apply(scrim, "ui_scrim")
 	if cue.revealEarnings and not Motion.reduced() then
-		-- On the motion clock with the panel's entry.
+		-- On the motion clock with the panel's entry, to the backdrop's resting depth.
 		Motion.run(Motion.keyOf(scrim, "fade"), Motion.T.panelEnter, function(p)
-			scrim.ImageTransparency = 1 - 0.45 * p
+			scrim.ImageTransparency = 1 - (1 - Motion.T.scrim) * p
 		end)
 	else
-		scrim.ImageTransparency = 0.55
+		scrim.ImageTransparency = Motion.T.scrim
 	end
 	ctx.summarySnap = snap
 	local view = SummaryCard.build(summary, area, ctx.compact, model, function()

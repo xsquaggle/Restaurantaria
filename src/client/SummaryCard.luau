@@ -4,8 +4,10 @@
 -- line and one continuation action. Built from a SummaryLines model; every label is live text.
 --
 -- Supplied art: ui_panel_summary, icon_shift_complete, icon_coin, icon_xp_star, ui_xp_track,
--- ui_xp_fill and the primary button family (astra-response-7). The light effects of the
--- reward motion (Shine) are declared stand-ins: no sparkle art has been supplied.
+-- ui_xp_fill and the primary button family (astra-response-7); fx_oven_glow lights the coin
+-- and the emblem. The rest of the reward light (Shine: sparkles, rays, the card's edge glow,
+-- the star's glow, sweeps) is declared stand-ins: no sparkle, ray or cool glow art has been
+-- supplied.
 --
 -- Layout and presentation are separate so the card can be re-skinned or animated without
 -- touching the values: SummaryCard.build lays the card out at its final size and returns the
@@ -31,8 +33,9 @@ local SummaryCard = {}
 -- Below this root height the card drops, in Astra's order (Message 15 ask 3), the optional
 -- row (none is built yet), the emblem art and the bar caption, and tightens its spacing, so
 -- the required reward, save and action rows keep the text floors. A qualifier the caption
--- carried moves into the rank words (Astra r17 R17-08). Whatever still does not fit scrolls
--- inside the card while the save line and the action stay fixed below it.
+-- carried moves into the rank words (Astra r17 R17-08). The action keeps its phone size (its
+-- drawn silhouette is not shrunk); whatever still does not fit scrolls inside the card while
+-- the save line and the action stay fixed below it.
 SummaryCard.TIGHT_HEIGHT = 292
 
 export type View = {
@@ -75,6 +78,12 @@ export type View = {
 	button: Widgets.Button,
 	-- True while the reward rows scroll (the content is taller than the screen allows).
 	scrolling: () -> boolean,
+	-- Lasting light (dark until the reward motion lights it; never under reduced motion):
+	-- rays behind the card and a glow round its edge, soft glows behind the coin and the star.
+	rays: Shine.Rays,
+	edge: Shine.EdgeGlow,
+	coinGlow: Shine.Glow,
+	starGlow: Shine.Glow,
 }
 
 -- Text sizes: desktop / phone. Phone primary text stays at 16 or more, secondary at 14.
@@ -97,6 +106,12 @@ local COIN_GLINT = Color3.fromRGB(255, 205, 96)
 local XP_GLINT = Color3.fromRGB(38, 196, 168)
 -- The coin's colour edge-on while it spins.
 local COIN_EDGE = Color3.fromRGB(196, 124, 44)
+-- The card's rays and edge glow (warm light over the dark backdrop), and the glow behind the
+-- star (mint that reads on the cream card).
+local RAY_LIGHT = Color3.fromRGB(255, 232, 168)
+local EDGE_LIGHT = Color3.fromRGB(255, 212, 120)
+-- The panel art's outer corner radius, in its own pixels (ui_panel_summary, 840x600).
+local PANEL_CORNER = 45
 
 local function size(name: string, compact: boolean): number
 	return SIZE[name][if compact then 2 else 1]
@@ -199,6 +214,25 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local padY = if tight then 8 elseif compact then 12 else 24
 	local gap = if tight then 2 elseif compact then 4 else 12
 	local innerW = cardW - padX * 2
+	-- Behind the card, over the backdrop: slow light rays and a warm glow round its edge.
+	local rays = Shine.rays(parent, {
+		at = UDim2.fromScale(0.5, 0.5),
+		radius = cardW,
+		count = 16,
+		colour = RAY_LIGHT,
+		opacity = 0.42,
+		width = 0.11,
+		z = 21,
+	})
+	rays.setLevel(0)
+	local edge = Shine.edgeGlow(parent, {
+		colour = EDGE_LIGHT,
+		opacity = 0.62,
+		layers = if compact then 6 else 8,
+		step = if compact then 4 else 6,
+		z = 22,
+	})
+	edge.setLevel(0)
 	local card = Ui.new("ImageLabel", {
 		Name = "Card",
 		BackgroundTransparency = 1,
@@ -209,7 +243,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(cardW, 200),
-		ZIndex = 21,
+		ZIndex = 23,
 		Parent = parent,
 	})
 	Art.apply(card, "ui_panel_summary")
@@ -261,6 +295,8 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local earned = row(content, "Earned", earnH, 2)
 	earned.ZIndex = 3
 	local coinHolder, coin = badge(earned, "icon_coin", earnH, 1)
+	-- The coin's warm glow, under the coin (dark until the reward lights it).
+	local coinGlow = Shine.glowShape(coinHolder, math.round(earnH * 2.1), WHITE, coin.ZIndex - 1, "fx_oven_glow")
 	local earnText = column(earned, 2)
 	line(earnText, "Label", Theme.Font.bodyBold, size("earnedLabel", compact), C.mutedInk, 1).Text = "Earned this shift"
 	local coins = line(earnText, "Coins", Theme.Font.display, size("coins", compact), C.tomato, 2)
@@ -302,6 +338,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local xpRow = Ui.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, xpRowH), LayoutOrder = 1, Parent = xpBlock })
 	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left, 6)
 	local starHolder, star = badge(left, "icon_xp_star", xpRowH, 1)
+	local starGlow = Shine.glowShape(starHolder, math.round(xpRowH * 2.6), Shine.TEAL, star.ZIndex - 1)
 	local xpEarned = line(left, "Earned", Theme.Font.display, size("xp", compact), C.ink, 2)
 	-- The rank words take the width they need at the right; the award gets the rest.
 	local rank = Ui.text({
@@ -409,7 +446,9 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		LayoutOrder = 1,
 		Parent = footer,
 	})
-	local buttonH = if tight then 48 elseif compact then 56 else 72
+	-- The tight card keeps the phone button (56 px; its art draws 224/240 of that, 52 px):
+	-- the reward rows scroll before the action's silhouette would shrink (Astra r17 R17-08).
+	local buttonH = if compact or tight then 56 else 72
 	local holder = Ui.new("Frame", { Name = "Action", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, buttonH), LayoutOrder = 2, Parent = footer })
 	local button = Widgets.button(model.action.label, onAction)
 	-- One stable path whatever the label says (Root.Summary.Card.Footer.Action.ActionButton).
@@ -462,7 +501,13 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 			frame:Destroy()
 		end
 	end
+	-- The card's presentation scale (the panel's pop). Sizes are measured at rest only:
+	-- mid-pop, the scaled sizes rounded back made the card's height wobble by a pixel or two.
+	local presentation = Motion.scale(card)
 	local function fit()
+		if math.abs(presentation.Scale - 1) > 1e-3 then
+			return
+		end
 		local k = if card.AbsoluteSize.X > 0 then card.AbsoluteSize.X / cardW else 1
 		local contentH = math.round(content.AbsoluteSize.Y / k)
 		local footH = math.round(footer.AbsoluteSize.Y / k)
@@ -473,9 +518,15 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		local h = padY * 2 + bodyH + gap + footH
 		card.Size = UDim2.fromOffset(cardW, h)
 		card.SliceScale = math.min(cardW / Assets.Meta.panelSummary.width, h / Assets.Meta.panelSummary.height)
+		-- The light behind follows the card's size: the edge glow hugs it, the rays reach
+		-- half again past its corners.
+		edge.root.Size = UDim2.fromOffset(cardW, h)
+		edge.setCorner(PANEL_CORNER * card.SliceScale)
+		rays.setRadius(math.round(math.sqrt(cardW * cardW + h * h) / 2 * 1.5))
 	end
 	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	footer:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	presentation:GetPropertyChangedSignal("Scale"):Connect(fit)
 	fit()
 
 	return {
@@ -513,6 +564,10 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		scrolling = function()
 			return scroller ~= nil
 		end,
+		rays = rays,
+		edge = edge,
+		coinGlow = coinGlow,
+		starGlow = starGlow,
 	}
 end
 
@@ -603,13 +658,18 @@ end
 -- and nothing here decides when the action is available (that is model.action alone).
 --
 -- `cue` (SummaryLines.presentation) says why the card is shown: only cue.revealEarnings
--- plays the sequence (once per shift): the panel lands with a sweep of light, the emblem
--- stamps in, the coin spins down and counts with sparkles, then pays off in a ring of light;
--- the XP arrives, counts and fills the bar from the real pre-shift progress with light on its
--- leading edge, across rank thresholds, then flashes. A pending award fills as a labelled
--- projection and never gets the definitive rank-up; when the save accepts it (cue.confirmXp)
--- it locks in with a flash, and only then a real rank-up is celebrated. Nothing counts twice.
--- At rest the action gets a call to action once it can be pressed, then an occasional glint.
+-- plays the sequence (once per shift). The panel lands as light rays and a warm glow come up
+-- behind it and a sweep of light crosses it; the emblem stamps in with a flare; the coin
+-- spins down and glows brighter as it counts among sparkles, then pays off in a flare, a ring,
+-- a burst of sparkles and a toss of small coins while the light behind the card surges; the
+-- XP arrives in the star's glow, counts and fills the bar from the real pre-shift progress
+-- with light on its leading edge, across rank thresholds, then flashes and flares. A pending
+-- award fills as a labelled projection and never gets the definitive rank-up; when the save
+-- accepts it (cue.confirmXp) it locks in with a flash, and only then a real rank-up is
+-- celebrated. Nothing counts twice. A shift that earned nothing is revealed quietly: no
+-- rays, glows or payoff light.
+-- At rest the rays turn slowly at a lower light, the coin and the star keep a soft glow, the
+-- action gets a call to action once it can be pressed, then an occasional glint.
 -- Reduced motion shows final values with a short fade on the first showing only, no light.
 
 export type Show = {
@@ -617,6 +677,9 @@ export type Show = {
 	model: any,
 	pr: Motion.Presentation?,
 	light: boolean, -- light effects on (not reduced motion)
+	festive: boolean, -- the shift earned something (coins, a bonus or XP): the card is lit
+	gloryBase: number, -- the level the rays and the edge glow sit at (1 = full light)
+	gloryShown: number, -- the level they show now
 	coinState: string, -- "waiting" | "counting" | "done"
 	xpState: string, -- "waiting" | "counting" | "done"
 	filling: boolean,
@@ -626,9 +689,11 @@ export type Show = {
 	resting: boolean,
 	called: boolean, -- the action's call to action has played
 	closed: boolean,
-	idle: { any }, -- keys of the resting glints
+	idle: { any }, -- keys of the lasting light and the resting glints
 	phases: { MotionPlan.Phase },
 }
+
+local CENTRE = UDim2.fromScale(0.5, 0.5)
 
 -- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp, in the style of the
 -- current model (a projection can be accepted while it fills). Returns the rank shown.
@@ -663,7 +728,110 @@ local function zAbove(gui: GuiObject, by: number?): number
 	return gui.ZIndex + (by or 1)
 end
 
--- A real (accepted) rank-up: the rank words pop and throw gold sparkles.
+------------------------------------------------------------------------------------------
+-- Lasting light: the rays and edge glow behind the card (its glory) and the glows behind
+-- the coin and the star. Owned by the show, not the presentation: a skip settles them to
+-- their resting light, and they end only when the card closes.
+
+local function setGlory(show: Show, level: number)
+	show.gloryShown = level
+	show.view.rays.setLevel(level)
+	show.view.edge.setLevel(level)
+end
+
+local function gloryKey(show: Show): any
+	return Motion.keyOf(show.view.rays.root, "glory")
+end
+
+-- The glory eases from where it shows to its resting level (the sequence ended or skipped).
+local function settleGlory(show: Show, duration: number)
+	if show.closed then
+		return
+	end
+	local T = Motion.T
+	local key = gloryKey(show)
+	if not table.find(show.idle, key) then
+		table.insert(show.idle, key)
+	end
+	local from = show.gloryShown
+	show.gloryBase = T.gloryRest
+	show.view.rays.setScale(1)
+	Motion.run(key, duration, function(p)
+		setGlory(show, from + (T.gloryRest - from) * MotionPlan.easeInOut(p))
+	end)
+end
+
+-- A payoff: the glory surges past its level and comes back as the rays swell a little.
+-- `strength` 1 is the coin payoff's surge.
+local function surgeGlory(show: Show, strength: number)
+	if not show.light or not show.festive or show.closed then
+		return
+	end
+	local T = Motion.T
+	local base = show.gloryBase
+	local peak = 1 + (T.glorySurge - 1) * strength
+	local rays = show.view.rays
+	Motion.run(gloryKey(show), T.glorySurgeTime, function(p)
+		setGlory(show, base * MotionPlan.pop(p, 1, peak))
+		rays.setScale(MotionPlan.pop(p, 1, 1 + 0.06 * strength))
+	end)
+end
+
+-- f() on every frame while the card stays up.
+local function always(show: Show, f: () -> ())
+	local key = {}
+	table.insert(show.idle, key)
+	local LAP = 30
+	local function lap()
+		if show.closed or not show.view.card.Parent then
+			return
+		end
+		Motion.run(key, LAP, function()
+			f()
+		end, lap)
+	end
+	lap()
+end
+
+-- The rays turn on the motion clock itself, so a rebuilt card's rays carry on at the same
+-- angle. `landed`: when the panel began to land (its whirl), or nil for no whirl.
+local function turnRays(show: Show, landed: number?)
+	local rays = show.view.rays
+	always(show, function()
+		local now = Motion.now()
+		rays.setTurn(MotionPlan.raysTurn(now, if landed then now - landed else math.huge) % 360)
+	end)
+end
+
+local function coinGlowKey(show: Show): any
+	return Motion.keyOf(show.view.coinGlow.root, "glow")
+end
+
+local function starGlowKey(show: Show): any
+	return Motion.keyOf(show.view.starGlow.root, "glow")
+end
+
+-- The coin's and the star's resting glow: only for a reward the card actually shows.
+local function restCoinGlow(show: Show)
+	show.view.coinGlow.set(1, if show.light and show.model.coins > 0 then Motion.T.coinGlowRest else 1)
+end
+
+local function restStarGlow(show: Show)
+	show.view.starGlow.set(1, if show.light and show.model.xpEarned > 0 then Motion.T.starGlowRest else 1)
+end
+
+-- A soft pulse of a resting glow (a glint, a lock-in): brighter and a little larger, then back.
+local function pulseGlow(key: any, glow: Shine.Glow, rest: number, life: number, by: number)
+	Motion.run(key, life, function(p)
+		local k = math.sin(math.pi * p)
+		glow.set(1 + 0.1 * k, rest - by * k)
+	end)
+end
+
+------------------------------------------------------------------------------------------
+-- Payoffs and the resting state
+
+-- A real (accepted) rank-up: the rank words pop in a warm flare and throw gold sparkles.
 local function celebrateRank(show: Show, pr: Motion.Presentation?)
 	local view = show.view
 	local T = Motion.T
@@ -676,13 +844,25 @@ local function celebrateRank(show: Show, pr: Motion.Presentation?)
 	Motion.pop(scale, 1, T.rankPeak, T.rankPop)
 	local w = view.rank.Size.X.Offset
 	local h = view.xpRow.Size.Y.Offset
+	local at = UDim2.new(1, -w / 2, 0.5, 0)
+	Shine.flare(pr, view.xpRow, {
+		at = at,
+		size = math.max(w, h * 2.4),
+		from = 0.6,
+		to = 1.7,
+		life = T.flare,
+		art = "fx_oven_glow",
+		peak = 0.2,
+		z = view.rank.ZIndex - 1,
+	})
 	Shine.burst(pr, view.xpRow, {
-		at = UDim2.new(1, -w / 2, 0.5, 0),
+		at = at,
 		count = 8,
 		from = 4,
 		to = math.max(w * 0.6, h * 1.6),
-		size = h * 0.7,
+		size = h * 0.8,
 		colours = { Shine.GOLD, Shine.WARM },
+		halo = Shine.GOLD,
 		z = zAbove(view.rank),
 		seed = 41,
 		life = 0.5,
@@ -708,6 +888,40 @@ local function barLight(show: Show, pr: Motion.Presentation?, life: number)
 	})
 end
 
+-- The star's payoff light: a mint flare, a ring and sparkles thrown out of it.
+local function starLight(show: Show, pr: Motion.Presentation?, count: number, seed: number)
+	local view = show.view
+	local T = Motion.T
+	local px = view.starHolder.Size.X.Offset
+	Shine.flare(pr, view.starHolder, {
+		at = CENTRE,
+		size = px * 2.6,
+		from = 0.6,
+		to = 2.2,
+		life = T.flare,
+		colour = Shine.TEAL,
+		peak = 0.1,
+		z = view.star.ZIndex - 2,
+	})
+	Shine.ring(pr, view.starHolder, { at = CENTRE, from = px * 0.8, to = px * 2.8, life = 0.55, colour = Shine.TEAL, peak = 0, z = view.star.ZIndex - 1 })
+	Shine.burst(pr, view.starHolder, {
+		at = CENTRE,
+		count = count,
+		from = px * 0.3,
+		to = px * 1.8,
+		size = px * 0.7,
+		colours = { Shine.TEAL, Shine.WARM },
+		halo = Shine.MINT,
+		z = zAbove(view.star),
+		seed = seed,
+		life = 0.5,
+		stagger = 0.05,
+	})
+	if show.model.xpEarned > 0 then
+		pulseGlow(starGlowKey(show), view.starGlow, T.starGlowRest, 0.6, 0.35)
+	end
+end
+
 -- The save accepted an award shown as a projection: the light gain becomes solid under a
 -- flash, the qualifier goes, and a real rank-up is celebrated now. Nothing counts again.
 local function lockIn(show: Show)
@@ -719,19 +933,8 @@ local function lockIn(show: Show)
 	end
 	local T = Motion.T
 	barLight(show, nil, T.lockIn)
-	local px = view.starHolder.Size.X.Offset
-	Shine.burst(nil, view.starHolder, {
-		at = UDim2.fromScale(0.5, 0.5),
-		count = 4,
-		from = px * 0.3,
-		to = px * 1.1,
-		size = px * 0.5,
-		colours = { Shine.MINT, WHITE },
-		z = zAbove(view.star),
-		seed = 53,
-		life = 0.42,
-		stagger = 0.04,
-	})
+	starLight(show, nil, 5, 53)
+	surgeGlory(show, 0.5)
 	if model.bar and model.bar.counted and model.bar.rankUp then
 		celebrateRank(show, nil)
 	end
@@ -752,7 +955,7 @@ local function buttonGlint(show: Show)
 	})
 end
 
--- A glint across the coin and one twinkle on its rim.
+-- A glint across the coin, a twinkle on its rim and a soft pulse of its glow.
 local function coinGlint(show: Show)
 	local view = show.view
 	local px = view.coinHolder.Size.X.Offset
@@ -764,7 +967,15 @@ local function coinGlint(show: Show)
 		z = zAbove(view.coin),
 		angle = 30,
 	})
-	Shine.twinkle(nil, view.coinHolder, { at = UDim2.fromScale(0.22, 0.24), size = px * 0.4, colour = Shine.WARM, z = zAbove(view.coin, 2), delay = 0.12 })
+	Shine.twinkle(nil, view.coinHolder, {
+		at = UDim2.fromScale(0.22, 0.24),
+		size = px * 0.55,
+		colour = Shine.WARM,
+		halo = Shine.WARM,
+		z = zAbove(view.coin, 2),
+		delay = 0.12,
+	})
+	pulseGlow(coinGlowKey(show), view.coinGlow, Motion.T.coinGlowRest, 0.7, 0.22)
 end
 
 -- The action is "Next shift" and can be pressed: the only state that gets the success
@@ -781,7 +992,7 @@ local function callToAction(show: Show)
 	end
 	show.called = true
 	local T = Motion.T
-	Motion.pop(button.press, 1, T.buttonPeak, T.buttonPop)
+	Motion.pop(show.view.button.press, 1, T.buttonPeak, T.buttonPop)
 	buttonGlint(show)
 end
 
@@ -820,7 +1031,9 @@ local function atRest(show: Show)
 		end
 	end)
 	every(show, 2.6, T.coinGlint, function()
-		coinGlint(show)
+		if show.model.coins > 0 then
+			coinGlint(show)
+		end
 	end)
 end
 
@@ -847,7 +1060,7 @@ local function fillLight(show: Show, pr: Motion.Presentation, duration: number):
 		Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
 		Ui.new("UIGradient", { Transparency = NumberSequence.new(1, 0.1) }),
 	})
-	local comet = Shine.twinkleShape(track, math.round(h * 1.9), Shine.WARM, z)
+	local comet = Shine.twinkleShape(track, math.round(h * 2.3), Shine.WARM, z, Shine.MINT)
 	local key = {}
 	local function remove()
 		glow:Destroy()
@@ -932,8 +1145,9 @@ local function fill(show: Show, duration: number)
 end
 
 -- The XP payoff after the bar settles: the block pops, the bar flashes and a sweep crosses
--- it, a ring and sparkles leave the star and light runs through the award. A real rank-up
--- (accepted award) is celebrated here; a projection's waits for the save.
+-- it, the star flares and throws sparkles, light runs through the award and the light behind
+-- the card surges. A real rank-up (accepted award) is celebrated here; a projection's waits
+-- for the save.
 local function finale(show: Show, pr: Motion.Presentation)
 	local view, model = show.view, show.model
 	local T = Motion.T
@@ -944,22 +1158,9 @@ local function finale(show: Show, pr: Motion.Presentation)
 	end)
 	Motion.pop(xpScale, 1, T.finalePeak, T.finalePop)
 	barLight(show, pr, 0.55)
-	local px = view.starHolder.Size.X.Offset
-	local centre = UDim2.fromScale(0.5, 0.5)
-	Shine.ring(pr, view.starHolder, { at = centre, from = px * 0.8, to = px * 2.6, life = 0.5, peak = 0.05, z = view.star.ZIndex - 1 })
-	Shine.burst(pr, view.starHolder, {
-		at = centre,
-		count = 7,
-		from = px * 0.3,
-		to = px * 1.6,
-		size = px * 0.6,
-		colours = { Shine.MINT, WHITE },
-		z = zAbove(view.star),
-		seed = 17,
-		life = 0.45,
-		stagger = 0.05,
-	})
+	starLight(show, pr, 8, 17)
 	Shine.text(pr, view.xpEarned, { colour = XP_GLINT, life = 0.55 })
+	surgeGlory(show, 0.7)
 	if model.bar and model.bar.counted and model.bar.rankUp then
 		celebrateRank(show, pr)
 	end
@@ -971,6 +1172,9 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		model = model,
 		pr = nil,
 		light = not Motion.reduced(),
+		festive = model.coins > 0 or model.bonus > 0 or model.xpEarned > 0,
+		gloryBase = 0,
+		gloryShown = 0,
 		coinState = "done",
 		xpState = "done",
 		filling = false,
@@ -988,10 +1192,20 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	local reduced = Motion.reduced()
 	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, fillBar, reduced)
 	show.phases = phases
+	local T = Motion.T
+	local lit = show.light and show.festive
 	if #phases == 0 then
 		-- Nothing replays: a later showing (a resize, a correction, a late notification) rests
-		-- on the final values, without the call to action it has had already. An acceptance
-		-- that came with a rebuild still locks in once, and its action may now be ready.
+		-- on the final values and the resting light, without the call to action it has had
+		-- already. An acceptance that came with a rebuild still locks in once, and its action
+		-- may now be ready.
+		if lit then
+			show.gloryBase = T.gloryRest
+			setGlory(show, T.gloryRest)
+			turnRays(show, nil)
+		end
+		restCoinGlow(show)
+		restStarGlow(show)
 		if cue ~= nil and cue.confirmXp == true then
 			show.lockInWaiting = true
 		else
@@ -1000,7 +1214,6 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		atRest(show)
 		return show
 	end
-	local T = Motion.T
 	local pr = Motion.presentation()
 	show.pr = pr
 	pr.onFinished = function()
@@ -1025,13 +1238,15 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	end
 
 	-- Everything that arrives later waits hidden in its resting place; the card art, the
-	-- save line and the action fade in with the panel.
+	-- save line and the action fade in with the panel. The glows have their own light.
 	local skip: { Instance } = { view.header, view.earned, view.xp }
 	if view.bonus then
 		table.insert(skip, view.bonus)
 	end
 	local cardFade = Motion.fader(view.card, skip)
-	local headFade, earnFade, xpFade = Motion.fader(view.header), Motion.fader(view.earned), Motion.fader(view.xp)
+	local headFade = Motion.fader(view.header)
+	local earnFade = Motion.fader(view.earned, { view.coinGlow.root })
+	local xpFade = Motion.fader(view.xp, { view.starGlow.root })
 	local bonusFade = if view.bonus then Motion.fader(view.bonus) else nil
 	local cardScale = Motion.scale(view.card)
 	local earnScale = Motion.scale(view.earned)
@@ -1063,6 +1278,13 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		show.xpState = "done"
 		writeXpLabel(view, show.model)
 	end)
+	-- The glows end on their resting light, whatever ends the presentation.
+	pr:own(coinGlowKey(show), function()
+		restCoinGlow(show)
+	end)
+	pr:own(starGlowKey(show), function()
+		restStarGlow(show)
+	end)
 	-- The coin row is centred, so the counting label keeps its final width (the final
 	-- text is in it now) and the icon does not slide sideways as digits are added.
 	local finalW = math.ceil(view.coins.TextBounds.X)
@@ -1080,39 +1302,66 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		fillAt(show, MotionPlan.xpSegments(model.bar.fromXp, model.bar.toXp, model.bar.need), 0)
 	end
 
-	-- Panel: lands from 0.9 through one overshoot, rising and fading in; a sweep of light
-	-- crosses the card and twinkles catch its corners.
+	-- Panel: lands from 0.9 through one overshoot, rising and fading in, as light rays and a
+	-- warm glow come up behind it; a glare of light crosses it and twinkles catch its rim.
 	Motion.trace("phase", "panel")
 	cardFade:show(T.panelFade)
 	Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
 	Motion.settle(view.card, T.panelRise, T.panelEnter)
 	Motion.hook("impact", "panel")
+	if lit then
+		-- The edge glow lands with the card (the same pop and rise), so it hugs the edge.
+		local edgeRoot = view.edge.root
+		local edgeScale = Motion.scale(edgeRoot)
+		pr:own(edgeScale, function()
+			edgeScale.Scale = 1
+		end)
+		pr:own(Motion.keyOf(edgeRoot, "settle"), function()
+			Motion.rest(edgeRoot)
+		end)
+		Motion.pop(edgeScale, T.panelFrom, T.panelPeak, T.panelEnter)
+		Motion.settle(edgeRoot, T.panelRise, T.panelEnter)
+		show.gloryBase = 1
+		local key = gloryKey(show)
+		pr:own(key, function()
+			settleGlory(show, T.gloryRestIn)
+		end)
+		Motion.run(key, T.gloryIn, function(p)
+			setGlory(show, MotionPlan.easeOut(p))
+		end)
+		turnRays(show, Motion.now())
+	end
 	local s = view.card.SliceScale
 	Shine.sheen(pr, view.card, {
 		delay = T.cardSheenDelay,
 		life = T.cardSheen,
-		peak = 0.3,
-		inset = Vector2.new(7 * s, 7 * s),
-		corner = UDim.new(0, math.round(30 * s)),
-		colour = Shine.WARM,
-		z = 0,
+		peak = 0.45,
+		inset = Vector2.new(5 * s, 5 * s),
+		corner = UDim.new(0, math.round((PANEL_CORNER - 5) * s)),
+		colour = WHITE,
+		z = 30,
 		angle = 24,
 	})
-	local corners = { { 0.04, 0.07 }, { 0.96, 0.1 }, { 0.985, 0.52 }, { 0.02, 0.6 }, { 0.93, 0.95 }, { 0.1, 0.93 } }
-	for i, at in corners do
-		Shine.twinkle(pr, view.card, {
-			at = UDim2.fromScale(at[1], at[2]),
-			size = if view.compact then 20 else 28,
-			colour = if i % 2 == 0 then Shine.GOLD else Shine.WARM,
-			z = 3,
-			delay = 0.2 + (i - 1) * 0.08,
-			life = 0.55,
-			spin = if i % 2 == 0 then -50 else 50,
-		})
+	if lit then
+		local rim = { { 0.03, 0.05 }, { 0.975, 0.07 }, { 0.995, 0.5 }, { 0.006, 0.62 }, { 0.955, 0.965 }, { 0.07, 0.955 } }
+		local px = if view.compact then 32 else 48
+		for i, at in rim do
+			local gold = i % 2 == 0
+			Shine.twinkle(pr, view.card, {
+				at = UDim2.fromScale(at[1], at[2]),
+				size = if gold then px * 0.75 else px,
+				colour = if gold then Shine.GOLD else Shine.WARM,
+				halo = if gold then Shine.GOLD else Shine.WARM,
+				z = 31,
+				delay = 0.2 + (i - 1) * 0.08,
+				life = 0.6,
+				spin = if gold then -50 else 50,
+			})
+		end
 	end
 
-	-- Heading: fades and rises; the emblem stamps in with a ring of light, light runs
-	-- through the title.
+	-- Heading: fades and rises; the emblem stamps in with a flare and a ring of light, light
+	-- runs through the title.
 	local heading = phase("heading") :: MotionPlan.Phase
 	pr:at(heading.start, function()
 		Motion.trace("phase", "heading")
@@ -1134,17 +1383,38 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 			end)
 			local holder = emblem.Parent :: Frame
 			local px = holder.Size.X.Offset
-			Shine.ring(pr, holder, { at = UDim2.fromScale(0.5, 0.5), from = px * 0.8, to = px * 1.8, life = 0.45, colour = Shine.WARM, peak = 0.2, z = emblem.ZIndex - 1, delay = 0.18 })
-			for i, at in { { 0.08, 0.16 }, { 0.94, 0.22 }, { 0.86, 0.92 } } do
-				Shine.twinkle(pr, holder, { at = UDim2.fromScale(at[1], at[2]), size = px * 0.34, colour = Shine.WARM, z = zAbove(emblem), delay = 0.16 + i * 0.06, life = 0.45 })
+			Shine.ring(pr, holder, { at = CENTRE, from = px * 0.8, to = px * 1.9, life = 0.5, colour = Shine.GOLD, peak = 0.1, z = emblem.ZIndex - 1, delay = 0.18 })
+			if lit then
+				Shine.flare(pr, holder, {
+					at = CENTRE,
+					size = px * 1.6,
+					from = 0.5,
+					to = 1.7,
+					life = T.flare,
+					art = "fx_oven_glow",
+					peak = 0.2,
+					z = emblem.ZIndex - 2,
+					delay = 0.12,
+				})
+				for i, at in { { 0.08, 0.16 }, { 0.94, 0.22 }, { 0.86, 0.92 } } do
+					Shine.twinkle(pr, holder, {
+						at = UDim2.fromScale(at[1], at[2]),
+						size = px * 0.46,
+						colour = Shine.WARM,
+						halo = Shine.GOLD,
+						z = zAbove(emblem),
+						delay = 0.16 + i * 0.06,
+						life = 0.5,
+					})
+				end
 			end
 		end
 		Shine.text(pr, view.title, { colour = TITLE_GLINT, life = 0.75, delay = 0.22 })
 	end)
 
-	-- Coin impact: the row drops in with one overshoot while the coin spins down to face-on.
+	-- Coin impact: the row drops in with one overshoot while the coin spins down to face-on
+	-- and its glow comes up behind it.
 	local coinPx = view.coinHolder.Size.X.Offset
-	local centre = UDim2.fromScale(0.5, 0.5)
 	local impact = phase("impact") :: MotionPlan.Phase
 	pr:at(impact.start, function()
 		Motion.trace("phase", "impact")
@@ -1152,10 +1422,17 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		Motion.pop(earnScale, T.impactFrom, T.impactPeak, impact.duration)
 		Motion.settle(view.earned, -T.impactDrop, impact.duration)
 		Shine.spin(pr, view.coin, { turns = T.coinTurns, life = T.coinSpin, edge = COIN_EDGE })
+		if show.model.coins > 0 then
+			Motion.run(coinGlowKey(show), T.glowIn, function(p)
+				local e = MotionPlan.easeOut(p)
+				view.coinGlow.set(0.6 + 0.4 * e, 1 - (1 - T.coinGlowRest) * e)
+			end)
+		end
 		Motion.hook("impact", "coins")
 	end)
 
-	-- Coin count: the row swells a little while sparkles catch the coin's rim.
+	-- Coin count: the row swells a little and the coin's glow brightens while sparkles catch
+	-- its rim.
 	local coins = phase("coins")
 	if coins then
 		pr:at(coins.start, function()
@@ -1170,6 +1447,10 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 			Motion.run(earnScale, coins.duration, function(p)
 				earnScale.Scale = 1 + (T.countSwell - 1) * MotionPlan.easeInOut(p)
 			end)
+			Motion.run(coinGlowKey(show), coins.duration, function(p)
+				local e = MotionPlan.easeInOut(p)
+				view.coinGlow.set(1 + 0.25 * e, T.coinGlowRest + (T.coinGlowCount - T.coinGlowRest) * e)
+			end)
 			local rng = Random.new(11)
 			local n = math.max(1, math.floor(coins.duration / 0.16))
 			for i = 0, n - 1 do
@@ -1177,35 +1458,63 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 				local r = coinPx * rng:NextNumber(0.36, 0.5)
 				Shine.twinkle(pr, view.coinHolder, {
 					at = UDim2.new(0.5, math.cos(a) * r, 0.5, math.sin(a) * r),
-					size = coinPx * rng:NextNumber(0.26, 0.36),
+					size = coinPx * rng:NextNumber(0.42, 0.58),
 					colour = if i % 2 == 0 then Shine.WARM else Shine.GOLD,
+					halo = Shine.WARM,
 					z = zAbove(view.coin),
 					delay = i * coins.duration / n + rng:NextNumber(0, 0.05),
-					life = 0.42,
+					life = 0.45,
 					spin = 60,
 				})
 			end
 		end)
 	end
 
-	-- Coin payoff: the row pops, a gold ring and sparkles leave the coin, light crosses the
-	-- coin and runs through the amount.
+	-- Coin payoff: the row pops as a warm flare blooms out of the coin, a gold ring and
+	-- sparkles leave it and small coins are tossed out of it, the light behind the card
+	-- surges, light crosses the coin and runs through the amount.
 	local payoff = phase("coinsDone")
 	if payoff then
 		pr:at(payoff.start, function()
 			Motion.trace("phase", "coinsDone")
 			Motion.pop(earnScale, T.countSwell, T.flourishPeak, T.flourishPop)
-			Shine.ring(pr, view.coinHolder, { at = centre, from = coinPx * 0.8, to = coinPx * 2.5, life = 0.5, colour = Shine.GOLD, peak = 0.05, z = view.coin.ZIndex - 1 })
+			Shine.flare(pr, view.coinHolder, {
+				at = CENTRE,
+				size = coinPx * 2.2,
+				from = 0.7,
+				to = 2.1,
+				life = T.flare,
+				art = "fx_oven_glow",
+				peak = 0.05,
+				z = view.coin.ZIndex - 2,
+			})
+			Motion.run(coinGlowKey(show), 0.5, function(p)
+				local e = MotionPlan.easeOut(p)
+				view.coinGlow.set(1.25 - 0.25 * e, T.coinGlowCount + (T.coinGlowRest - T.coinGlowCount) * e)
+			end)
+			Shine.ring(pr, view.coinHolder, { at = CENTRE, from = coinPx * 0.8, to = coinPx * 2.6, life = 0.55, colour = Shine.GOLD, peak = 0, z = view.coin.ZIndex - 1 })
+			Shine.toss(pr, view.coinHolder, {
+				at = CENTRE,
+				count = MotionPlan.tossCount(show.model.coins),
+				size = coinPx * 0.42,
+				speed = coinPx * 5.5,
+				gravity = coinPx * 20,
+				spread = 130,
+				edge = COIN_EDGE,
+				z = zAbove(view.coin, 2),
+				seed = 29,
+			})
 			Shine.burst(pr, view.coinHolder, {
-				at = centre,
+				at = CENTRE,
 				count = 10,
 				from = coinPx * 0.35,
-				to = coinPx * 1.45,
-				size = coinPx * 0.42,
+				to = coinPx * 1.6,
+				size = coinPx * 0.55,
 				colours = { Shine.GOLD, Shine.WARM, Shine.GOLD },
-				z = zAbove(view.coin),
+				halo = Shine.GOLD,
+				z = zAbove(view.coin, 3),
 				seed = 7,
-				life = 0.45,
+				life = 0.5,
 				stagger = 0.05,
 			})
 			Shine.sheen(pr, view.coinHolder, {
@@ -1217,6 +1526,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 				angle = 30,
 			})
 			Shine.text(pr, view.coins, { colour = COIN_GLINT, life = 0.55 })
+			surgeGlory(show, 1)
 		end)
 	end
 	local bonus = phase("bonus")
@@ -1230,7 +1540,8 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		end)
 	end
 
-	-- XP arrival: the block rises in and the star spins in with mint twinkles.
+	-- XP arrival: the block rises in, the star spins in with mint twinkles and its glow comes
+	-- up behind it.
 	local starPx = view.starHolder.Size.X.Offset
 	local arrive = phase("xpArrive") :: MotionPlan.Phase
 	pr:at(arrive.start, function()
@@ -1253,8 +1564,22 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		Motion.run(tiltKey, T.starSpin, function(p)
 			view.star.Rotation = MotionPlan.tilt(p, T.starTilt)
 		end)
+		if show.model.xpEarned > 0 then
+			Motion.run(starGlowKey(show), arrive.duration + 0.2, function(p)
+				local e = MotionPlan.easeOut(p)
+				view.starGlow.set(0.5 + 0.5 * e, 1 - (1 - T.starGlowRest) * e)
+			end)
+		end
 		for i, at in { { 0.05, 0.1 }, { 0.98, 0.2 }, { 0.9, 0.98 }, { 0.08, 0.9 } } do
-			Shine.twinkle(pr, view.starHolder, { at = UDim2.fromScale(at[1], at[2]), size = starPx * 0.5, colour = Shine.MINT, z = zAbove(view.star), delay = 0.12 + i * 0.04, life = 0.42 })
+			Shine.twinkle(pr, view.starHolder, {
+				at = UDim2.fromScale(at[1], at[2]),
+				size = starPx * 0.62,
+				colour = if i % 2 == 0 then Shine.TEAL else Shine.WARM,
+				halo = if i % 2 == 0 then Shine.MINT else Shine.TEAL,
+				z = zAbove(view.star),
+				delay = 0.12 + i * 0.04,
+				life = 0.45,
+			})
 		end
 	end)
 
@@ -1322,6 +1647,11 @@ function SummaryCard.update(show: Show, model: any, cue: any?)
 		show.xpState = "done"
 		writeXpLabel(view, model)
 	end
+	-- A glow only stays lit for a reward the card still shows.
+	if not running then
+		restCoinGlow(show)
+		restStarGlow(show)
+	end
 	local confirm = cue ~= nil and cue.confirmXp == true
 	if not running then
 		if confirm then
@@ -1348,7 +1678,8 @@ function SummaryCard.update(show: Show, model: any, cue: any?)
 end
 
 -- Skip (tap anywhere on the summary, or the action): every value final at once, every
--- effect stopped. It never touches saving or awards anything.
+-- effect stopped, the lasting light settling to rest. It never touches saving or awards
+-- anything.
 function SummaryCard.finish(show: Show)
 	local pr = show.pr
 	if pr and pr.alive then
@@ -1358,8 +1689,8 @@ function SummaryCard.finish(show: Show)
 	writeValues(show.view, show.model)
 end
 
--- The card is going away (the shift moved on, or it is rebuilt): stops its motion and its
--- resting glints for good.
+-- The card is going away (the shift moved on, or it is rebuilt): stops its motion, its
+-- lasting light and its resting glints for good.
 function SummaryCard.close(show: Show)
 	show.closed = true
 	for _, key in show.idle do

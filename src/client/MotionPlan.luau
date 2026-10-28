@@ -2,11 +2,11 @@
 -- The game-wide motion language as numbers and curves (Astra r15 motion-and-reward-spec):
 -- press, pop (one restrained overshoot), settle, the slowing count-up, the rate-limited count
 -- ticks, the XP fill across rank thresholds, the shift reward timeline and the curves its
--- light effects follow (twinkle, coin spin, ring, sweep). Pure: no services, no instances, so
--- the timing and the values a presentation ends on can be checked offline. Motion and Shine
--- (the Roblox side) play these. The starting settings are Astra's; the end-of-shift sequence
--- is retuned here for Lawson's 2026-10-28 direction (a richer, more rewarding card), not from
--- measured Papa's timings.
+-- light effects follow (twinkle, coin spin, ring, sweep, the rays' turn, tossed coins' arcs).
+-- Pure: no services, no instances, so the timing and the values a presentation ends on can
+-- be checked offline. Motion and Shine (the Roblox side) play these. The starting settings
+-- are Astra's; the end-of-shift sequence is retuned here for Lawson's 2026-10-28 direction (a
+-- richer, more rewarding card), not from measured Papa's timings.
 
 local MotionPlan = {}
 
@@ -76,6 +76,31 @@ MotionPlan.T = {
 	twinkle = 0.5,
 	moteEvery = 0.04,
 	mote = 0.45,
+	-- The backdrop (Astra's ui_scrim) settles at this transparency: deeper than its earlier
+	-- 0.55, so the card and its light stand out (Lawson 2026-10-28).
+	scrim = 0.4,
+	-- The card's glory: slow light rays behind it and a warm glow round its edge. Their light
+	-- (1 = full) comes up as the panel lands, surges with each payoff and eases to a resting
+	-- level when the sequence ends; the rays turn slowly, with a faster whirl at the start.
+	gloryIn = 0.6,
+	gloryRest = 0.55,
+	glorySurge = 1.4,
+	glorySurgeTime = 0.7,
+	gloryRestIn = 0.9,
+	raysSpin = 6, -- degrees a second
+	raysWhirl = 40, -- degrees added while the panel lands
+	raysWhirlTime = 1.4,
+	-- Glows behind the coin and the star: up as each arrives, the coin's brighter as it counts;
+	-- a payoff blooms a larger glow out (a flare); both keep a soft glow at rest.
+	glowIn = 0.35,
+	coinGlowCount = 0.3, -- transparency the coin's glow reaches as its count ends
+	coinGlowRest = 0.62,
+	starGlowRest = 0.68,
+	flare = 0.7,
+	-- Small coins tossed out of the coin at its payoff, more for a larger award (bounded).
+	toss = 0.9,
+	tossMin = 5,
+	tossMax = 12,
 	-- Resting state: the continuation button's call to action once it can be pressed, then a
 	-- glint on the button and the coin now and then while the card stays up.
 	buttonPeak = 1.06,
@@ -175,6 +200,29 @@ end
 MotionPlan.SWEEP = 0.95
 function MotionPlan.sweep(p: number): number
 	return -MotionPlan.SWEEP + 2 * MotionPlan.SWEEP * easeInOut(p)
+end
+
+-- The rays' turn (degrees) at `clock` seconds of the motion clock, `since` seconds after the
+-- panel began to land: a steady slow turn on the clock itself (so rays built again carry on
+-- at the same angle), plus a whirl that eases out while the panel lands.
+function MotionPlan.raysTurn(clock: number, since: number): number
+	local T = MotionPlan.T
+	return T.raysSpin * clock + T.raysWhirl * MotionPlan.easeOut(math.max(since, 0) / T.raysWhirlTime)
+end
+
+-- Where a tossed object is `t` seconds after leaving with velocity (vx, vy) px a second under
+-- `gravity` px a second squared (screen y grows downward).
+function MotionPlan.arc(t: number, vx: number, vy: number, gravity: number): (number, number)
+	return vx * t, vy * t + 0.5 * gravity * t * t
+end
+
+-- How many small coins a payoff tosses: a few more for each doubling of the award, bounded.
+function MotionPlan.tossCount(coins: number): number
+	local T = MotionPlan.T
+	if coins <= 0 then
+		return 0
+	end
+	return math.clamp(T.tossMin + math.floor(math.log(coins + 1, 2)), T.tossMin, T.tossMax)
 end
 
 -- Integer shown at `elapsed` of a count from 0 to `final` over `duration`: floor(final * p),

@@ -1,11 +1,11 @@
 -- Checks for the shared motion language (MotionPlan, slice 5): the count-up ends exactly on
 -- its value and never goes back, ticks stay under the rate limit and are never queued, a pop
 -- ends on 1 after one overshoot, the XP bar carries overflow across rank thresholds, the light
--- curves (twinkle, coin spin, ring, sweep, turn-in) start and end where they must, and the
--- shift reward timeline keeps Astra's order (panel, heading, coin impact, coin count and its
--- payoff, then XP and its payoff) inside its bounded length. It plays on the first showing
--- only. Numbers and order only: smoothness, feel and real-time frame rate need Lawson's eyes
--- on the running game, not this file.
+-- curves (twinkle, coin spin, ring, sweep, turn-in, the rays' turn, tossed coins' arcs) start
+-- and end where they must, and the shift reward timeline keeps Astra's order (panel, heading,
+-- coin impact, coin count and its payoff, then XP and its payoff) inside its bounded length.
+-- It plays on the first showing only. Numbers and order only: smoothness, feel and real-time
+-- frame rate need Lawson's eyes on the running game, not this file.
 
 local MotionPlan = require(game:GetService("StarterPlayer").StarterPlayerScripts.Client.MotionPlan)
 
@@ -196,6 +196,37 @@ do
 		last = v
 	end
 	check("sweep one way", monotonic, true)
+	-- Rays: a steady turn on the clock plus a landing whirl that ends; a card built again
+	-- (no whirl) shows the same angle as one whose whirl has ended.
+	check("rays whirl starts at nothing", near(MotionPlan.raysTurn(0, 0), 0), true)
+	check("rays whirl ends", near(MotionPlan.raysTurn(10, 5) - MotionPlan.raysTurn(10, 4), 0), true)
+	check("rays rebuilt carry on", near(MotionPlan.raysTurn(12.5, math.huge), MotionPlan.raysTurn(12.5, T.raysWhirlTime)), true)
+	check("rays turn slowly at rest", near(MotionPlan.raysTurn(11, math.huge) - MotionPlan.raysTurn(10, math.huge), T.raysSpin), true)
+	last, monotonic = -math.huge, true
+	for i = 0, 200 do
+		local v = MotionPlan.raysTurn(i / 100, i / 100)
+		monotonic = monotonic and v >= last
+		last = v
+	end
+	check("rays never turn back", monotonic, true)
+	-- Tossed coins: leave from the centre, rise, then fall under gravity.
+	local x0, y0 = MotionPlan.arc(0, 50, -300, 1200)
+	check("toss starts at the centre", x0 == 0 and y0 == 0, true)
+	local _, yTop = MotionPlan.arc(0.25, 50, -300, 1200)
+	local _, yEnd = MotionPlan.arc(0.9, 50, -300, 1200)
+	check("toss rises to its top", near(yTop, -37.5), true)
+	check("toss falls back past its start", yEnd > 0, true)
+	-- How many: none for nothing, a few more per doubling of the award, bounded.
+	check("toss none for nothing", MotionPlan.tossCount(0), 0)
+	check("toss one coin", MotionPlan.tossCount(1), T.tossMin + 1)
+	check("toss grows", MotionPlan.tossCount(100) > MotionPlan.tossCount(5), true)
+	check("toss bounded", MotionPlan.tossCount(1e9), T.tossMax)
+	-- The card's light: up with the panel, a surge above full, a lower resting level; the
+	-- backdrop deepened from 0.55 but still lets the game show through.
+	check("glory rests lower than full", T.gloryRest > 0 and T.gloryRest < 1, true)
+	check("glory surges above full", T.glorySurge > 1, true)
+	check("backdrop deeper than before", T.scrim < 0.55 and T.scrim >= 0.3, true)
+	check("coin glow brightens as it counts", T.coinGlowCount < T.coinGlowRest, true)
 end
 
 -- XP bar across thresholds (100 XP a rank).
