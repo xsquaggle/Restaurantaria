@@ -87,6 +87,8 @@ local function brute(K)
 	end
 	return best, worst2, angle
 end
+-- 0.58 here is a fixed geometric case (the oven flatten before slice 4), not the live oven,
+-- which is PrepGeometry.BAKE_FLATTEN (0.7).
 for _, case in { { 190, 1 }, { 190, 0.58 }, { 663, 0.58 } } do
 	for _, turn in { 0, 45, 90 } do
 		local K = G.viewMatrix(G.shape(1.1, 0.35, math.rad(turn)), case[1], case[2])

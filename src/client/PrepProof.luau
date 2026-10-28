@@ -194,7 +194,7 @@ end
 --  body {key = "P3" | "P4", a, b, turn, flatten?, colour?}: one registered body at the mat
 --    centre for pixel measurement (MEASURE colour by default).
 --  pin {x, y}: the pin stand-in anchored at a station point (sweep captures).
---  views {a, b, turn}: Prep, Bake (0.58), Cut and result-card views of one dough with sauce and
+--  views {a, b, turn}: Prep, Bake (BAKE_FLATTEN), Cut and result-card views of one dough with sauce and
 --    cheese stamps at stored dough-local positions, for the extreme-oval captures.
 --  stroke {}: a 0.5 s scripted roll on real frames, P3 -> P4 hand-off included; logs every
 --    frame's drawn body against the expected oval and the crossfade alphas.
@@ -295,13 +295,13 @@ function PrepProof.run(mode: string, opts: any?): string
 		add("pins drawn in the station frame, which clips; anchor = pointer (magenta dot), never clamped")
 		add(string.format("mat centre %s,%s mat %d; mat edges x %s..%s y %s..%s", r2(L.cx), r2(L.cy), env.mat, r2(L.cx - env.mat / 2), r2(L.cx + env.mat / 2), r2(L.cy - env.mat / 2), r2(L.cy + env.mat / 2)))
 	elseif mode == "views" then
-		-- Four views side by side at their sizes: Prep (frame), Bake flatten 0.58 (same frame),
+		-- Four views side by side at their sizes: Prep (frame), Bake at the live flatten (same frame),
 		-- Cut (same frame) and the result-card thumbnail (72 HD / 56 phone).
 		local S = G.shape(o.a or 1.1, o.b or 0.35, math.rad(o.turn or 45))
 		local thumb = if L.compact then 56 else 72
 		local scale = if L.compact then 0.55 else 0.42 -- views shrunk to sit side by side; stated in the report
 		local F = math.floor(env.frame * scale)
-		local specs = { { "Prep", F, 1 }, { "Bake 0.58", F, G.BAKE_FLATTEN }, { "Cut", F, 1 }, { "Result", thumb, 1 } }
+		local specs = { { "Prep", F, 1 }, { "Bake " .. G.BAKE_FLATTEN, F, G.BAKE_FLATTEN }, { "Cut", F, 1 }, { "Result", thumb, 1 } }
 		local cells, _ = Food.sauce({ { kind = "pour", x = -0.3, y = -0.2 }, { kind = "pour", x = 0.35, y = 0.1 }, { kind = "pour", x = 0, y = 0.45 }, { kind = "spread", x = -0.7, y = 0, x2 = 0.7, y2 = 0 } })
 		local pinches = {}
 		for i = 0, 11 do

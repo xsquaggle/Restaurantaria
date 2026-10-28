@@ -95,6 +95,7 @@ for _, win in { { 180, 96 }, { 590, 330 }, { 600, 200 }, { 100, 100 } } do
 	check(string.format("oven %dx%d: inside height", win[1], win[2]), h / 2 <= math.min(o.centreY, 1 - o.centreY) * win[2] + 1e-9, true)
 	near(string.format("oven %dx%d: flatten", win[1], win[2]), h / w, o.flatten)
 end
+check("prep proof flatten is the live oven's (D-4)", require(game:GetService("ReplicatedStorage").Shared.PrepGeometry).BAKE_FLATTEN, StationLayout.OVEN.flatten)
 check("oven flatten eased from 0.58", StationLayout.OVEN.flatten > 0.58 and StationLayout.OVEN.flatten < 1, true)
 
 ------------------------------------------------------------------------------------------
@@ -175,6 +176,55 @@ m = ResultLines.model(result({
 	make = part(60, { "Too little cheese: grade held to 35" }, sauceDetail),
 }), "Gu")
 check("crust after hold pair", m.notes[3], "Sauce on the crust")
+
+-- D-1: the crust note stays when the sauce is the weakest step and its own notes fill the card.
+local sauceNotes = { "Not enough sauce", "Bare spots", "Sauce on the crust" }
+local weakSauce = { sauce = { score = 50, notes = sauceNotes } }
+m = ResultLines.model(result({
+	make = part(50, sauceNotes, weakSauce),
+	bake = part(90, { "Baked 3s past regular" }),
+	cut = part(80, { "1 cut missed the centre" }),
+}), "Jo")
+check("D-1 weakest sauce: crust kept", table.find(m.notes, "Sauce on the crust") ~= nil, true)
+check("D-1 weakest sauce: first note", m.notes[1], "Not enough sauce")
+check("D-1 weakest sauce: crust second", m.notes[2], "Sauce on the crust")
+m = ResultLines.model(result({
+	overall = 35,
+	make = part(50, { "No cheese: grade held to 35", "Not enough sauce", "Bare spots", "Sauce on the crust" }, weakSauce),
+	bake = part(90, { "Baked 3s past regular" }),
+}), "Jo")
+check("D-1 hold + weakest sauce: crust third", m.notes[3], "Sauce on the crust")
+
+-- D-2: the food's state is never pushed off by the crust note (a make hold tied with the food
+-- cap leaves "Burnt" as an ordinary bake note).
+m = ResultLines.model(result({
+	overall = 35,
+	make = part(60, { "No cheese: grade held to 35" }, sauceDetail),
+	bake = part(0, { "Burnt", "Baked 6s past regular" }),
+	cut = part(80, { "1 cut missed the centre" }),
+}), "Ko")
+check("D-2: hold first", m.notes[1], "No cheese")
+check("D-2: Burnt kept", m.notes[3], "Burnt")
+m = ResultLines.model(result({
+	make = part(85, { "Dough too small" }, sauceDetail),
+	bake = part(40, { "Still raw" }),
+}), "Ko")
+check("D-2 no hold: food before crust", m.notes[2], "Still raw")
+check("D-2 no hold: crust after food", m.notes[3], "Sauce on the crust")
+for _, word in { "Still raw", "Undercooked", "Nearly burnt", "Burnt" } do
+	m = ResultLines.model(result({
+		make = part(60, { "a", "b" }, sauceDetail),
+		bake = part(40, { word }),
+		cut = part(60, { "d" }),
+	}), "Lu")
+	check("food state kept: " .. word, table.find(m.notes, word) ~= nil, true)
+end
+
+-- D-3: the grade has its own text, so the card can shorten a long name and never the grade.
+m = ResultLines.model(result({ overall = 80 }), "AVeryLongFriendName1")
+check("D-3 name", m.name, "AVeryLongFriendName1")
+check("D-3 grade text", m.gradeText, "· 80%")
+check("D-3 title unchanged", m.title, "AVeryLongFriendName1 · 80%")
 
 -- Never more than three notes.
 m = ResultLines.model(result({

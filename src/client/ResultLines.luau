@@ -8,9 +8,16 @@ local ResultLines = {}
 
 ResultLines.MAX_NOTES = 3
 
+-- The bake notes that name the food's state (Scoring's FOOD_WORDS); one of these always
+-- stays on the card.
+ResultLines.FOOD_STATES = { ["Still raw"] = true, Undercooked = true, ["Nearly burnt"] = true, Burnt = true }
+local CRUST = "Sauce on the crust"
+
 export type Part = { name: string, score: number }
 export type Model = {
 	title: string, -- "Bo · 100%"
+	name: string, -- "Bo": the part a narrow card may shorten
+	gradeText: string, -- "· 100%": always shown whole
 	grade: number,
 	parts: { Part }, -- the grade's components, in order
 	pay: string, -- coins, and Service when it moves the coins only (split join)
@@ -63,34 +70,51 @@ function ResultLines.model(result: any, label: string): Model
 		end
 		round += 1
 	end
-	-- The note of the hold that set the grade (it leads its part's notes) goes first, as its
-	-- food problem and then the hold; the other notes follow in turn.
+	-- Priority while there are more notes than room (Astra r14 4.3; audit D-1, D-2):
+	-- 1. the hold that set the grade, as its food problem and then the hold, or else the first
+	--    note in turn;
+	-- 2. the food's state ("Burnt", "Still raw"...), which is never pushed off by a later note;
+	-- 3. "Sauce on the crust" whenever the sauce step recorded it: at result size a crust spill
+	--    cannot be seen on the thumbnail (Astra r14 QA 4);
+	-- 4. the other notes in turn.
 	local notes = {}
-	for i, n in raw do
-		local problem, hold = ResultLines.splitHeld(n)
-		if hold then
-			table.remove(raw, i)
-			table.insert(notes, problem)
-			table.insert(notes, hold)
-			break
-		end
-	end
-	for _, n in raw do
+	local function add(n: string)
 		if not has(notes, n) then
 			table.insert(notes, n)
 		end
 	end
-	-- At result size a crust spill cannot be seen on the thumbnail (Astra r14 QA 4), so the
-	-- sauce's own note is named whenever the sauce step recorded it.
+	for i, n in raw do
+		local problem, hold = ResultLines.splitHeld(n)
+		if hold then
+			table.remove(raw, i)
+			add(problem)
+			add(hold)
+			break
+		end
+	end
+	if #notes == 0 and raw[1] then
+		add(raw[1])
+	end
+	for _, n in r.bake.notes do
+		if ResultLines.FOOD_STATES[n] then
+			add(n)
+			break
+		end
+	end
 	local sauce = r.make.detail and r.make.detail.sauce
-	if sauce and sauce.notes and has(sauce.notes, "Sauce on the crust") and not has(notes, "Sauce on the crust") then
-		table.insert(notes, math.min(#notes + 1, if notes[2] and string.find(notes[2], "^That held") then 3 else 2), "Sauce on the crust")
+	if sauce and sauce.notes and has(sauce.notes, CRUST) then
+		add(CRUST)
+	end
+	for _, n in raw do
+		add(n)
 	end
 	while #notes > ResultLines.MAX_NOTES do
 		table.remove(notes)
 	end
 	return {
 		title = string.format("%s · %d%%", label, r.overall),
+		name = label,
+		gradeText = string.format("· %d%%", r.overall),
 		grade = r.overall,
 		parts = parts,
 		pay = if split then string.format("%s · Service %d", coins, r.wait.score) else coins,

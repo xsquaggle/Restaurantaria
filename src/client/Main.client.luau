@@ -1067,18 +1067,38 @@ function ctx.showResult(ticketId: number)
 	})
 	-- Title across the card, then the grade's parts as short rows beside the served pizza (56
 	-- px on phones, 72 px on wide screens; Astra r13's result view).
-	Ui.text({
-		Name = "Title",
-		Text = model.title,
+	-- The grade has its own label, so a long name is shortened and the grade never is.
+	local title = Ui.new("Frame", { Name = "Title", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, titleSize + 4), LayoutOrder = 0, ZIndex = 10, Parent = content })
+	local grade = Ui.text({
+		Name = "Grade",
+		Text = model.gradeText,
+		FontFace = Theme.Font.display,
+		TextSize = titleSize,
+		TextWrapped = false,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		ZIndex = 10,
+		Parent = title,
+	})
+	local name = Ui.text({
+		Name = "Name",
+		Text = model.name,
 		FontFace = Theme.Font.display,
 		TextSize = titleSize,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextWrapped = false,
-		Size = UDim2.new(1, 0, 0, titleSize + 4),
-		LayoutOrder = 0,
+		Size = UDim2.fromScale(1, 1),
 		ZIndex = 10,
-		Parent = content,
+		Parent = title,
 	})
+	local function fitName()
+		name.Size = UDim2.new(1, -(math.ceil(grade.AbsoluteSize.X) + 4), 1, 0)
+	end
+	grade:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitName)
+	fitName()
 	local head = Ui.new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, thumb), LayoutOrder = 1, ZIndex = 10, Parent = content })
 	local served = nil
 	for _, p in snap.pizzas do

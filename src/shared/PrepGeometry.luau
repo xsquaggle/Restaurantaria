@@ -23,7 +23,7 @@ PrepGeometry.CAP = 1.1 -- largest semi-axis (proposal)
 PrepGeometry.BALL = 0.35 -- the ball's radius (proposal); body 0.35 F across
 PrepGeometry.STRETCH = 0.35 -- largest stretch of one full-length stroke (proposal)
 PrepGeometry.MAT_OVER_FRAME = 1 / 0.9 -- boardOverPizza (Assets.Meta)
-PrepGeometry.BAKE_FLATTEN = 0.58 -- PIZZA_FLATTEN (Bake.luau)
+PrepGeometry.BAKE_FLATTEN = 0.7 -- StationLayout.OVEN.flatten (0.58 before slice 4); layout check keeps them equal
 PrepGeometry.PHONE_FRAME = 190 -- ceil(180 / 0.95): at least 180 px of visible crust
 PrepGeometry.STATE_RADII = { 0.35, 0.47, 0.59, 0.71, 0.83, 0.95 } -- P4 nominal mean radii (proposal)
 
@@ -107,8 +107,8 @@ end
 
 -- The view's screen matrix K = (F / 2) D S: the unit circle's point to px offsets from the view
 -- centre, so K applied to the unit circle is the drawn dough outline. It already includes the
--- dough S; apply it to q / 0.95, not to a pizza-local p. D's flatten scales y (0.58 in Bake, 1
--- elsewhere).
+-- dough S; apply it to q / 0.95, not to a pizza-local p. D's flatten scales y (BAKE_FLATTEN in
+-- Bake, 1 elsewhere).
 function PrepGeometry.viewMatrix(S: Mat2, frame: number, flatten: number?): Mat2
 	local k = frame / 2
 	local f = flatten or 1
