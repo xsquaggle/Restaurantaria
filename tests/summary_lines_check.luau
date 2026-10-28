@@ -32,7 +32,7 @@ check("retry: not settled", SummaryLines.settled({ settlement = "retry" }), fals
 
 l = lines("saved", 1)
 check("saved: count", l[2], "Rank 1 · 1 shift completed")
-check("saved: wording", l[3], "Progress saved")
+check("saved: wording", l[3], "Saved!")
 check("saved: settled", SummaryLines.settled({ settlement = "saved" }), true)
 
 l = lines("saved", 2)
@@ -202,10 +202,12 @@ end
 
 -- Play-once presentation cues (motion brief rule 1): keyed by shift, outside the UI.
 local state = {}
+local clock = 0
 local function cue(settlement: string, recorded: boolean, id: string): any
 	local sn = snap(settlement, recorded, if recorded then 70 else 40, 30)
 	sn.shiftId = id
-	return SummaryLines.presentation(state, sn, 100)
+	clock += 1
+	return SummaryLines.presentation(state, sn, 100, clock)
 end
 local c = cue("pending", false, "A")
 check("cue first: reason", c.reason, "first")
@@ -234,6 +236,29 @@ check("cue new shift saved at once: nothing to confirm later", c.confirmXp, fals
 c = cue("saved", true, "B")
 check("cue resize after: rebuild", c.reason, "rebuild")
 check("cue resize after: no advance", c.advanceXp, false)
+
+-- The save line's landing (Lawson 2026-10-28): once, when the save is first seen saved; a
+-- rebuilt card keeps the moment it landed; a later wait or retry starts it over.
+c = cue("pending", false, "C")
+check("save cue pending: not landed", c.saveFresh, false)
+check("save cue pending: no moment", c.savedAt, nil)
+c = cue("saved", true, "C")
+check("save cue lands: fresh", c.saveFresh, true)
+local landedAt = c.savedAt
+check("save cue lands: at the caller's clock", landedAt, clock)
+c = cue("saved", true, "C")
+check("save cue rebuild: not fresh again", c.saveFresh, false)
+check("save cue rebuild: same moment", c.savedAt, landedAt)
+c = cue("retry", false, "D")
+check("save cue failed: not landed", c.saveFresh, false)
+c = cue("pending", false, "D")
+check("save cue retrying: not landed", c.savedAt, nil)
+c = cue("saved", true, "D")
+check("save cue after a retry: lands once", c.saveFresh, true)
+c = cue("saved", true, "E")
+check("save cue saved at once: first and fresh", c.reason == "first" and c.saveFresh, true)
+c = cue("session", true, "F")
+check("save cue session: never lands", c.saveFresh or c.savedAt ~= nil, false)
 
 local report = string.format("summary lines checks: %d passed, %d failed", passed, #failures)
 if #failures > 0 then

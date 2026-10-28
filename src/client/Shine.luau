@@ -2,8 +2,8 @@
 -- Light for reward moments (slice 5; Lawson 2026-10-28 asked for glimmer and shine on the
 -- end-of-shift card, its coins and its XP meter): sweeps of light across a surface or a
 -- label, twinkles and bursts of them, rings, glows and flares, light rays, a glow round a
--- panel's edge, drifting motes, a flash, a coin's spin and small coins tossed out of one.
--- Curves and timings come from MotionPlan.
+-- panel's edge, drifting motes, a flash, a coin's spin, small coins tossed out of one and a
+-- burst of confetti. Curves and timings come from MotionPlan.
 --
 -- Every effect plays on the Motion driver, so the Studio test clock holds it and a skip is
 -- exact: given a presentation, the presentation owns the effect and its finish removes it at
@@ -15,10 +15,10 @@
 -- Stand-ins (declared, not supplied art): no sparkle, ray or cool glow art has been
 -- supplied, so a twinkle is drawn here from four soft light streaks, a bright core and a soft
 -- halo; a cool glow from stacked soft discs; light rays from soft beams; a panel's edge glow
--- from stacked rounded outlines; a sweep of light is a band in a UIGradient. Shine.skin.sparkle
--- names supplied art to use for twinkles instead (one image, tinted per use). Supplied art
--- used as it is: fx_select_ring (rings), fx_oven_glow (warm glows and flares) and icon_coin
--- (tossed coins).
+-- from stacked rounded outlines; a sweep of light is a band in a UIGradient; confetti pieces
+-- (paper, pepperoni, basil) are drawn shapes. Shine.skin.sparkle names supplied art to use
+-- for twinkles instead (one image, tinted per use). Supplied art used as it is:
+-- fx_select_ring (rings), fx_oven_glow (warm glows and flares) and icon_coin (tossed coins).
 
 local Art = require(game:GetService("ReplicatedStorage").Shared.Art)
 local Motion = require(script.Parent.Motion)
@@ -674,6 +674,167 @@ function Shine.toss(pr: Owner, host: Instance, o: TossOptions)
 			image.ImageTransparency = if q < 0.6 then 0 else ((q - 0.6) / 0.4) ^ 1.3
 		end, function()
 			image.ImageTransparency = 1
+		end)
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Confetti
+
+export type ConfettiOptions = {
+	at: UDim2, -- the middle of the line the pieces leave from
+	width: number, -- px: how wide that line is
+	count: number,
+	speed: number, -- px a second they leave at, at most
+	drag: number, -- how fast the air slows them (1/s)
+	fall: number, -- px a second they flutter down at, at most
+	size: number, -- px: the length of an average piece
+	life: number,
+	back: number, -- ZIndex of the pieces behind the card
+	front: number, -- ZIndex of the pieces in front of it
+	frontShare: number, -- share of the pieces in front
+	seed: number, -- the same burst every time
+	delay: number?,
+}
+
+-- Paper in the pizzeria's colours (tomato, cheese, the XP teal, cream, oven orange, basil),
+-- with pepperoni slices and basil leaves among it.
+local PAPER = {
+	Color3.fromRGB(226, 91, 69),
+	Color3.fromRGB(255, 200, 68),
+	Color3.fromRGB(44, 196, 168),
+	Color3.fromRGB(255, 245, 224),
+	Color3.fromRGB(240, 160, 64),
+	Color3.fromRGB(127, 179, 94),
+}
+local PEPPERONI = Color3.fromRGB(205, 74, 56)
+local PEPPERONI_SPOT = Color3.fromRGB(150, 44, 34)
+local LEAF = Color3.fromRGB(96, 156, 72)
+local SHADE = Color3.fromRGB(70, 44, 36)
+-- Shapes: width and height as shares of the piece's length, corner radius, how often.
+local PIECES = {
+	{ kind = "strip", w = 0.42, h = 1, corner = 0.12, weight = 40 },
+	{ kind = "square", w = 0.62, h = 0.62, corner = 0.1, weight = 20 },
+	{ kind = "dot", w = 0.52, h = 0.52, corner = 0.5, weight = 12 },
+	{ kind = "pepperoni", w = 0.7, h = 0.7, corner = 0.5, weight = 14 },
+	{ kind = "leaf", w = 0.44, h = 0.95, corner = 0.5, weight = 14 },
+}
+
+local function pickPiece(rng: Random): any
+	local total = 0
+	for _, p in PIECES do
+		total += p.weight
+	end
+	local r = rng:NextNumber(0, total)
+	for _, p in PIECES do
+		r -= p.weight
+		if r <= 0 then
+			return p
+		end
+	end
+	return PIECES[1]
+end
+
+-- A burst of confetti: pieces thrown up and outward from along a line, slowed by the air,
+-- fluttering down (each sways, turns and tumbles end over end, darkening edge-on) and
+-- fading out. Some fly behind the card and some in front; the front ones leave from the
+-- outer parts of the line and lean outward, so few cross the card's middle. Stand-in: the
+-- pieces are drawn shapes (no confetti art has been supplied).
+function Shine.confetti(pr: Owner, host: Instance, o: ConfettiOptions)
+	local rng = Random.new(o.seed)
+	for _ = 1, o.count do
+		local piece = pickPiece(rng)
+		local front = rng:NextNumber() < o.frontShare
+		local depth = if front then 1.12 else 0.86
+		local len = o.size * depth * rng:NextNumber(0.8, 1.15)
+		local w, h = math.max(3, math.round(len * piece.w)), math.max(3, math.round(len * piece.h))
+		local colour = if piece.kind == "pepperoni" then PEPPERONI
+			elseif piece.kind == "leaf" then LEAF
+			else PAPER[rng:NextInteger(1, #PAPER)]
+		if not front then
+			-- Further away: a little smaller and a little dimmer.
+			colour = colour:Lerp(SHADE, 0.12)
+		end
+		local holder = Ui.new("Frame", {
+			Name = "Confetti",
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = o.at,
+			Size = UDim2.fromOffset(w, h),
+			ZIndex = if front then o.front else o.back,
+			Parent = host,
+		})
+		local paper = Ui.new("Frame", {
+			Name = "Paper",
+			BackgroundColor3 = colour,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = holder.ZIndex,
+			Parent = holder,
+		}, {
+			Ui.new("UICorner", { CornerRadius = UDim.new(piece.corner, 0) }),
+		})
+		local spots: { Frame } = {}
+		if piece.kind == "pepperoni" then
+			for _, s in { { 0.32, 0.36, 0.22 }, { 0.64, 0.6, 0.18 }, { 0.36, 0.7, 0.13 } } do
+				table.insert(spots, Ui.new("Frame", {
+					BackgroundColor3 = PEPPERONI_SPOT,
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(s[1], s[2]),
+					Size = UDim2.fromScale(s[3], s[3]),
+					ZIndex = holder.ZIndex,
+					Parent = paper,
+				}, { round() }))
+			end
+		end
+		local scale = Ui.new("UIScale", { Scale = 0.3, Parent = holder })
+		-- Front pieces leave from the outer thirds of the line and lean further out.
+		local u = if front
+			then (if rng:NextNumber() < 0.5 then rng:NextNumber(0, 0.3) else rng:NextNumber(0.7, 1))
+			else rng:NextNumber()
+		local x0 = (u - 0.5) * o.width
+		local fan = math.rad(if front then 64 else 46)
+		local a = -math.pi / 2 + (u - 0.5) * 2 * fan + math.rad(rng:NextNumber(-14, 14))
+		local speed = o.speed * rng:NextNumber(0.5, 1)
+		local vx, vy = math.cos(a) * speed, math.sin(a) * speed
+		local drag = o.drag * rng:NextNumber(0.85, 1.2)
+		local gravity = o.fall * drag
+		local sway = len * rng:NextNumber(0.6, 1.6)
+		local swayRate = rng:NextNumber(3.5, 6.5)
+		local swayPhase = rng:NextNumber(0, math.pi * 2)
+		local spin = rng:NextNumber(150, 520) * (if rng:NextNumber() < 0.5 then -1 else 1)
+		local turn0 = rng:NextNumber(0, 360)
+		local tumble = rng:NextNumber(4, 11)
+		local tumblePhase = rng:NextNumber(0, math.pi * 2)
+		local life = o.life * rng:NextNumber(0.8, 1.05)
+		local delay = (o.delay or 0) + rng:NextNumber(0, 0.05)
+		play(pr, holder, delay, life, function(q)
+			local t = q * life
+			local slow = math.exp(-drag * t)
+			local x, y = MotionPlan.confetti(t, vx, vy, drag, gravity)
+			x += x0 + sway * math.sin(swayRate * t + swayPhase) * (1 - slow)
+			holder.Position = o.at + UDim2.fromOffset(x, y)
+			holder.Rotation = turn0 + spin * (0.4 * t + 0.6 * (1 - slow) / drag)
+			scale.Scale = 0.3 + 0.7 * MotionPlan.easeOut(math.min(t / 0.1, 1))
+			-- Tumbling end over end: it narrows and darkens edge-on.
+			local c = math.abs(math.cos(tumble * t + tumblePhase))
+			paper.Size = UDim2.fromScale(math.max(c, 0.12), 1)
+			paper.BackgroundColor3 = colour:Lerp(SHADE, (1 - c) * 0.35)
+			local fade = if q < 0.72 then 0 else ((q - 0.72) / 0.28) ^ 1.2
+			paper.BackgroundTransparency = fade
+			for _, spot in spots do
+				spot.BackgroundTransparency = fade
+			end
+		end, function()
+			paper.BackgroundTransparency = 1
+			for _, spot in spots do
+				spot.BackgroundTransparency = 1
+			end
 		end)
 	end
 end

@@ -1,8 +1,9 @@
 -- Checks for the shared motion language (MotionPlan, slice 5): the count-up ends exactly on
 -- its value and never goes back, ticks stay under the rate limit and are never queued, a pop
 -- ends on 1 after one overshoot, the XP bar carries overflow across rank thresholds, the light
--- curves (twinkle, coin spin, ring, sweep, turn-in, the rays' turn, tossed coins' arcs) start
--- and end where they must, and the shift reward timeline keeps Astra's order (panel, heading,
+-- curves (twinkle, coin spin, ring, sweep, turn-in, the rays' turn, tossed coins' arcs,
+-- confetti) and the save line's wave, spinner, check, hop and fade start and end where they
+-- must, and the shift reward timeline keeps Astra's order (panel, heading,
 -- coin impact, coin count and its payoff, then XP and its payoff) inside its bounded length.
 -- It plays on the first showing only. Numbers and order only: smoothness, feel and real-time
 -- frame rate need Lawson's eyes on the running game, not this file.
@@ -342,6 +343,89 @@ do
 	check("reduced: short", MotionPlan.total(tl) <= 0.2, true)
 	tl = MotionPlan.rewardTimeline(30, 0, 30, false, true, true)
 	check("reduced later showing: nothing plays", #tl, 0)
+end
+
+-- Confetti and the save line (Lawson 2026-10-28).
+do
+	check("confetti: the phone throws fewer", T.confettiCompact < T.confetti, true)
+	check("confetti: most pieces fly behind the card", T.confettiFront > 0 and T.confettiFront < 0.5, true)
+	check("confetti: as the panel lands", T.confettiAt >= 0 and T.confettiAt < T.panelEnter, true)
+	-- A piece leaves from its origin, rises, slows, and falls no faster than gravity / drag.
+	local x0, y0 = MotionPlan.confetti(0, 300, -900, 3, 750)
+	check("confetti: starts at its origin", near(x0, 0) and near(y0, 0), true)
+	local _, yTop = MotionPlan.confetti(0.5, 300, -900, 3, 750)
+	check("confetti: rises first", yTop < -100, true)
+	local xa, ya = MotionPlan.confetti(3, 300, -900, 3, 750)
+	local xb, yb = MotionPlan.confetti(3.1, 300, -900, 3, 750)
+	check("confetti: drifts out no further than speed / drag", xa < 100 and xb >= xa, true)
+	check("confetti: falls at about gravity / drag", math.abs((yb - ya) / 0.1 - 250) < 5, true)
+
+	-- The waiting word: each letter hops in turn, the line rests between waves, and no letter
+	-- ever dips below the line.
+	local n = 9
+	local cycle = MotionPlan.saveWaveCycle(n)
+	check("wave: first letter at rest at the start", MotionPlan.saveWave(0, 1, n), 0)
+	check("wave: first letter tops out mid-hop", near(MotionPlan.saveWave(T.saveWaveHop / 2, 1, n), 1), true)
+	check(
+		"wave: the next letter follows",
+		MotionPlan.saveWave(T.saveWaveStep, 2, n) == 0 and MotionPlan.saveWave(T.saveWaveStep + T.saveWaveHop / 2, 2, n) > 0.99,
+		true
+	)
+	check("wave: repeats", math.abs(MotionPlan.saveWave(0.2, 3, n) - MotionPlan.saveWave(0.2 + cycle, 3, n)) < 1e-6, true)
+	local restAt = (n - 1) * T.saveWaveStep + T.saveWaveHop + T.saveWaveRest / 2
+	local still, low = true, 0
+	for i = 1, n do
+		if MotionPlan.saveWave(restAt, i, n) ~= 0 then
+			still = false
+		end
+		for k = 0, 40 do
+			low = math.min(low, MotionPlan.saveWave(k * cycle / 40, i, n))
+		end
+	end
+	check("wave: the line rests between waves", still, true)
+	check("wave: never below the line", low >= 0, true)
+
+	-- The spinner turns once per T.saveTurn; its arc breathes between its bounds.
+	local turn0, arc0 = MotionPlan.spinner(0)
+	check("spinner: starts on its smallest arc", near(turn0, 0) and near(arc0, T.saveArcMin), true)
+	check("spinner: half a turn in half a period", near((MotionPlan.spinner(T.saveTurn / 2)), 180), true)
+	local _, arcMid = MotionPlan.spinner(T.saveBreath / 2)
+	check("spinner: breathes out to its largest arc", near(arcMid, T.saveArcMax), true)
+	check("arc cut: nothing", near(MotionPlan.arcCut(0), 1), true)
+	check("arc cut: the whole ring", near(MotionPlan.arcCut(1), 0), true)
+	check("arc cut: half", near(MotionPlan.arcCut(0.5), 0.5), true)
+
+	-- The check draws its short stroke, then its long one, and ends complete.
+	local s0, l0 = MotionPlan.checkDraw(0, 0.34)
+	local sMid, lMid = MotionPlan.checkDraw(0.3, 0.34)
+	local s1, l1 = MotionPlan.checkDraw(1, 0.34)
+	check("check: starts undrawn", s0 == 0 and l0 == 0, true)
+	check("check: short stroke first", sMid > 0 and lMid == 0, true)
+	check("check: ends complete", near(s1, 1) and near(l1, 1), true)
+
+	-- The words' hop: from rest, up to the top, one small bounce, at rest and full size.
+	local hop0, scale0 = MotionPlan.hop(0)
+	local hop1, scale1 = MotionPlan.hop(1)
+	local top, bounce = 0, 0
+	for k = 0, 100 do
+		local lift = MotionPlan.hop(k / 100)
+		if k < 70 then
+			top = math.max(top, lift)
+		else
+			bounce = math.max(bounce, lift)
+		end
+	end
+	check("hop: starts at rest", near(hop0, 0) and near(scale0, 0.86), true)
+	check("hop: rises to the top", near(top, 1), true)
+	check("hop: one small bounce", bounce > 0.1 and bounce <= 0.18 + 1e-9, true)
+	check("hop: ends at rest, full size", math.abs(hop1) < 1e-9 and near(scale1, 1), true)
+
+	-- "Saved!" holds a couple of seconds, then fades over T.saveFade.
+	local start = MotionPlan.savedFadeStart()
+	check("saved: holds a couple of seconds", T.saveHold >= 1.5 and T.saveHold <= 3, true)
+	check("saved: fade starts after the hop and the hold", near(start, T.saveWordAt + T.saveHop + T.saveHold), true)
+	check("saved: shown while it holds", MotionPlan.savedFade(start - 0.01), 0)
+	check("saved: gone after its fade", MotionPlan.savedFade(start + T.saveFade), 1)
 end
 
 local report = string.format("motion checks: %d passed, %d failed", passed, #failures)

@@ -1029,8 +1029,9 @@ local function refreshSummary(snap: any)
 	-- that buildLayout rebuilds, keyed by shift): only the first showing of a shift fades the
 	-- scrim in, reveals its earnings and counts its XP into the bar (as a labelled projection
 	-- while the save runs); the save's acceptance locks it in once without replaying it; a
-	-- resize, correction or late notification shows the final state at once.
-	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank)
+	-- resize, correction or late notification shows the final state at once. The save line's
+	-- landing ("Saved!") plays once too, timed on the motion clock.
+	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank, Motion.now())
 	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
 	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
 	local model = SummaryLines.model(snap, Config.Rewards.xpPerRank)

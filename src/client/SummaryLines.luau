@@ -21,7 +21,8 @@ function SummaryLines.build(snap: any): { string }
 		if SummaryLines.settled(snap)
 			then string.format("Rank %d · %d shift%s completed", profile.rank or 1, count, if count == 1 then "" else "s")
 			else string.format("Rank %d", profile.rank or 1),
-		if snap.settlement == "saved" then "Progress saved"
+		-- Lawson 2026-10-28: the save line lands on "Saved!" (it fades away after a moment).
+		if snap.settlement == "saved" then "Saved!"
 			elseif snap.settlement == "retry" then "Save not confirmed. Please retry."
 			elseif snap.settlement == "session" then "Progress not saved"
 			else "Saving...",
@@ -184,22 +185,44 @@ end
 -- locks in once and a real rank-up may now be celebrated; nothing counts again) or "rebuild"
 -- (anything else: a resize, a correction, a repeated or late notification: final values).
 -- Keyed by shift id, so a retry, reopen or duplicate never replays a reward.
-export type Cue = { reason: string, revealEarnings: boolean, advanceXp: boolean, confirmXp: boolean }
+-- The save line's landing plays once too: savedAt is when this shift's save was first seen
+-- saved (on the caller's clock, `now`), saveFresh says this is that moment; a rebuilt card
+-- uses savedAt to show "Saved!" for what is left of its time. A later wait or retry clears it.
+export type Cue = {
+	reason: string,
+	revealEarnings: boolean,
+	advanceXp: boolean,
+	confirmXp: boolean,
+	savedAt: number?,
+	saveFresh: boolean,
+}
 
-function SummaryLines.presentation(state: { [string]: any }, snap: any, xpPerRank: number?): Cue
+function SummaryLines.presentation(state: { [string]: any }, snap: any, xpPerRank: number?, now: number?): Cue
 	local key = tostring(snap.shiftId)
 	local seen = state[key]
 	local bar = SummaryLines.bar((snap.profile or {}).xp, snap.xp or 0, snap.recorded == true, xpPerRank)
 	local counted = bar ~= nil and bar.counted
+	local cue: Cue
 	if not seen then
-		state[key] = { xpCounted = counted }
-		return { reason = "first", revealEarnings = true, advanceXp = bar ~= nil, confirmXp = false }
-	end
-	if counted and not seen.xpCounted then
+		seen = { xpCounted = counted }
+		state[key] = seen
+		cue = { reason = "first", revealEarnings = true, advanceXp = bar ~= nil, confirmXp = false, saveFresh = false }
+	elseif counted and not seen.xpCounted then
 		seen.xpCounted = true
-		return { reason = "settled", revealEarnings = false, advanceXp = false, confirmXp = true }
+		cue = { reason = "settled", revealEarnings = false, advanceXp = false, confirmXp = true, saveFresh = false }
+	else
+		cue = { reason = "rebuild", revealEarnings = false, advanceXp = false, confirmXp = false, saveFresh = false }
 	end
-	return { reason = "rebuild", revealEarnings = false, advanceXp = false, confirmXp = false }
+	if snap.settlement == "saved" then
+		if seen.savedAt == nil then
+			seen.savedAt = now or 0
+			cue.saveFresh = true
+		end
+	else
+		seen.savedAt = nil
+	end
+	cue.savedAt = seen.savedAt
+	return cue
 end
 
 return SummaryLines

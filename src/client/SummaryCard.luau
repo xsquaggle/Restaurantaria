@@ -6,7 +6,8 @@
 -- Supplied art: ui_panel_summary, icon_shift_complete, icon_coin, icon_xp_star, ui_xp_track,
 -- ui_xp_fill and the primary button family (astra-response-7); fx_oven_glow lights the coin
 -- and the emblem. The rest of the reward light (Shine: sparkles, rays, the card's edge glow,
--- the star's glow, sweeps) is declared stand-ins: no sparkle, ray or cool glow art has been
+-- the star's glow, sweeps, confetti) and the save line's spinner and check (SaveLine) are
+-- declared stand-ins: no sparkle, ray, cool glow, confetti, spinner or check art has been
 -- supplied.
 --
 -- Layout and presentation are separate so the card can be re-skinned or animated without
@@ -19,6 +20,7 @@ local Art = require(game:GetService("ReplicatedStorage").Shared.Art)
 local Assets = require(game:GetService("ReplicatedStorage").Shared.Assets)
 local Motion = require(script.Parent.Motion)
 local MotionPlan = require(script.Parent.MotionPlan)
+local SaveLine = require(script.Parent.SaveLine)
 local Shine = require(script.Parent.Shine)
 local SummaryLines = require(script.Parent.SummaryLines)
 local Theme = require(script.Parent.Theme)
@@ -75,6 +77,7 @@ export type View = {
 	-- The fixed footer: the one save line and the action.
 	footer: Frame,
 	status: TextLabel,
+	saveLine: SaveLine.Line, -- the save line's motion over the status row
 	button: Widgets.Button,
 	-- True while the reward rows scroll (the content is taller than the screen allows).
 	scrolling: () -> boolean,
@@ -446,6 +449,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		LayoutOrder = 1,
 		Parent = footer,
 	})
+	local saveLine = SaveLine.new(status, size("status", compact))
 	-- The tight card keeps the phone button (56 px; its art draws 224/240 of that, 52 px):
 	-- the reward rows scroll before the action's silhouette would shrink (Astra r17 R17-08).
 	local buttonH = if compact or tight then 56 else 72
@@ -560,6 +564,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		captionSize = size("caption", compact),
 		footer = footer,
 		status = status,
+		saveLine = saveLine,
 		button = button,
 		scrolling = function()
 			return scroller ~= nil
@@ -633,22 +638,34 @@ local function writeBar(view: View, model: any)
 	end
 end
 
-local function writeStatus(view: View, model: any)
-	view.status.Text = model.status
-	view.status.TextColor3 = TONE[model.tone] or C.mutedInk
+-- `landing` says whether the save has just landed (the save line plays it once) or how long
+-- ago it did; nil keeps whatever the line shows for an unchanged state.
+local function writeStatus(view: View, model: any, landing: SaveLine.Cue?)
+	SaveLine.set(view.saveLine, model.tone, model.status, TONE[model.tone] or C.mutedInk, landing)
 	view.button:setLabel(model.action.label)
 	-- Waiting for the save is an automatic wait: the mint standby, no emphasis, no press.
 	view.button:setStandby(model.action.mode == "standby")
 end
 
-local function writeValues(view: View, model: any)
+local function writeValues(view: View, model: any, landing: SaveLine.Cue?)
 	view.coins.Text = coinText(model.coins)
 	if view.bonus then
 		view.bonus.Text = bonusText(model.bonus)
 	end
 	writeXpLabel(view, model)
 	writeBar(view, model)
-	writeStatus(view, model)
+	writeStatus(view, model, landing)
+end
+
+-- The save line's cue from the presentation cue: whether the save has just landed and how
+-- long ago it did, on the motion clock; a fresh landing waits `delay` seconds.
+local function landingOf(cue: any?, delay: number): SaveLine.Cue
+	local at = if cue ~= nil then cue.savedAt else nil
+	return {
+		fresh = cue ~= nil and cue.saveFresh == true,
+		age = if at ~= nil then Motion.now() - at else math.huge,
+		delay = delay,
+	}
 end
 
 ------------------------------------------------------------------------------------------
@@ -659,15 +676,17 @@ end
 --
 -- `cue` (SummaryLines.presentation) says why the card is shown: only cue.revealEarnings
 -- plays the sequence (once per shift). The panel lands as light rays and a warm glow come up
--- behind it and a sweep of light crosses it; the emblem stamps in with a flare; the coin
--- spins down and glows brighter as it counts among sparkles, then pays off in a flare, a ring,
--- a burst of sparkles and a toss of small coins while the light behind the card surges; the
--- XP arrives in the star's glow, counts and fills the bar from the real pre-shift progress
--- with light on its leading edge, across rank thresholds, then flashes and flares. A pending
--- award fills as a labelled projection and never gets the definitive rank-up; when the save
+-- behind it, a little burst of confetti flies up from behind its top edge and a sweep of
+-- light crosses it; the emblem stamps in with a flare; the coin spins down and glows
+-- brighter as it counts among sparkles, then pays off in a flare, a ring, a burst of
+-- sparkles and a toss of small coins while the light behind the card surges; the XP arrives
+-- in the star's glow, counts and fills the bar from the real pre-shift progress with light
+-- on its leading edge, across rank thresholds, then flashes and flares. A pending award
+-- fills as a labelled projection and never gets the definitive rank-up; when the save
 -- accepts it (cue.confirmXp) it locks in with a flash, and only then a real rank-up is
 -- celebrated. Nothing counts twice. A shift that earned nothing is revealed quietly: no
--- rays, glows or payoff light.
+-- rays, glows, confetti or payoff light. The save line (SaveLine) waves while the save runs
+-- and lands once on "Saved!" (cue.saveFresh), which fades away after a moment.
 -- At rest the rays turn slowly at a lower light, the coin and the star keep a soft glow, the
 -- action gets a call to action once it can be pressed, then an occasional glint.
 -- Reduced motion shows final values with a short fade on the first showing only, no light.
@@ -826,6 +845,34 @@ local function pulseGlow(key: any, glow: Shine.Glow, rest: number, life: number,
 		local k = math.sin(math.pi * p)
 		glow.set(1 + 0.1 * k, rest - by * k)
 	end)
+end
+
+-- A little burst of confetti as the card lands (Lawson 2026-10-28): from just inside the
+-- card's top edge, up and outward, some behind the card and some in front. It carries no
+-- value, so the presentation does not own it: a skip lets it fall on, a rebuild clears it.
+local function confetti(show: Show)
+	local card = show.view.card
+	local host = card.Parent
+	if show.closed or not host then
+		return
+	end
+	local T = Motion.T
+	local w, h = card.Size.X.Offset, card.Size.Y.Offset
+	local k = w / 560
+	Shine.confetti(nil, host, {
+		at = UDim2.new(0.5, 0, 0.5, math.round(-h / 2 + h * 0.1)),
+		width = w * 0.8,
+		count = if show.view.compact then T.confettiCompact else T.confetti,
+		speed = T.confettiSpeed * k,
+		drag = T.confettiDrag,
+		fall = T.confettiFall * k,
+		size = T.confettiSize * k,
+		life = T.confettiLife,
+		back = card.ZIndex - 1,
+		front = card.ZIndex + 1,
+		frontShare = T.confettiFront,
+		seed = 23,
+	})
 end
 
 ------------------------------------------------------------------------------------------
@@ -1186,10 +1233,11 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		idle = {},
 		phases = {},
 	}
-	writeValues(view, model)
 	local reveal = cue ~= nil and cue.revealEarnings == true
 	local fillBar = reveal and cue ~= nil and cue.advanceXp == true and model.bar ~= nil and view.track ~= nil
 	local reduced = Motion.reduced()
+	-- A save that has already landed when the card first shows lands as the panel does.
+	writeValues(view, model, landingOf(cue, if reveal and not reduced then Motion.T.panelEnter * 0.5 else 0))
 	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, fillBar, reduced)
 	show.phases = phases
 	local T = Motion.T
@@ -1225,7 +1273,8 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 
 	if reduced then
 		-- A short fade of the whole card; every value is final already.
-		local f = Motion.fader(view.card)
+		local f = Motion.fader(view.card, { view.status })
+		SaveLine.appear(view.saveLine, T.reducedFade)
 		pr:own(f.key, function()
 			f:rest()
 		end)
@@ -1239,7 +1288,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 
 	-- Everything that arrives later waits hidden in its resting place; the card art, the
 	-- save line and the action fade in with the panel. The glows have their own light.
-	local skip: { Instance } = { view.header, view.earned, view.xp }
+	local skip: { Instance } = { view.header, view.earned, view.xp, view.status }
 	if view.bonus then
 		table.insert(skip, view.bonus)
 	end
@@ -1306,6 +1355,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	-- warm glow come up behind it; a glare of light crosses it and twinkles catch its rim.
 	Motion.trace("phase", "panel")
 	cardFade:show(T.panelFade)
+	SaveLine.appear(view.saveLine, T.panelFade)
 	Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
 	Motion.settle(view.card, T.panelRise, T.panelEnter)
 	Motion.hook("impact", "panel")
@@ -1330,6 +1380,9 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 			setGlory(show, MotionPlan.easeOut(p))
 		end)
 		turnRays(show, Motion.now())
+		pr:at(T.confettiAt, function()
+			confetti(show)
+		end)
 	end
 	local s = view.card.SliceScale
 	Shine.sheen(pr, view.card, {
@@ -1628,7 +1681,7 @@ function SummaryCard.update(show: Show, model: any, cue: any?)
 	local old = show.model
 	show.model = model
 	local view = show.view
-	writeStatus(view, model)
+	writeStatus(view, model, landingOf(cue, 0))
 	if view.bonus then
 		view.bonus.Text = bonusText(model.bonus)
 	end
@@ -1696,6 +1749,7 @@ function SummaryCard.close(show: Show)
 	for _, key in show.idle do
 		Motion.stop(key, false)
 	end
+	SaveLine.close(show.view.saveLine)
 	SummaryCard.finish(show)
 end
 

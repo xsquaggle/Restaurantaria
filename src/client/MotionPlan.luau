@@ -2,7 +2,8 @@
 -- The game-wide motion language as numbers and curves (Astra r15 motion-and-reward-spec):
 -- press, pop (one restrained overshoot), settle, the slowing count-up, the rate-limited count
 -- ticks, the XP fill across rank thresholds, the shift reward timeline and the curves its
--- light effects follow (twinkle, coin spin, ring, sweep, the rays' turn, tossed coins' arcs).
+-- light effects follow (twinkle, coin spin, ring, sweep, the rays' turn, tossed coins' arcs,
+-- confetti), and the save line's wave, spinner, check and hop.
 -- Pure: no services, no instances, so the timing and the values a presentation ends on can
 -- be checked offline. Motion and Shine (the Roblox side) play these. The starting settings
 -- are Astra's; the end-of-shift sequence is retuned here for Lawson's 2026-10-28 direction (a
@@ -128,6 +129,45 @@ MotionPlan.T = {
 	reducedFade = 0.12,
 	-- Count ticks: at most 10 a second, never queued (spec 5).
 	tickRate = 10,
+	-- Confetti as the end-of-shift card lands (Lawson 2026-10-28): a little burst from behind
+	-- the card's top edge, thrown up and out, slowed by the air and fluttering down. Speeds
+	-- and sizes are for the desktop card (560 px wide) and scale with the card.
+	confettiAt = 0.06, -- seconds after the panel starts to land
+	confetti = 40, -- pieces (the phone card throws fewer)
+	confettiCompact = 26,
+	confettiSpeed = 980, -- px a second they leave at, at most
+	confettiDrag = 3.1, -- how fast the air slows them (1/s)
+	confettiFall = 250, -- px a second they flutter down at, at most
+	confettiSize = 16, -- px: the length of an average piece
+	confettiLife = 2.5,
+	confettiFront = 0.35, -- share of pieces in front of the card; the rest fly behind it
+	-- The save line (Lawson 2026-10-28). While the save runs, "Saving..." waves letter by
+	-- letter (each letter hops in turn, then the line rests) beside a spinner whose arc
+	-- breathes as it turns. When the save lands the spinner whirls and closes into a ring, the
+	-- ring fills into a green disc with one overshoot, the check draws on, and the words hop
+	-- once (one small bounce) into "Saved!", which fades out after a couple of seconds.
+	saveWaveStep = 0.07, -- seconds between one letter's hop and the next
+	saveWaveHop = 0.44, -- seconds one letter's hop lasts
+	saveWaveRest = 0.36, -- seconds the line rests between waves
+	saveWaveLift = 0.24, -- how high a letter hops, in text heights
+	saveTurn = 0.9, -- seconds per turn of the spinner
+	saveArcMin = 0.2, -- the spinner's arc, as a share of its ring, breathing between these
+	saveArcMax = 0.7,
+	saveBreath = 1.6, -- seconds per breath of the arc
+	saveWhirl = 0.34, -- seconds the spinner whirls and closes into a ring as the save lands
+	saveWhirlTurns = 1.25, -- extra turns while it whirls
+	saveDiscAt = 0.2, -- seconds into the landing the ring starts to fill into the disc
+	saveDisc = 0.32,
+	saveDiscFrom = 0.4,
+	saveDiscPeak = 1.18,
+	saveCheckAt = 0.34, -- seconds into the landing the check starts to draw
+	saveCheck = 0.3,
+	saveWordAt = 0.3, -- seconds into the landing the words change and hop
+	saveHop = 0.46,
+	saveHopLift = 0.42, -- in text heights
+	saveSlide = 0.4, -- share of the hop the line takes to re-centre on the shorter word
+	saveHold = 2, -- seconds "Saved!" stays after it has landed
+	saveFade = 0.45,
 }
 
 -- Share of a pop spent rising to the peak; the rest settles back to 1.
@@ -383,6 +423,89 @@ function MotionPlan.find(phases: { Phase }, name: string): Phase?
 		end
 	end
 	return nil
+end
+
+------------------------------------------------------------------------------------------
+-- Confetti and the save line
+
+-- Where a piece of confetti is `t` seconds after leaving with velocity (vx, vy) px a second,
+-- slowed by air drag `drag` (1/s) and falling under `gravity` px a second squared (screen y
+-- grows downward): it slows quickly and never falls faster than gravity / drag.
+function MotionPlan.confetti(t: number, vx: number, vy: number, drag: number, gravity: number): (number, number)
+	local e = 1 - math.exp(-drag * t)
+	return vx / drag * e, vy / drag * e + gravity / drag * (t - e / drag)
+end
+
+-- Letter i (from 1) of an n-letter waiting word at `t` seconds: how far it has hopped (0 at
+-- rest, 1 at the top). Each letter hops in turn, easing up and down; the line then rests
+-- before the next wave.
+function MotionPlan.saveWaveCycle(n: number): number
+	local T = MotionPlan.T
+	return math.max(n - 1, 0) * T.saveWaveStep + T.saveWaveHop + T.saveWaveRest
+end
+
+function MotionPlan.saveWave(t: number, i: number, n: number): number
+	local T = MotionPlan.T
+	local u = (t % MotionPlan.saveWaveCycle(n) - (i - 1) * T.saveWaveStep) / T.saveWaveHop
+	if u <= 0 or u >= 1 then
+		return 0
+	end
+	local s = math.sin(math.pi * u)
+	return s * s
+end
+
+-- The spinner `t` seconds into a wait: its turn (degrees, 0..360) and its arc (share of the
+-- ring), breathing between T.saveArcMin and T.saveArcMax.
+function MotionPlan.spinner(t: number): (number, number)
+	local T = MotionPlan.T
+	local breath = 0.5 - 0.5 * math.cos(2 * math.pi * t / T.saveBreath)
+	return (360 * t / T.saveTurn) % 360, T.saveArcMin + (T.saveArcMax - T.saveArcMin) * breath
+end
+
+-- A ring drawn as a stroke cut by a linear gradient shows the arc of `share` of the ring
+-- (centred on the gradient's direction) when the gradient goes from hidden to shown at this
+-- point along it: 1 shows nothing, 0 the whole ring.
+function MotionPlan.arcCut(share: number): number
+	return (1 + math.cos(math.pi * clamp01(share))) / 2
+end
+
+-- The check drawing on at progress p, like a pen: how much of its short stroke and of its
+-- long stroke shows (0..1 each). `split` is the short stroke's share of the whole length.
+function MotionPlan.checkDraw(p: number, split: number): (number, number)
+	local s = easeInOut(p)
+	if s <= split then
+		return if split > 0 then s / split else 1, 0
+	end
+	return 1, if split < 1 then (s - split) / (1 - split) else 1
+end
+
+-- The new words' hop at progress p: how high they are (in hop heights: up fast, down under
+-- gravity, one small bounce, at rest at the end) and their scale (one overshoot, ending on 1).
+local HOP_UP, HOP_DOWN = 0.34, 0.7
+function MotionPlan.hop(p: number): (number, number)
+	p = clamp01(p)
+	local lift: number
+	if p < HOP_UP then
+		lift = MotionPlan.easeOut(p / HOP_UP)
+	elseif p < HOP_DOWN then
+		local d = (p - HOP_UP) / (HOP_DOWN - HOP_UP)
+		lift = 1 - d * d
+	else
+		lift = 0.18 * math.sin(math.pi * (p - HOP_DOWN) / (1 - HOP_DOWN))
+	end
+	return lift, MotionPlan.pop(p, 0.86, 1.12)
+end
+
+-- How long after a save lands its "Saved!" line starts to fade, and how faded it is
+-- (0 shown .. 1 gone) `since` seconds after it landed.
+function MotionPlan.savedFadeStart(): number
+	local T = MotionPlan.T
+	return T.saveWordAt + T.saveHop + T.saveHold
+end
+
+function MotionPlan.savedFade(since: number): number
+	local T = MotionPlan.T
+	return easeInOut((since - MotionPlan.savedFadeStart()) / T.saveFade)
 end
 
 return MotionPlan
