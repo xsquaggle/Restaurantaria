@@ -1222,12 +1222,15 @@ function ctx.showResult(ticketId: number)
 	local payLines = if compact then #model.payLines else 1
 	local pay = Ui.new("Frame", { Name = "Pay", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, payLines * (partSize + 4) + 4), LayoutOrder = 2, ZIndex = 10, Parent = content })
 	Ui.new("Frame", { Name = "Rule", BackgroundColor3 = C.mutedInk, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 10, Parent = pay })
+	-- Anchored on its centre so its landing pop grows from the middle of the icon.
+	local coinSize = partSize + 2
 	local coin = Ui.new("ImageLabel", {
 		Name = "Coin",
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
-		Position = UDim2.fromOffset(0, 5),
-		Size = UDim2.fromOffset(partSize + 2, partSize + 2),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(coinSize / 2, 5 + coinSize / 2),
+		Size = UDim2.fromOffset(coinSize, coinSize),
 		ZIndex = 10,
 		Parent = pay,
 	})
