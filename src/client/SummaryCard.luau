@@ -4,32 +4,40 @@
 -- line and one continuation action. Built from a SummaryLines model; every label is live text.
 --
 -- Supplied art: ui_panel_summary, icon_shift_complete, icon_coin, icon_xp_star, ui_xp_track,
--- ui_xp_fill and the primary button family (astra-response-7). Nothing is drawn in code.
+-- ui_xp_fill and the primary button family (astra-response-7). The light effects of the
+-- reward motion (Shine) are declared stand-ins: no sparkle art has been supplied.
 --
 -- Layout and presentation are separate so the card can be re-skinned or animated without
 -- touching the values: SummaryCard.build lays the card out at its final size and returns the
 -- live parts; SummaryCard.show puts the model's values in them and plays the reward motion
--- (slice 5, Astra r15 motion brief), which always ends on those same final values.
+-- (slice 5: Astra r15 motion brief, retuned and lit for Lawson's 2026-10-28 direction), which
+-- always ends on those same final values.
 
 local Art = require(game:GetService("ReplicatedStorage").Shared.Art)
 local Assets = require(game:GetService("ReplicatedStorage").Shared.Assets)
 local Motion = require(script.Parent.Motion)
 local MotionPlan = require(script.Parent.MotionPlan)
+local Shine = require(script.Parent.Shine)
+local SummaryLines = require(script.Parent.SummaryLines)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local Widgets = require(script.Parent.Widgets)
 
 local C = Theme.Colour
+local WHITE = Color3.new(1, 1, 1)
 
 local SummaryCard = {}
 
 -- Below this root height the card drops, in Astra's order (Message 15 ask 3), the optional
 -- row (none is built yet), the emblem art and the bar caption, and tightens its spacing, so
--- the required reward, save and action rows keep the text floors.
+-- the required reward, save and action rows keep the text floors. A qualifier the caption
+-- carried moves into the rank words (Astra r17 R17-08). Whatever still does not fit scrolls
+-- inside the card while the save line and the action stay fixed below it.
 SummaryCard.TIGHT_HEIGHT = 292
 
 export type View = {
 	tight: boolean, -- built in the small-height fallback (root under TIGHT_HEIGHT)
+	compact: boolean,
 	card: ImageLabel,
 	-- The groups the reward motion moves. Each sits centred in a fixed-size holder, so a
 	-- pop or a settle never moves the rows around it.
@@ -37,15 +45,36 @@ export type View = {
 	earned: Frame,
 	bonus: TextLabel?,
 	xp: Frame,
+	-- Icons sit centred in fixed holders (the layout places the holder), so each image can
+	-- scale, turn or spin about its centre with room for light around it.
+	emblem: ImageLabel?,
+	coinHolder: Frame,
+	coin: ImageLabel,
+	starHolder: Frame,
+	star: ImageLabel,
+	title: TextLabel,
 	left: Frame,
+	xpRow: Frame,
 	coins: TextLabel,
 	xpEarned: TextLabel,
 	rank: TextLabel,
 	caption: TextLabel?,
+	track: ImageLabel?,
+	-- The bar: the confirmed part (fillClip) over the lighter projected part (ghostClip).
 	fillClip: Frame?,
+	ghostClip: Frame?,
 	fillWidth: number,
+	fillH: number,
+	insetX: number,
+	insetY: number,
+	xpSize: number,
+	captionSize: number,
+	-- The fixed footer: the one save line and the action.
+	footer: Frame,
 	status: TextLabel,
 	button: Widgets.Button,
+	-- True while the reward rows scroll (the content is taller than the screen allows).
+	scrolling: () -> boolean,
 }
 
 -- Text sizes: desktop / phone. Phone primary text stays at 16 or more, secondary at 14.
@@ -61,6 +90,13 @@ local SIZE = {
 }
 
 local TONE = { saved = C.basil, pending = C.mutedInk, warn = C.tomato }
+
+-- Highlight colours the light sweeps carry through text.
+local TITLE_GLINT = Color3.fromRGB(240, 164, 72)
+local COIN_GLINT = Color3.fromRGB(255, 205, 96)
+local XP_GLINT = Color3.fromRGB(38, 196, 168)
+-- The coin's colour edge-on while it spins.
+local COIN_EDGE = Color3.fromRGB(196, 124, 44)
 
 local function size(name: string, compact: boolean): number
 	return SIZE[name][if compact then 2 else 1]
@@ -84,17 +120,29 @@ local function row(parent: Instance, name: string, height: number, order: number
 	})
 end
 
-local function icon(parent: Instance, art: string, px: number, order: number): ImageLabel
-	local label = Ui.new("ImageLabel", {
+-- An icon in a fixed holder: the holder is laid out, the image inside is centred. The holder
+-- sits above its row's text (z 2) so light around the icon passes over the words.
+local function badge(parent: Instance, art: string, px: number, order: number): (Frame, ImageLabel)
+	local holder = Ui.new("Frame", {
 		Name = art,
 		BackgroundTransparency = 1,
-		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromOffset(px, px),
 		LayoutOrder = order,
+		ZIndex = 2,
 		Parent = parent,
 	})
-	Art.apply(label, art)
-	return label
+	local image = Ui.new("ImageLabel", {
+		Name = "Image",
+		BackgroundTransparency = 1,
+		ScaleType = Enum.ScaleType.Fit,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+		Parent = holder,
+	})
+	Art.apply(image, art)
+	return holder, image
 end
 
 -- Moves a fixed-size row's contents into a centred "Group" frame of the same size, so the
@@ -149,6 +197,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	local cardW = math.min(if compact then 420 else 560, area.X - 24)
 	local padX = if compact then 22 else 36
 	local padY = if tight then 8 elseif compact then 12 else 24
+	local gap = if tight then 2 elseif compact then 4 else 12
 	local innerW = cardW - padX * 2
 	local card = Ui.new("ImageLabel", {
 		Name = "Card",
@@ -164,17 +213,26 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		Parent = parent,
 	})
 	Art.apply(card, "ui_panel_summary")
+	-- The reward rows live in the body (which scrolls if it must); the save line and the
+	-- action live in the footer, always in view.
+	local body = Ui.new("Frame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(padX, padY),
+		Size = UDim2.fromOffset(innerW, 0),
+		ZIndex = 1,
+		Parent = card,
+	})
 	local content = Ui.new("Frame", {
 		Name = "Content",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(padX, padY),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.fromOffset(innerW, 0),
-		Parent = card,
+		Parent = body,
 	}, {
 		Ui.new("UIListLayout", {
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, if tight then 2 elseif compact then 4 else 12),
+			Padding = UDim.new(0, gap),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -182,21 +240,27 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	-- 1. Emblem, title and the completed day.
 	local headH = if tight then 40 elseif compact then 44 else 72
 	local head = row(content, "Header", headH, 1)
+	head.ZIndex = 2
+	local emblem: ImageLabel? = nil
 	if not tight then
-		icon(head, "icon_shift_complete", headH, 1)
+		local _, image = badge(head, "icon_shift_complete", headH, 1)
+		emblem = image
 	end
 	local headText = column(head, 2)
-	line(headText, "Title", Theme.Font.display, size("title", compact), C.ink, 1).Text = "Shift complete!"
+	local title = line(headText, "Title", Theme.Font.display, size("title", compact), C.ink, 1)
+	title.Text = "Shift complete!"
 	local served = string.format("%d customer%s served", model.served, if model.served == 1 then "" else "s")
 	line(headText, "Day", Theme.Font.bodyBold, size("subtitle", compact), C.mutedInk, 2).Text = if model.day
 		then string.format("Day %d · %s", model.day, served)
 		else served
 	local headGroup = lift(head)
 
-	-- 2. Earned coins: the shift's whole reward (snap.tips), in the HUD's currency.
+	-- 2. Earned coins: the shift's whole reward (snap.tips), in the HUD's currency. Above the
+	-- other rows (z 3), so the coin's light passes over them.
 	local earnH = if compact then 44 else 64
 	local earned = row(content, "Earned", earnH, 2)
-	icon(earned, "icon_coin", earnH, 1)
+	earned.ZIndex = 3
+	local coinHolder, coin = badge(earned, "icon_coin", earnH, 1)
 	local earnText = column(earned, 2)
 	line(earnText, "Label", Theme.Font.bodyBold, size("earnedLabel", compact), C.mutedInk, 1).Text = "Earned this shift"
 	local coins = line(earnText, "Coins", Theme.Font.display, size("coins", compact), C.tomato, 2)
@@ -210,7 +274,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 
 	-- 3. XP block: earned XP and rank, then the bar against the real per-rank threshold.
 	-- The block's height is worked out here, not left to AutomaticSize, so its group can rise
-	-- inside it without the save line and the button moving.
+	-- inside it without the rows below moving.
 	local xpW = math.min(innerW, if compact then innerW else 440)
 	local xpPad = if compact then 2 else 4
 	local xpRowH = if compact then 24 else 30
@@ -222,6 +286,7 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(xpW, xpH),
 		LayoutOrder = 4,
+		ZIndex = 2,
 		Parent = content,
 	})
 	local xpBlock = Ui.new("Frame", {
@@ -236,27 +301,31 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 	})
 	local xpRow = Ui.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, xpRowH), LayoutOrder = 1, Parent = xpBlock })
 	local left = row(xpRow, "Left", xpRowH, 1, Enum.HorizontalAlignment.Left, 6)
-	icon(left, "icon_xp_star", xpRowH, 1)
+	local starHolder, star = badge(left, "icon_xp_star", xpRowH, 1)
 	local xpEarned = line(left, "Earned", Theme.Font.display, size("xp", compact), C.ink, 2)
+	-- The rank words take the width they need at the right; the award gets the rest.
 	local rank = Ui.text({
 		Name = "Rank",
 		FontFace = Theme.Font.display,
 		TextSize = size("xp", compact),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextWrapped = false,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
 		Size = UDim2.fromScale(0.5, 1),
+		ZIndex = 2,
 		Parent = xpRow,
 	})
 	local caption: TextLabel? = nil
+	local track: ImageLabel? = nil
 	local fillClip: Frame? = nil
-	local fillWidth = 0
+	local ghostClip: Frame? = nil
+	local fillWidth, fillH, insetX, insetY = 0, 0, 0, 0
 	if model.bar then
 		-- Track and fill per Astra's manifest (Assets.Meta.xpTrack / xpFill).
 		local meta, fillMeta = Assets.Meta.xpTrack, Assets.Meta.xpFill
 		local s = trackH / meta.height
-		local track = Ui.new("ImageLabel", {
+		local trackImage = Ui.new("ImageLabel", {
 			Name = "Track",
 			BackgroundTransparency = 1,
 			ScaleType = Enum.ScaleType.Slice,
@@ -266,30 +335,39 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 			LayoutOrder = 2,
 			Parent = xpBlock,
 		})
-		Art.apply(track, "ui_xp_track")
-		local insetX, insetY = math.round(meta.insetX * s), math.round(meta.insetY * s)
+		Art.apply(trackImage, "ui_xp_track")
+		track = trackImage
+		insetX, insetY = math.round(meta.insetX * s), math.round(meta.insetY * s)
 		fillWidth = xpW - insetX * 2
-		local fillH = trackH - insetY * 2
-		fillClip = Ui.new("Frame", {
-			Name = "FillClip",
-			BackgroundTransparency = 1,
-			ClipsDescendants = true,
-			Position = UDim2.fromOffset(insetX, insetY),
-			Size = UDim2.fromOffset(0, fillH),
-			ZIndex = 2,
-			Parent = track,
-		})
-		local fill = Ui.new("ImageLabel", {
-			Name = "Fill",
-			BackgroundTransparency = 1,
-			ScaleType = Enum.ScaleType.Slice,
-			SliceCenter = fillMeta.slice,
-			SliceScale = fillH / fillMeta.height,
-			Size = UDim2.fromOffset(fillWidth, fillH),
-			ZIndex = 2,
-			Parent = fillClip,
-		})
-		Art.apply(fill, "ui_xp_fill")
+		fillH = trackH - insetY * 2
+		-- The same fill art twice, revealed by clipping, never squeezed: lighter for XP the
+		-- save does not have yet, solid for confirmed XP on top.
+		local function clip(name: string, z: number, transparency: number): Frame
+			local holder = Ui.new("Frame", {
+				Name = name,
+				BackgroundTransparency = 1,
+				ClipsDescendants = true,
+				Position = UDim2.fromOffset(insetX, insetY),
+				Size = UDim2.fromOffset(0, fillH),
+				ZIndex = z,
+				Parent = trackImage,
+			})
+			local fill = Ui.new("ImageLabel", {
+				Name = "Fill",
+				BackgroundTransparency = 1,
+				ImageTransparency = transparency,
+				ScaleType = Enum.ScaleType.Slice,
+				SliceCenter = fillMeta.slice,
+				SliceScale = fillH / fillMeta.height,
+				Size = UDim2.fromOffset(fillWidth, fillH),
+				ZIndex = z,
+				Parent = holder,
+			})
+			Art.apply(fill, "ui_xp_fill")
+			return holder
+		end
+		ghostClip = clip("ProjectedClip", 2, 0.55)
+		fillClip = clip("FillClip", 3, 0)
 		caption = if tight then nil else Ui.text({
 			Name = "Caption",
 			FontFace = Theme.Font.bodyBold,
@@ -303,7 +381,24 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		})
 	end
 
-	-- 4. The one save line.
+	-- 4 and 5. The footer: the one save line and the continuation action, fixed at the
+	-- bottom of the card.
+	local footer = Ui.new("Frame", {
+		Name = "Footer",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, padX, 1, -padY),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.fromOffset(innerW, 0),
+		ZIndex = 1,
+		Parent = card,
+	}, {
+		Ui.new("UIListLayout", {
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, gap),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
 	local status = Ui.text({
 		Name = "Status",
 		FontFace = Theme.Font.bodyBold,
@@ -311,56 +406,115 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 		TextXAlignment = Enum.TextXAlignment.Center,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.new(1, 0, 0, 0),
-		LayoutOrder = 5,
-		Parent = content,
+		LayoutOrder = 1,
+		Parent = footer,
 	})
-
-	-- 5. The continuation action.
 	local buttonH = if tight then 48 elseif compact then 56 else 72
-	local holder = Ui.new("Frame", { Name = "Action", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, buttonH), LayoutOrder = 6, Parent = content })
+	local holder = Ui.new("Frame", { Name = "Action", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, buttonH), LayoutOrder = 2, Parent = footer })
 	local button = Widgets.button(model.action.label, onAction)
-	-- One stable path whatever the label says (Root.Summary.Card.Content.Action.ActionButton).
+	-- One stable path whatever the label says (Root.Summary.Card.Footer.Action.ActionButton).
+	-- Centred, so an accent scales it about its middle.
 	button.frame.Name = "ActionButton"
-	button.frame.AnchorPoint = Vector2.new(0.5, 0)
-	button.frame.Position = UDim2.fromScale(0.5, 0)
+	button.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	button.frame.Position = UDim2.fromScale(0.5, 0.5)
 	button.frame.Size = UDim2.fromOffset(if compact then 200 else 260, buttonH)
 	button.frame.Parent = holder
 
 	-- Everything inside sits above the card art.
-	for _, d in content:GetDescendants() do
-		if d:IsA("GuiObject") then
-			d.ZIndex = 22 + d.ZIndex
+	for _, root in { body, footer } do
+		for _, d in root:GetDescendants() do
+			if d:IsA("GuiObject") then
+				d.ZIndex = 22 + d.ZIndex
+			end
 		end
 	end
 
-	-- The card follows its content's height, up to the screen.
+	-- The card follows its content's height, up to the screen. Past that, the reward rows
+	-- scroll in a bounded body and the footer stays where it is (Astra r17 R17-08). Sizes are
+	-- read without the card's own presentation scale, so a pop never resizes the card.
+	local scroller: ScrollingFrame? = nil
+	local function setScrolling(on: boolean)
+		if on == (scroller ~= nil) then
+			return
+		end
+		if on then
+			local frame = Ui.new("ScrollingFrame", {
+				Name = "Scroll",
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Size = UDim2.fromScale(1, 1),
+				CanvasSize = UDim2.new(),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				ScrollBarThickness = if compact then 4 else 6,
+				ScrollBarImageColor3 = C.mutedInk,
+				ScrollBarImageTransparency = 0.35,
+				VerticalScrollBarInset = Enum.ScrollBarInset.None,
+				ZIndex = 22,
+				Parent = body,
+			})
+			content.Parent = frame
+			scroller = frame
+		else
+			content.Parent = body
+			local frame = scroller :: ScrollingFrame
+			scroller = nil
+			frame:Destroy()
+		end
+	end
 	local function fit()
-		local h = math.min(math.ceil(content.AbsoluteSize.Y) + padY * 2, area.Y - 24)
+		local k = if card.AbsoluteSize.X > 0 then card.AbsoluteSize.X / cardW else 1
+		local contentH = math.round(content.AbsoluteSize.Y / k)
+		local footH = math.round(footer.AbsoluteSize.Y / k)
+		local room = math.max(area.Y - 24 - padY * 2 - gap - footH, 0)
+		setScrolling(contentH > room)
+		local bodyH = math.min(contentH, room)
+		body.Size = UDim2.fromOffset(innerW, bodyH)
+		local h = padY * 2 + bodyH + gap + footH
 		card.Size = UDim2.fromOffset(cardW, h)
 		card.SliceScale = math.min(cardW / Assets.Meta.panelSummary.width, h / Assets.Meta.panelSummary.height)
 	end
 	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	footer:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	fit()
 
 	return {
 		tight = tight,
+		compact = compact,
 		card = card,
 		header = headGroup,
 		earned = earnGroup,
 		bonus = bonus,
 		xp = xpBlock,
+		emblem = emblem,
+		coinHolder = coinHolder,
+		coin = coin,
+		starHolder = starHolder,
+		star = star,
+		title = title,
 		left = left,
+		xpRow = xpRow,
 		coins = coins,
 		xpEarned = xpEarned,
 		rank = rank,
 		caption = caption,
+		track = track,
 		fillClip = fillClip,
+		ghostClip = ghostClip,
 		fillWidth = fillWidth,
+		fillH = fillH,
+		insetX = insetX,
+		insetY = insetY,
+		xpSize = size("xp", compact),
+		captionSize = size("caption", compact),
+		footer = footer,
 		status = status,
 		button = button,
+		scrolling = function()
+			return scroller ~= nil
+		end,
 	}
 end
-
 
 ------------------------------------------------------------------------------------------
 -- Values. writeValues puts the model's final values in the card; writeStatus the save line
@@ -370,6 +524,10 @@ local function coinText(n: number): string
 	return string.format("%d coin%s", n, if n == 1 then "" else "s")
 end
 
+local function bonusText(n: number): string
+	return string.format("Tutorial bonus: +%d coin%s", n, if n == 1 then "" else "s")
+end
+
 -- "+30 XP · save pending" -> " · save pending": what the counting label keeps after "+n XP".
 local function xpSuffix(model: any): string
 	local base = string.format("+%d XP", model.xpEarned)
@@ -377,31 +535,43 @@ local function xpSuffix(model: any): string
 	return if string.sub(label, 1, #base) == base then string.sub(label, #base + 1) else ""
 end
 
-local function setFill(view: View, fraction: number)
-	local clip = view.fillClip
-	if clip then
-		local w = math.round(view.fillWidth * math.clamp(fraction, 0, 1))
-		clip.Size = UDim2.fromOffset(w, clip.Size.Y.Offset)
-		-- At zero the fill is hidden outright, so no sliver of its cap shows.
-		clip.Visible = w > 0
+-- The bar's two layers: the confirmed part and, under it, the whole shown fill.
+local function setFill(view: View, solid: number, shown: number)
+	local function set(clip: Frame?, fraction: number)
+		if clip then
+			local w = math.round(view.fillWidth * math.clamp(fraction, 0, 1))
+			clip.Size = UDim2.fromOffset(w, clip.Size.Y.Offset)
+			-- At zero the fill is hidden outright, so no sliver of its cap shows.
+			clip.Visible = w > 0
+		end
 	end
+	set(view.fillClip, solid)
+	set(view.ghostClip, math.max(shown, solid))
+end
+
+-- The rank words take the width they need; the award label gets the rest of the row. The
+-- small style (a qualifier: "Projected Rank 3") uses the caption size in the muted ink.
+local function writeRank(view: View, text: string, small: boolean)
+	local label = view.rank
+	label.Text = text
+	label.TextSize = if small then view.captionSize else view.xpSize
+	label.TextColor3 = if small then C.mutedInk else C.ink
+	local w = math.ceil(label.TextBounds.X) + 2
+	label.Size = UDim2.new(0, w, 1, 0)
+	view.left.Size = UDim2.new(1, -(w + 8), 1, 0)
 end
 
 local function writeXpLabel(view: View, model: any)
 	view.xpEarned.Text = model.xpLabel or string.format("+%d XP", model.xpEarned)
-	-- A pending qualifier ("· save pending") needs more of the row; the rank then has no
-	-- rank-up words (those wait for the save).
-	local leftShare = if model.xpLabel and string.find(model.xpLabel, "·") then 0.7 else 0.5
-	view.left.Size = UDim2.fromScale(leftShare, 1)
-	view.rank.Size = UDim2.fromScale(1 - leftShare, 1)
 end
 
 local function writeBar(view: View, model: any)
-	view.rank.Text = if model.rank
-		then string.format("Rank %d%s", model.rank, if model.bar and model.bar.rankUp then " · Rank up!" else "")
-		else ""
-	if model.bar then
-		setFill(view, model.bar.fraction)
+	local bar = model.bar
+	if bar then
+		writeRank(view, SummaryLines.rankText(bar, bar.rank, true, view.tight))
+		setFill(view, bar.solidFraction, bar.fraction)
+	else
+		writeRank(view, if model.rank then string.format("Rank %d", model.rank) else "", false)
 	end
 	if view.caption then
 		view.caption.Text = model.xpCaption or ""
@@ -419,7 +589,7 @@ end
 local function writeValues(view: View, model: any)
 	view.coins.Text = coinText(model.coins)
 	if view.bonus then
-		view.bonus.Text = string.format("Tutorial bonus: +%d coin%s", model.bonus, if model.bonus == 1 then "" else "s")
+		view.bonus.Text = bonusText(model.bonus)
 	end
 	writeXpLabel(view, model)
 	writeBar(view, model)
@@ -427,63 +597,302 @@ local function writeValues(view: View, model: any)
 end
 
 ------------------------------------------------------------------------------------------
--- The reward presentation (Astra r15 motion brief, section 4). A Show holds one card's
--- presentation; Main keeps it outside the rebuilt UI. It only observes the save state: the
--- status line and the action follow the model at once, and nothing here decides when the
--- action is available (that is model.action alone).
+-- The reward presentation (Astra r15 motion brief, section 4; Lawson 2026-10-28: fluid and
+-- richly lit). A Show holds one card's presentation; Main keeps it outside the rebuilt UI.
+-- It only observes the save state: the status line and the action follow the model at once,
+-- and nothing here decides when the action is available (that is model.action alone).
 --
 -- `cue` (SummaryLines.presentation) says why the card is shown: only cue.revealEarnings
--- plays the entry, coin impact, coin count and XP count (once per shift), and only
--- cue.advanceXp fills the bar, from the real pre-shift progress to the accepted total,
--- across rank thresholds. Anything else shows final values. Reduced motion shows final
--- values with a short fade on the first showing only.
+-- plays the sequence (once per shift): the panel lands with a sweep of light, the emblem
+-- stamps in, the coin spins down and counts with sparkles, then pays off in a ring of light;
+-- the XP arrives, counts and fills the bar from the real pre-shift progress with light on its
+-- leading edge, across rank thresholds, then flashes. A pending award fills as a labelled
+-- projection and never gets the definitive rank-up; when the save accepts it (cue.confirmXp)
+-- it locks in with a flash, and only then a real rank-up is celebrated. Nothing counts twice.
+-- At rest the action gets a call to action once it can be pressed, then an occasional glint.
+-- Reduced motion shows final values with a short fade on the first showing only, no light.
 
 export type Show = {
 	view: View,
 	model: any,
 	pr: Motion.Presentation?,
-	xpStarted: boolean, -- the XP phase has begun (a later acceptance fills at once)
-	xpLabelDone: boolean, -- the XP label has finished counting (or never counts)
-	fillWanted: boolean, -- the award was accepted; the XP phase fills the bar
+	light: boolean, -- light effects on (not reduced motion)
+	coinState: string, -- "waiting" | "counting" | "done"
+	xpState: string, -- "waiting" | "counting" | "done"
 	filling: boolean,
-	-- The fill started its own presentation (no entry running), so it ends it too.
-	fillOnly: boolean,
-	-- The entry's timeline has ended while the fill still runs: the fill ends it.
-	endAfterFill: boolean,
+	finaleStarted: boolean,
+	-- The save accepted the award after the sequence's own payoff: lock in at rest.
+	lockInWaiting: boolean,
+	resting: boolean,
+	called: boolean, -- the action's call to action has played
+	closed: boolean,
+	idle: { any }, -- keys of the resting glints
 	phases: { MotionPlan.Phase },
 }
 
--- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp. The caption rounds
--- down like the counting award label, so the two always add up.
-local function fillAt(view: View, bar: any, segments: { MotionPlan.Segment }, p: number)
+-- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp, in the style of the
+-- current model (a projection can be accepted while it fills). Returns the rank shown.
+local function fillAt(show: Show, segments: { MotionPlan.Segment }, p: number): number
+	local view = show.view
+	local bar = show.model.bar
 	local rank, fraction = MotionPlan.xpAt(segments, p)
-	setFill(view, fraction)
-	view.rank.Text = string.format("Rank %d", rank)
+	if not bar then
+		return rank
+	end
+	local solid = if not bar.projected then fraction elseif rank == bar.baseRank then math.min(bar.baseFraction, fraction) else 0
+	setFill(view, solid, fraction)
+	writeRank(view, SummaryLines.rankText(bar, rank, false, view.tight))
 	if view.caption then
-		view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 1e-6), bar.need, rank + 1)
+		view.caption.Text = SummaryLines.caption(bar, rank, fraction)
+	end
+	return rank
+end
+
+local function countDuration(xp: number): number
+	local T = Motion.T
+	return MotionPlan.countDuration(xp, T.xpCount, T.xpCountMin, T.xpCountMax)
+end
+
+-- The top layer of the bar as the model stands: solid once accepted, else the projection.
+local function leadClip(show: Show): Frame?
+	local bar = show.model.bar
+	return if bar and bar.projected then show.view.ghostClip else show.view.fillClip
+end
+
+local function zAbove(gui: GuiObject, by: number?): number
+	return gui.ZIndex + (by or 1)
+end
+
+-- A real (accepted) rank-up: the rank words pop and throw gold sparkles.
+local function celebrateRank(show: Show, pr: Motion.Presentation?)
+	local view = show.view
+	local T = Motion.T
+	local scale = Motion.scale(view.rank)
+	if pr then
+		pr:own(scale, function()
+			scale.Scale = 1
+		end)
+	end
+	Motion.pop(scale, 1, T.rankPeak, T.rankPop)
+	local w = view.rank.Size.X.Offset
+	local h = view.xpRow.Size.Y.Offset
+	Shine.burst(pr, view.xpRow, {
+		at = UDim2.new(1, -w / 2, 0.5, 0),
+		count = 8,
+		from = 4,
+		to = math.max(w * 0.6, h * 1.6),
+		size = h * 0.7,
+		colours = { Shine.GOLD, Shine.WARM },
+		z = zAbove(view.rank),
+		seed = 41,
+		life = 0.5,
+		stagger = 0.06,
+	})
+end
+
+-- Light along the bar: a flash over the filled part and a sweep across the whole track.
+local function barLight(show: Show, pr: Motion.Presentation?, life: number)
+	local view = show.view
+	local track, lead = view.track, leadClip(show)
+	if not track or not lead then
+		return
+	end
+	Shine.flash(pr, lead, { life = life * 0.75, peak = 0.3, z = zAbove(lead, 2), corner = UDim.new(0.5, 0) })
+	Shine.sheen(pr, track, {
+		life = life,
+		peak = 0.2,
+		inset = Vector2.new(view.insetX, view.insetY),
+		corner = UDim.new(0.5, 0),
+		z = zAbove(lead, 3),
+		angle = 12,
+	})
+end
+
+-- The save accepted an award shown as a projection: the light gain becomes solid under a
+-- flash, the qualifier goes, and a real rank-up is celebrated now. Nothing counts again.
+local function lockIn(show: Show)
+	local view, model = show.view, show.model
+	writeXpLabel(view, model)
+	writeBar(view, model)
+	if show.closed or not show.light then
+		return
+	end
+	local T = Motion.T
+	barLight(show, nil, T.lockIn)
+	local px = view.starHolder.Size.X.Offset
+	Shine.burst(nil, view.starHolder, {
+		at = UDim2.fromScale(0.5, 0.5),
+		count = 4,
+		from = px * 0.3,
+		to = px * 1.1,
+		size = px * 0.5,
+		colours = { Shine.MINT, WHITE },
+		z = zAbove(view.star),
+		seed = 53,
+		life = 0.42,
+		stagger = 0.04,
+	})
+	if model.bar and model.bar.counted and model.bar.rankUp then
+		celebrateRank(show, nil)
 	end
 end
 
-local function fillDuration(model: any): number
-	local T = Motion.T
-	return MotionPlan.countDuration(model.xpEarned, T.xpCount, T.xpCountMin, T.xpCountMax)
+-- A sweep of light across the action button.
+local function buttonGlint(show: Show)
+	local button = show.view.button
+	local h = button.frame.Size.Y.Offset
+	Shine.sheen(nil, button.body, {
+		life = Motion.T.glint,
+		peak = 0.35,
+		inset = Vector2.new(math.round(h * 0.1), math.round(h * 0.12)),
+		corner = UDim.new(0.5, 0),
+		colour = Shine.WARM,
+		z = button.label.ZIndex - 1,
+		angle = 24,
+	})
 end
 
--- Fills the bar from bar.fromXp to bar.toXp over `duration` under the show's presentation
--- (or a new one), carrying overflow into the next rank; ends on the model's final bar.
+-- A glint across the coin and one twinkle on its rim.
+local function coinGlint(show: Show)
+	local view = show.view
+	local px = view.coinHolder.Size.X.Offset
+	Shine.sheen(nil, view.coinHolder, {
+		life = 0.45,
+		peak = 0.3,
+		inset = Vector2.new(px * 0.08, px * 0.08),
+		corner = UDim.new(0.5, 0),
+		z = zAbove(view.coin),
+		angle = 30,
+	})
+	Shine.twinkle(nil, view.coinHolder, { at = UDim2.fromScale(0.22, 0.24), size = px * 0.4, colour = Shine.WARM, z = zAbove(view.coin, 2), delay = 0.12 })
+end
+
+-- The action is "Next shift" and can be pressed: the only state that gets the success
+-- accent (a wait or "Retry save" stays calm, motion brief: errors and saving).
+local function ready(show: Show): boolean
+	local button = show.view.button
+	return show.model.action.mode == "ready" and not button.standby and button.enabled
+end
+
+-- Once the action is ready after the sequence: one pop and a glint, once per shift.
+local function callToAction(show: Show)
+	if show.called or show.closed or not show.light or not ready(show) then
+		return
+	end
+	show.called = true
+	local T = Motion.T
+	Motion.pop(button.press, 1, T.buttonPeak, T.buttonPop)
+	buttonGlint(show)
+end
+
+-- f now and then while the card is up: first after `first` seconds, then every `period`.
+local function every(show: Show, first: number, period: number, f: () -> ())
+	local key = {}
+	table.insert(show.idle, key)
+	local function tick()
+		if show.closed or not show.view.card.Parent then
+			return
+		end
+		f()
+		Motion.after(key, period, tick)
+	end
+	Motion.after(key, first, tick)
+end
+
+-- The sequence has ended (or was skipped, or never played): the resting state.
+local function atRest(show: Show)
+	if show.closed or show.resting then
+		return
+	end
+	show.resting = true
+	if show.lockInWaiting then
+		show.lockInWaiting = false
+		lockIn(show)
+	end
+	if not show.light then
+		return
+	end
+	callToAction(show)
+	local T = Motion.T
+	every(show, 1.4, T.buttonGlint, function()
+		if ready(show) then
+			buttonGlint(show)
+		end
+	end)
+	every(show, 2.6, T.coinGlint, function()
+		coinGlint(show)
+	end)
+end
+
+-- Light on the moving bar: a glow inside the fill's leading edge, a twinkle riding its tip
+-- and motes shed behind it. Returns the per-frame update (linear progress 0..1).
+local function fillLight(show: Show, pr: Motion.Presentation, duration: number): (number) -> ()
+	local view = show.view
+	local track = view.track :: ImageLabel
+	local lead = leadClip(show) :: Frame
+	local h = view.fillH
+	local k = h / 24
+	local z = zAbove(view.fillClip :: Frame, 3)
+	local glow = Ui.new("Frame", {
+		Name = "Lead",
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromOffset(math.round(h * 2.4), h),
+		ZIndex = zAbove(lead),
+		Parent = lead,
+	}, {
+		Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		Ui.new("UIGradient", { Transparency = NumberSequence.new(1, 0.1) }),
+	})
+	local comet = Shine.twinkleShape(track, math.round(h * 1.9), Shine.WARM, z)
+	local key = {}
+	local function remove()
+		glow:Destroy()
+		comet.root:Destroy()
+	end
+	pr:own(key, remove)
+	local rng = Random.new(23)
+	local emitted = 0
+	return function(p: number)
+		-- In over the first 8 %, out over the last 20 %.
+		local alpha = math.min(p / 0.08, 1) * (1 - math.clamp((p - 0.8) / 0.2, 0, 1))
+		glow.BackgroundTransparency = 1 - 0.85 * alpha
+		local x = view.insetX + lead.Size.X.Offset
+		comet.root.Position = UDim2.new(0, x, 0.5, 0)
+		comet.set(alpha, 1 - alpha, p * 200)
+		local due = math.floor(p * duration / Motion.T.moteEvery)
+		while emitted < due and alpha > 0.05 do
+			emitted += 1
+			Shine.mote(pr, track, {
+				at = UDim2.new(0, x - 2, 0.5, rng:NextNumber(-0.35, 0.35) * h),
+				drift = Vector2.new(-rng:NextNumber(8, 24), rng:NextNumber(-12, 12)) * k,
+				size = math.max(2, rng:NextNumber(3, 6) * k),
+				life = Motion.T.mote,
+				colour = if emitted % 2 == 0 then WHITE else Shine.MINT,
+				z = z,
+				peak = 0.1,
+			})
+		end
+		emitted = math.max(emitted, due)
+		if p >= 1 then
+			remove()
+		end
+	end
+end
+
+-- Fills the bar from bar.fromXp to bar.toXp over `duration` under the show's presentation,
+-- carrying overflow into the next rank; ends on the model's final bar.
 local function fill(show: Show, duration: number)
 	local view, model = show.view, show.model
 	local bar = model.bar
-	if not bar or not view.fillClip or show.filling then
+	local pr = show.pr
+	if not bar or not view.fillClip or not view.track or show.filling or not pr or not pr.alive then
 		return
 	end
 	show.filling = true
-	local pr = show.pr
-	if not pr or not pr.alive then
-		pr = Motion.presentation()
-		show.pr = pr
-		show.fillOnly = true
-	end
 	local presentation = pr :: Motion.Presentation
 	local key = Motion.keyOf(view.fillClip :: Frame, "fill")
 	presentation:own(key, function()
@@ -492,16 +901,68 @@ local function fill(show: Show, duration: number)
 	end)
 	Motion.trace("phase", "xpFill")
 	local segments = MotionPlan.xpSegments(bar.fromXp, bar.toXp, bar.need)
+	local lastRank = if segments[1] then segments[1].rank else bar.baseRank
+	local light = if show.light then fillLight(show, presentation, duration) else nil
 	Motion.run(key, duration, function(p)
-		fillAt(view, bar, segments, MotionPlan.easeOut(p))
+		local rank = fillAt(show, segments, MotionPlan.easeOut(p))
+		if rank > lastRank then
+			lastRank = rank
+			Motion.hook("impact", "rank")
+			if show.light then
+				-- A threshold: the bar flashes as it carries over; a real rank-up also pops
+				-- the rank. A projection gets no definitive rank-up cue.
+				local lead = leadClip(show)
+				if lead then
+					Shine.flash(presentation, lead, { life = 0.3, peak = 0.25, z = zAbove(lead, 2), corner = UDim.new(0.5, 0) })
+				end
+				local now = show.model.bar
+				if now and now.counted then
+					celebrateRank(show, presentation)
+				end
+			end
+		end
+		if light then
+			light(p)
+		end
 	end, function()
 		show.filling = false
 		writeBar(view, show.model)
 		Motion.hook("complete", "xp")
-		if show.fillOnly or show.endAfterFill then
-			presentation:finish()
-		end
 	end)
+end
+
+-- The XP payoff after the bar settles: the block pops, the bar flashes and a sweep crosses
+-- it, a ring and sparkles leave the star and light runs through the award. A real rank-up
+-- (accepted award) is celebrated here; a projection's waits for the save.
+local function finale(show: Show, pr: Motion.Presentation)
+	local view, model = show.view, show.model
+	local T = Motion.T
+	show.finaleStarted = true
+	local xpScale = Motion.scale(view.xp)
+	pr:own(xpScale, function()
+		xpScale.Scale = 1
+	end)
+	Motion.pop(xpScale, 1, T.finalePeak, T.finalePop)
+	barLight(show, pr, 0.55)
+	local px = view.starHolder.Size.X.Offset
+	local centre = UDim2.fromScale(0.5, 0.5)
+	Shine.ring(pr, view.starHolder, { at = centre, from = px * 0.8, to = px * 2.6, life = 0.5, peak = 0.05, z = view.star.ZIndex - 1 })
+	Shine.burst(pr, view.starHolder, {
+		at = centre,
+		count = 7,
+		from = px * 0.3,
+		to = px * 1.6,
+		size = px * 0.6,
+		colours = { Shine.MINT, WHITE },
+		z = zAbove(view.star),
+		seed = 17,
+		life = 0.45,
+		stagger = 0.05,
+	})
+	Shine.text(pr, view.xpEarned, { colour = XP_GLINT, life = 0.55 })
+	if model.bar and model.bar.counted and model.bar.rankUp then
+		celebrateRank(show, pr)
+	end
 end
 
 function SummaryCard.show(view: View, model: any, cue: any?): Show
@@ -509,29 +970,42 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		view = view,
 		model = model,
 		pr = nil,
-		xpStarted = false,
-		xpLabelDone = false,
-		fillWanted = false,
+		light = not Motion.reduced(),
+		coinState = "done",
+		xpState = "done",
 		filling = false,
-		fillOnly = false,
-		endAfterFill = false,
+		finaleStarted = false,
+		lockInWaiting = false,
+		resting = false,
+		called = false,
+		closed = false,
+		idle = {},
 		phases = {},
 	}
 	writeValues(view, model)
 	local reveal = cue ~= nil and cue.revealEarnings == true
-	local advance = cue ~= nil and cue.advanceXp == true and model.bar ~= nil and model.bar.counted == true
+	local fillBar = reveal and cue ~= nil and cue.advanceXp == true and model.bar ~= nil and view.track ~= nil
 	local reduced = Motion.reduced()
-	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, advance, reduced)
+	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, fillBar, reduced)
 	show.phases = phases
 	if #phases == 0 then
-		show.xpStarted = true
-		show.xpLabelDone = true
+		-- Nothing replays: a later showing (a resize, a correction, a late notification) rests
+		-- on the final values, without the call to action it has had already. An acceptance
+		-- that came with a rebuild still locks in once, and its action may now be ready.
+		if cue ~= nil and cue.confirmXp == true then
+			show.lockInWaiting = true
+		else
+			show.called = true
+		end
+		atRest(show)
 		return show
 	end
 	local T = Motion.T
 	local pr = Motion.presentation()
 	show.pr = pr
-	local cardScale = Motion.scale(view.card)
+	pr.onFinished = function()
+		atRest(show)
+	end
 	local function phase(name: string): MotionPlan.Phase?
 		return MotionPlan.find(phases, name)
 	end
@@ -544,183 +1018,332 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		end)
 		f:hide()
 		f:show(T.reducedFade)
-		show.xpStarted = true
-		show.xpLabelDone = true
 		pr:at(T.reducedFade, function()
 			pr:finish()
 		end)
 		return show
 	end
 
-	if reveal then
-		-- Everything that arrives later waits hidden in its resting place.
-		local headFade, earnFade, xpFade = Motion.fader(view.header), Motion.fader(view.earned), Motion.fader(view.xp)
-		local bonusFade = if view.bonus then Motion.fader(view.bonus) else nil
-		local earnScale = Motion.scale(view.earned)
-		pr:own(cardScale, function()
-			cardScale.Scale = 1
-		end)
-		pr:own(Motion.keyOf(view.card, "settle"), function()
-			Motion.rest(view.card)
-		end)
-		pr:own(Motion.keyOf(view.header, "settle"), function()
-			Motion.rest(view.header)
-		end)
-		pr:own(Motion.keyOf(view.earned, "settle"), function()
-			Motion.rest(view.earned)
-		end)
-		pr:own(Motion.keyOf(view.xp, "settle"), function()
-			Motion.rest(view.xp)
-		end)
-		pr:own(earnScale, function()
-			earnScale.Scale = 1
-		end)
-		for _, f in { headFade, earnFade, xpFade, bonusFade } do
-			local fader = f :: Motion.Fader
-			pr:own(fader.key, function()
-				fader:rest()
-			end)
-			fader:hide()
-		end
-		local coinKey = Motion.keyOf(view.coins, "count")
-		local xpKey = Motion.keyOf(view.xpEarned, "count")
-		pr:own(coinKey, function()
-			view.coins.Text = coinText(show.model.coins)
-		end)
-		pr:own(xpKey, function()
-			writeXpLabel(view, show.model)
-		end)
-		-- The coin row is centred, so the counting label keeps its final width (the final
-		-- text is in it now) and the icon does not slide sideways as digits are added.
-		local finalW = math.ceil(view.coins.TextBounds.X)
-		if finalW > 0 then
-			view.coins.AutomaticSize = Enum.AutomaticSize.Y
-			view.coins.Size = UDim2.fromOffset(finalW, 0)
-			view.coins.TextXAlignment = Enum.TextXAlignment.Left
-		end
-		view.coins.Text = coinText(0)
-		view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
-		-- An accepted award arrives on the real pre-award progress and fills from there.
-		if advance and model.bar then
-			fillAt(view, model.bar, MotionPlan.xpSegments(model.bar.fromXp, model.bar.toXp, model.bar.need), 0)
-		end
-
-		-- Panel enter: 0.96 -> 1.01 -> 1.00 with a small upward settle.
-		Motion.trace("phase", "panel")
-		Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
-		Motion.settle(view.card, T.panelRise, T.panelEnter)
-		Motion.hook("impact", "panel")
-		local heading = phase("heading") :: MotionPlan.Phase
-		pr:at(heading.start, function()
-			Motion.trace("phase", "heading")
-			headFade:show(heading.duration)
-			Motion.settle(view.header, T.headingRise, heading.duration)
-		end)
-		local impact = phase("impact") :: MotionPlan.Phase
-		pr:at(impact.start, function()
-			Motion.trace("phase", "impact")
-			-- The coin group lands from a few px above with one overshoot.
-			earnFade:show(impact.duration * 0.6)
-			Motion.pop(earnScale, T.impactFrom, T.impactPeak, impact.duration)
-			Motion.settle(view.earned, -T.impactDrop, impact.duration)
-			Motion.hook("impact", "coins")
-		end)
-		local coins = phase("coins")
-		if coins then
-			pr:at(coins.start, function()
-				Motion.trace("phase", "coins")
-				Motion.count(coinKey, show.model.coins, coins.duration, function(n)
-					view.coins.Text = coinText(n)
-				end, "coinTick", function()
-					Motion.hook("complete", "coins")
-				end)
-			end)
-		end
-		local bonus = phase("bonus")
-		if bonus and bonusFade then
-			pr:at(bonus.start, function()
-				Motion.trace("phase", "bonus")
-				bonusFade:show(bonus.duration)
-			end)
-		end
-		local arrive = phase("xpArrive") :: MotionPlan.Phase
-		pr:at(arrive.start, function()
-			Motion.trace("phase", "xpArrive")
-			show.xpStarted = true
-			if not phase("xpCount") then
-				show.xpLabelDone = true
-				writeXpLabel(view, show.model)
-			end
-			xpFade:show(arrive.duration)
-			Motion.settle(view.xp, T.xpRise, arrive.duration)
-		end)
-		local count = phase("xpCount")
-		local countStart = arrive.start + arrive.duration
-		if count then
-			pr:at(count.start, function()
-				Motion.trace("phase", "xpCount")
-				Motion.count(xpKey, show.model.xpEarned, count.duration, function(n)
-					view.xpEarned.Text = string.format("+%d XP", n) .. xpSuffix(show.model)
-				end, "xpTick", function()
-					show.xpLabelDone = true
-					writeXpLabel(view, show.model)
-				end)
-			end)
-		end
-		show.fillWanted = advance
-		pr:at(countStart, function()
-			Motion.trace("phase", "xpFillCheck")
-			if show.fillWanted then
-				fill(show, fillDuration(show.model))
-			end
-		end)
-		pr:at(MotionPlan.total(phases), function()
-			Motion.trace("phase", "timelineEnd")
-			if show.filling then
-				show.endAfterFill = true
-			else
-				pr:finish()
-			end
-		end)
-	else
-		-- The award was accepted after the first showing: the bar alone fills, once.
-		show.xpStarted = true
-		show.xpLabelDone = true
-		fill(show, fillDuration(model))
+	-- Everything that arrives later waits hidden in its resting place; the card art, the
+	-- save line and the action fade in with the panel.
+	local skip: { Instance } = { view.header, view.earned, view.xp }
+	if view.bonus then
+		table.insert(skip, view.bonus)
 	end
+	local cardFade = Motion.fader(view.card, skip)
+	local headFade, earnFade, xpFade = Motion.fader(view.header), Motion.fader(view.earned), Motion.fader(view.xp)
+	local bonusFade = if view.bonus then Motion.fader(view.bonus) else nil
+	local cardScale = Motion.scale(view.card)
+	local earnScale = Motion.scale(view.earned)
+	local coinKey = Motion.keyOf(view.coins, "count")
+	local xpKey = Motion.keyOf(view.xpEarned, "count")
+	pr:own(cardScale, function()
+		cardScale.Scale = 1
+	end)
+	pr:own(earnScale, function()
+		earnScale.Scale = 1
+	end)
+	for _, gui in { view.card, view.header, view.earned, view.xp } do
+		pr:own(Motion.keyOf(gui, "settle"), function()
+			Motion.rest(gui)
+		end)
+	end
+	for _, f in { cardFade, headFade, earnFade, xpFade, bonusFade } do
+		local fader = f :: Motion.Fader
+		pr:own(fader.key, function()
+			fader:rest()
+		end)
+		fader:hide()
+	end
+	pr:own(coinKey, function()
+		show.coinState = "done"
+		view.coins.Text = coinText(show.model.coins)
+	end)
+	pr:own(xpKey, function()
+		show.xpState = "done"
+		writeXpLabel(view, show.model)
+	end)
+	-- The coin row is centred, so the counting label keeps its final width (the final
+	-- text is in it now) and the icon does not slide sideways as digits are added.
+	local finalW = math.ceil(view.coins.TextBounds.X)
+	if finalW > 0 then
+		view.coins.AutomaticSize = Enum.AutomaticSize.Y
+		view.coins.Size = UDim2.fromOffset(finalW, 0)
+		view.coins.TextXAlignment = Enum.TextXAlignment.Left
+	end
+	show.coinState = "waiting"
+	show.xpState = "waiting"
+	view.coins.Text = coinText(0)
+	view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
+	-- The XP arrives on the real pre-shift progress and fills from there.
+	if fillBar and model.bar then
+		fillAt(show, MotionPlan.xpSegments(model.bar.fromXp, model.bar.toXp, model.bar.need), 0)
+	end
+
+	-- Panel: lands from 0.9 through one overshoot, rising and fading in; a sweep of light
+	-- crosses the card and twinkles catch its corners.
+	Motion.trace("phase", "panel")
+	cardFade:show(T.panelFade)
+	Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
+	Motion.settle(view.card, T.panelRise, T.panelEnter)
+	Motion.hook("impact", "panel")
+	local s = view.card.SliceScale
+	Shine.sheen(pr, view.card, {
+		delay = T.cardSheenDelay,
+		life = T.cardSheen,
+		peak = 0.3,
+		inset = Vector2.new(7 * s, 7 * s),
+		corner = UDim.new(0, math.round(30 * s)),
+		colour = Shine.WARM,
+		z = 0,
+		angle = 24,
+	})
+	local corners = { { 0.04, 0.07 }, { 0.96, 0.1 }, { 0.985, 0.52 }, { 0.02, 0.6 }, { 0.93, 0.95 }, { 0.1, 0.93 } }
+	for i, at in corners do
+		Shine.twinkle(pr, view.card, {
+			at = UDim2.fromScale(at[1], at[2]),
+			size = if view.compact then 20 else 28,
+			colour = if i % 2 == 0 then Shine.GOLD else Shine.WARM,
+			z = 3,
+			delay = 0.2 + (i - 1) * 0.08,
+			life = 0.55,
+			spin = if i % 2 == 0 then -50 else 50,
+		})
+	end
+
+	-- Heading: fades and rises; the emblem stamps in with a ring of light, light runs
+	-- through the title.
+	local heading = phase("heading") :: MotionPlan.Phase
+	pr:at(heading.start, function()
+		Motion.trace("phase", "heading")
+		headFade:show(heading.duration)
+		Motion.settle(view.header, T.headingRise, heading.duration)
+		local emblem = view.emblem
+		if emblem then
+			local scale = Motion.scale(emblem)
+			local tiltKey = Motion.keyOf(emblem, "tilt")
+			pr:own(scale, function()
+				scale.Scale = 1
+			end)
+			pr:own(tiltKey, function()
+				emblem.Rotation = 0
+			end)
+			Motion.pop(scale, T.emblemFrom, T.emblemPeak, T.emblemStamp)
+			Motion.run(tiltKey, T.emblemStamp, function(p)
+				emblem.Rotation = MotionPlan.tilt(p, T.emblemTilt)
+			end)
+			local holder = emblem.Parent :: Frame
+			local px = holder.Size.X.Offset
+			Shine.ring(pr, holder, { at = UDim2.fromScale(0.5, 0.5), from = px * 0.8, to = px * 1.8, life = 0.45, colour = Shine.WARM, peak = 0.2, z = emblem.ZIndex - 1, delay = 0.18 })
+			for i, at in { { 0.08, 0.16 }, { 0.94, 0.22 }, { 0.86, 0.92 } } do
+				Shine.twinkle(pr, holder, { at = UDim2.fromScale(at[1], at[2]), size = px * 0.34, colour = Shine.WARM, z = zAbove(emblem), delay = 0.16 + i * 0.06, life = 0.45 })
+			end
+		end
+		Shine.text(pr, view.title, { colour = TITLE_GLINT, life = 0.75, delay = 0.22 })
+	end)
+
+	-- Coin impact: the row drops in with one overshoot while the coin spins down to face-on.
+	local coinPx = view.coinHolder.Size.X.Offset
+	local centre = UDim2.fromScale(0.5, 0.5)
+	local impact = phase("impact") :: MotionPlan.Phase
+	pr:at(impact.start, function()
+		Motion.trace("phase", "impact")
+		earnFade:show(impact.duration * 0.6)
+		Motion.pop(earnScale, T.impactFrom, T.impactPeak, impact.duration)
+		Motion.settle(view.earned, -T.impactDrop, impact.duration)
+		Shine.spin(pr, view.coin, { turns = T.coinTurns, life = T.coinSpin, edge = COIN_EDGE })
+		Motion.hook("impact", "coins")
+	end)
+
+	-- Coin count: the row swells a little while sparkles catch the coin's rim.
+	local coins = phase("coins")
+	if coins then
+		pr:at(coins.start, function()
+			Motion.trace("phase", "coins")
+			show.coinState = "counting"
+			Motion.count(coinKey, show.model.coins, coins.duration, function(n)
+				view.coins.Text = coinText(n)
+			end, "coinTick", function()
+				show.coinState = "done"
+				Motion.hook("complete", "coins")
+			end)
+			Motion.run(earnScale, coins.duration, function(p)
+				earnScale.Scale = 1 + (T.countSwell - 1) * MotionPlan.easeInOut(p)
+			end)
+			local rng = Random.new(11)
+			local n = math.max(1, math.floor(coins.duration / 0.16))
+			for i = 0, n - 1 do
+				local a = rng:NextNumber(0, math.pi * 2)
+				local r = coinPx * rng:NextNumber(0.36, 0.5)
+				Shine.twinkle(pr, view.coinHolder, {
+					at = UDim2.new(0.5, math.cos(a) * r, 0.5, math.sin(a) * r),
+					size = coinPx * rng:NextNumber(0.26, 0.36),
+					colour = if i % 2 == 0 then Shine.WARM else Shine.GOLD,
+					z = zAbove(view.coin),
+					delay = i * coins.duration / n + rng:NextNumber(0, 0.05),
+					life = 0.42,
+					spin = 60,
+				})
+			end
+		end)
+	end
+
+	-- Coin payoff: the row pops, a gold ring and sparkles leave the coin, light crosses the
+	-- coin and runs through the amount.
+	local payoff = phase("coinsDone")
+	if payoff then
+		pr:at(payoff.start, function()
+			Motion.trace("phase", "coinsDone")
+			Motion.pop(earnScale, T.countSwell, T.flourishPeak, T.flourishPop)
+			Shine.ring(pr, view.coinHolder, { at = centre, from = coinPx * 0.8, to = coinPx * 2.5, life = 0.5, colour = Shine.GOLD, peak = 0.05, z = view.coin.ZIndex - 1 })
+			Shine.burst(pr, view.coinHolder, {
+				at = centre,
+				count = 10,
+				from = coinPx * 0.35,
+				to = coinPx * 1.45,
+				size = coinPx * 0.42,
+				colours = { Shine.GOLD, Shine.WARM, Shine.GOLD },
+				z = zAbove(view.coin),
+				seed = 7,
+				life = 0.45,
+				stagger = 0.05,
+			})
+			Shine.sheen(pr, view.coinHolder, {
+				life = 0.45,
+				peak = 0.25,
+				inset = Vector2.new(coinPx * 0.08, coinPx * 0.08),
+				corner = UDim.new(0.5, 0),
+				z = zAbove(view.coin),
+				angle = 30,
+			})
+			Shine.text(pr, view.coins, { colour = COIN_GLINT, life = 0.55 })
+		end)
+	end
+	local bonus = phase("bonus")
+	if bonus and bonusFade then
+		pr:at(bonus.start, function()
+			Motion.trace("phase", "bonus")
+			bonusFade:show(bonus.duration)
+			if view.bonus then
+				Shine.text(pr, view.bonus, { colour = COIN_GLINT, life = 0.55, delay = bonus.duration })
+			end
+		end)
+	end
+
+	-- XP arrival: the block rises in and the star spins in with mint twinkles.
+	local starPx = view.starHolder.Size.X.Offset
+	local arrive = phase("xpArrive") :: MotionPlan.Phase
+	pr:at(arrive.start, function()
+		Motion.trace("phase", "xpArrive")
+		if not phase("xpCount") then
+			show.xpState = "done"
+			writeXpLabel(view, show.model)
+		end
+		xpFade:show(arrive.duration)
+		Motion.settle(view.xp, T.xpRise, arrive.duration)
+		local starScale = Motion.scale(view.star)
+		local tiltKey = Motion.keyOf(view.star, "tilt")
+		pr:own(starScale, function()
+			starScale.Scale = 1
+		end)
+		pr:own(tiltKey, function()
+			view.star.Rotation = 0
+		end)
+		Motion.pop(starScale, T.starFrom, T.starPeak, T.starSpin)
+		Motion.run(tiltKey, T.starSpin, function(p)
+			view.star.Rotation = MotionPlan.tilt(p, T.starTilt)
+		end)
+		for i, at in { { 0.05, 0.1 }, { 0.98, 0.2 }, { 0.9, 0.98 }, { 0.08, 0.9 } } do
+			Shine.twinkle(pr, view.starHolder, { at = UDim2.fromScale(at[1], at[2]), size = starPx * 0.5, colour = Shine.MINT, z = zAbove(view.star), delay = 0.12 + i * 0.04, life = 0.42 })
+		end
+	end)
+
+	-- XP count, with the bar filling along the same progress.
+	local count = phase("xpCount")
+	if count then
+		pr:at(count.start, function()
+			Motion.trace("phase", "xpCount")
+			show.xpState = "counting"
+			Motion.count(xpKey, show.model.xpEarned, count.duration, function(n)
+				view.xpEarned.Text = string.format("+%d XP", n) .. xpSuffix(show.model)
+			end, "xpTick", function()
+				show.xpState = "done"
+				writeXpLabel(view, show.model)
+				if not fillBar and show.light then
+					-- No bar to fill: the award's own payoff is a sweep of light.
+					Shine.text(pr, view.xpEarned, { colour = XP_GLINT, life = 0.55 })
+				end
+			end)
+			if fillBar then
+				fill(show, countDuration(show.model.xpEarned))
+			end
+		end)
+	end
+	local done = phase("xpDone")
+	if done then
+		pr:at(done.start, function()
+			Motion.trace("phase", "xpDone")
+			finale(show, pr)
+		end)
+	end
+	pr:at(MotionPlan.total(phases), function()
+		Motion.trace("phase", "timelineEnd")
+		pr:finish()
+	end)
 	return show
 end
 
--- A newer snapshot of the same shift and layout (the save result): the save line and the
--- action change at once; values a running count owns finish on the new model by themselves.
--- An award accepted now fills the bar, during the XP phase or straight away after it.
+-- A newer snapshot of the same shift and layout (a save result, or a corrected amount with
+-- the same save wording, Astra r17 R17-06): the save line and the action change at once, and
+-- the values are reconciled quietly to the new model without replaying anything. A count
+-- still running when its amount changes stops on the new amount; one still to come counts to
+-- it. An award the save has just accepted locks in (cue.confirmXp), at once if the sequence
+-- is over or its payoff has passed, else in the payoff itself.
 function SummaryCard.update(show: Show, model: any, cue: any?)
+	local old = show.model
 	show.model = model
 	local view = show.view
 	writeStatus(view, model)
-	local running = show.pr ~= nil and (show.pr :: Motion.Presentation).alive
 	if view.bonus then
-		view.bonus.Text = string.format("Tutorial bonus: +%d coin%s", model.bonus, if model.bonus == 1 then "" else "s")
+		view.bonus.Text = bonusText(model.bonus)
 	end
-	if not running then
+	local running = SummaryCard.playing(show)
+	if not running or show.coinState == "done" then
+		view.coins.Text = coinText(model.coins)
+	elseif show.coinState == "counting" and model.coins ~= old.coins then
+		Motion.stop(Motion.keyOf(view.coins, "count"), false)
+		show.coinState = "done"
 		view.coins.Text = coinText(model.coins)
 	end
-	-- The XP label follows the new model unless its count is running (the count picks the
-	-- new wording up itself) or is still to come (the label waits hidden at zero).
-	if not running or show.xpLabelDone then
+	if not running or show.xpState == "done" then
+		writeXpLabel(view, model)
+	elseif show.xpState == "counting" and model.xpEarned ~= old.xpEarned then
+		Motion.stop(Motion.keyOf(view.xpEarned, "count"), false)
+		show.xpState = "done"
 		writeXpLabel(view, model)
 	end
-	local advance = cue ~= nil and cue.advanceXp == true and model.bar ~= nil and model.bar.counted == true
-	if advance and not Motion.reduced() then
-		if show.xpStarted then
-			fill(show, fillDuration(model))
+	local confirm = cue ~= nil and cue.confirmXp == true
+	if not running then
+		if confirm then
+			lockIn(show)
 		else
-			show.fillWanted = true
+			writeBar(view, model)
 		end
-		return
+	elseif not show.filling then
+		if show.finaleStarted then
+			writeBar(view, model)
+			if confirm then
+				show.lockInWaiting = true
+			end
+		end
+		-- Before the fill starts, the fill itself uses the new model.
 	end
-	if not show.filling then
-		writeBar(view, model)
+	-- The action has just become ready (the save confirmed): it gets its call to action.
+	if old.action.mode ~= "ready" and model.action.mode == "ready" then
+		show.called = false
+	end
+	if show.resting then
+		callToAction(show)
 	end
 end
 
@@ -733,6 +1356,16 @@ function SummaryCard.finish(show: Show)
 	end
 	show.filling = false
 	writeValues(show.view, show.model)
+end
+
+-- The card is going away (the shift moved on, or it is rebuilt): stops its motion and its
+-- resting glints for good.
+function SummaryCard.close(show: Show)
+	show.closed = true
+	for _, key in show.idle do
+		Motion.stop(key, false)
+	end
+	SummaryCard.finish(show)
 end
 
 function SummaryCard.playing(show: Show?): boolean

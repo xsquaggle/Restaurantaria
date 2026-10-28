@@ -1,9 +1,11 @@
 -- Checks for the shared motion language (MotionPlan, slice 5): the count-up ends exactly on
 -- its value and never goes back, ticks stay under the rate limit and are never queued, a pop
--- ends on 1 after one overshoot, the XP bar carries overflow across rank thresholds, and the
--- shift reward timeline keeps Astra's order (panel, heading, coin impact, coin count, then
--- XP) inside its bounded length. Numbers and order only: smoothness, feel and real-time
--- frame rate need Lawson's eyes on the running game, not this file.
+-- ends on 1 after one overshoot, the XP bar carries overflow across rank thresholds, the light
+-- curves (twinkle, coin spin, ring, sweep, turn-in) start and end where they must, and the
+-- shift reward timeline keeps Astra's order (panel, heading, coin impact, coin count and its
+-- payoff, then XP and its payoff) inside its bounded length. It plays on the first showing
+-- only. Numbers and order only: smoothness, feel and real-time frame rate need Lawson's eyes
+-- on the running game, not this file.
 
 local MotionPlan = require(game:GetService("StarterPlayer").StarterPlayerScripts.Client.MotionPlan)
 
@@ -22,15 +24,20 @@ end
 
 local T = MotionPlan.T
 
--- Starting settings as Astra wrote them (spec 2 and 4).
+-- Starting settings as Astra wrote them (spec 2 and 4), and the end-of-shift panel as
+-- retuned for Lawson's richer card (2026-10-28).
 check("press scale", T.pressScale, 0.97)
 check("press in 70 ms", T.pressIn, 0.07)
 check("press out 110 ms", T.pressOut, 0.11)
-check("panel 220 ms", T.panelEnter, 0.22)
+check("panel 360 ms", T.panelEnter, 0.36)
+check("panel lands from 0.9", T.panelFrom, 0.9)
+check("panel overshoot 1.03", T.panelPeak, 1.03)
 check("coin count baseline 1.2 s", T.coinCount, 1.2)
 check("xp count baseline 0.9 s", T.xpCount, 0.9)
 check("tick rate 10/s", T.tickRate, 10)
 check("xp rise within 4-8 px", T.xpRise >= 4 and T.xpRise <= 8, true)
+check("count swell is slight", T.countSwell > 1 and T.countSwell <= 1.05, true)
+check("payoff peaks above the swell", T.flourishPeak > T.countSwell, true)
 
 -- Ease-out curve: 0 at 0, 1 at 1, rising, slower at the end than at the start.
 check("ease 0", MotionPlan.easeOut(0), 0)
@@ -122,6 +129,75 @@ for _, case in { { 0.96, 1.01 }, { 0.94, 1.035 }, { 0.6, 1.15 }, { 1.18, 0.98 } 
 	check(name .. ": never beyond from/peak", bounded, true)
 end
 
+-- Light curves (Shine plays these).
+check("ease in-out 0", MotionPlan.easeInOut(0), 0)
+check("ease in-out 1", near(MotionPlan.easeInOut(1), 1), true)
+check("ease in-out half", near(MotionPlan.easeInOut(0.5), 0.5), true)
+do
+	-- Turn-in: from the tilt, past upright once, ending exactly upright.
+	check("tilt starts tilted", near(MotionPlan.tilt(0, -16), -16), true)
+	check("tilt ends upright", MotionPlan.tilt(1, -16), 0)
+	local over, back = 0, false
+	for i = 0, 100 do
+		local r = MotionPlan.tilt(i / 100, -16)
+		if r > 0 then
+			back = true
+			over = math.max(over, r)
+		end
+	end
+	check("tilt passes upright once", back, true)
+	check("tilt overshoot small", over <= 16 * 0.12 + 1e-9, true)
+	-- Twinkle: from nothing, flares to at most 1.12, fades out, ends gone.
+	local s0, t0 = MotionPlan.twinkle(0)
+	local s1, t1 = MotionPlan.twinkle(1)
+	check("twinkle starts at zero size", s0, 0)
+	check("twinkle starts lit", t0, 0)
+	check("twinkle ends at zero size", near(s1, 0), true)
+	check("twinkle ends gone", t1, 1)
+	local maxScale, lastT, fades = 0, 0, true
+	for i = 0, 100 do
+		local sc, tr = MotionPlan.twinkle(i / 100)
+		maxScale = math.max(maxScale, sc)
+		fades = fades and tr >= lastT - 1e-9
+		lastT = tr
+	end
+	check("twinkle flare bounded", maxScale <= 1.12 + 1e-9 and maxScale >= 1.1, true)
+	check("twinkle only fades out", fades, true)
+	-- Coin spin: face-on at both ends, edge-on in between, never thinner than 8 %.
+	local w0, sh0 = MotionPlan.flip(0, T.coinTurns)
+	local w1, sh1 = MotionPlan.flip(1, T.coinTurns)
+	check("spin starts face-on", near(w0, 1) and near(sh0, 0), true)
+	check("spin ends face-on", near(w1, 1) and near(sh1, 0), true)
+	local thinnest, shadeOk = 1, true
+	for i = 0, 400 do
+		local w, sh = MotionPlan.flip(i / 400, T.coinTurns)
+		thinnest = math.min(thinnest, w)
+		shadeOk = shadeOk and sh >= 0 and sh <= 0.6 + 1e-9
+	end
+	check("spin passes edge-on", near(thinnest, 0.08), true)
+	check("spin shade bounded", shadeOk, true)
+	-- Ring: bright at the start, gone at the end, never brighter again.
+	check("ring starts at its peak", near(MotionPlan.ringFade(0, 0.05), 0.05), true)
+	check("ring ends gone", MotionPlan.ringFade(1, 0.05), 1)
+	local last, monotonic = 0, true
+	for i = 0, 100 do
+		local v = MotionPlan.ringFade(i / 100, 0.05)
+		monotonic = monotonic and v >= last - 1e-9
+		last = v
+	end
+	check("ring only fades", monotonic, true)
+	-- Sweep: off one side to off the other, never turning back.
+	check("sweep starts off the left", near(MotionPlan.sweep(0), -MotionPlan.SWEEP), true)
+	check("sweep ends off the right", near(MotionPlan.sweep(1), MotionPlan.SWEEP), true)
+	last, monotonic = -math.huge, true
+	for i = 0, 100 do
+		local v = MotionPlan.sweep(i / 100)
+		monotonic = monotonic and v >= last
+		last = v
+	end
+	check("sweep one way", monotonic, true)
+end
+
 -- XP bar across thresholds (100 XP a rank).
 local function seg(fromXp: number, toXp: number): { MotionPlan.Segment }
 	return MotionPlan.xpSegments(fromXp, toXp, 100)
@@ -188,26 +264,35 @@ local function names(phases: { MotionPlan.Phase }): string
 end
 do
 	local tl = MotionPlan.rewardTimeline(30, 0, 30, true, true, false)
-	check("ordinary: phases", names(tl), "panel,heading,impact,coins,xpArrive,xpCount,xpFill")
+	check("ordinary: phases", names(tl), "panel,heading,impact,coins,coinsDone,xpArrive,xpCount,xpFill,xpDone")
 	local total = MotionPlan.total(tl)
-	check("ordinary: 2.5-3.5 s", total >= 2.5 and total <= 3.5, true)
+	check("ordinary: 3.2-3.8 s", total >= 3.2 and total <= 3.8, true)
+	local panel = MotionPlan.find(tl, "panel") :: MotionPlan.Phase
 	local heading = MotionPlan.find(tl, "heading") :: MotionPlan.Phase
 	local impact = MotionPlan.find(tl, "impact") :: MotionPlan.Phase
 	local coins = MotionPlan.find(tl, "coins") :: MotionPlan.Phase
+	local payoff = MotionPlan.find(tl, "coinsDone") :: MotionPlan.Phase
 	local arrive = MotionPlan.find(tl, "xpArrive") :: MotionPlan.Phase
 	local xpCount = MotionPlan.find(tl, "xpCount") :: MotionPlan.Phase
 	local xpFill = MotionPlan.find(tl, "xpFill") :: MotionPlan.Phase
-	check("heading 100 ms after panel", near(heading.start, 0.1), true)
+	local xpDone = MotionPlan.find(tl, "xpDone") :: MotionPlan.Phase
+	check("heading while the panel lands", heading.start > 0 and heading.start < panel.duration, true)
 	check("heading ends before impact", heading.start + heading.duration <= impact.start + 1e-9, true)
 	check("count after impact", coins.start >= impact.start + impact.duration - 1e-9, true)
+	check("payoff when the count lands", near(payoff.start, coins.start + coins.duration), true)
 	check("XP after coins settle", arrive.start >= coins.start + coins.duration, true)
+	check("XP arrives as the payoff plays out", arrive.start < payoff.start + payoff.duration, true)
 	check("XP count after arrival", near(xpCount.start, arrive.start + arrive.duration), true)
 	check("fill with the XP count", near(xpFill.start, xpCount.start) and near(xpFill.duration, xpCount.duration), true)
+	check("XP payoff when the bar settles", near(xpDone.start, xpFill.start + xpFill.duration), true)
+	check("XP payoff ends the sequence", near(total, xpDone.start + xpDone.duration), true)
 
+	-- A pending award fills too (as a projection): the timeline is the same whatever the
+	-- save state. Without a bar the XP counts and nothing fills.
 	tl = MotionPlan.rewardTimeline(30, 0, 30, true, false, false)
-	check("pending save: XP counts, bar waits", names(tl), "panel,heading,impact,coins,xpArrive,xpCount")
+	check("no bar: XP counts, nothing fills", names(tl), "panel,heading,impact,coins,coinsDone,xpArrive,xpCount")
 	tl = MotionPlan.rewardTimeline(30, 25, 30, true, true, false)
-	check("bonus: own reveal", names(tl), "panel,heading,impact,coins,bonus,xpArrive,xpCount,xpFill")
+	check("bonus: own reveal", names(tl), "panel,heading,impact,coins,coinsDone,bonus,xpArrive,xpCount,xpFill,xpDone")
 	local bonus = MotionPlan.find(tl, "bonus") :: MotionPlan.Phase
 	local c2 = MotionPlan.find(tl, "coins") :: MotionPlan.Phase
 	check("bonus: with the coin result", bonus.start < c2.start + c2.duration and bonus.start + bonus.duration <= c2.start + c2.duration + 1e-9, true)
@@ -215,17 +300,17 @@ do
 	check("zero: quiet reveal, no counts", names(tl), "panel,heading,impact,xpArrive")
 	check("zero: short", MotionPlan.total(tl) < 1, true)
 	tl = MotionPlan.rewardTimeline(1e6, 500, 1e6, true, true, false)
-	check("large: bounded", MotionPlan.total(tl) <= 3.6, true)
+	check("large: bounded", MotionPlan.total(tl) <= 4.4, true)
+	-- A later showing (the save's acceptance, a resize, a correction) never replays.
 	tl = MotionPlan.rewardTimeline(30, 0, 30, false, true, false)
-	check("accepted later: bar alone", names(tl), "xpFill")
-	check("accepted later: starts at once", (MotionPlan.find(tl, "xpFill") :: MotionPlan.Phase).start, 0)
+	check("later showing: nothing replays", #tl, 0)
 	tl = MotionPlan.rewardTimeline(30, 0, 30, false, false, false)
 	check("rebuild: nothing plays", #tl, 0)
 	tl = MotionPlan.rewardTimeline(30, 25, 30, true, true, true)
 	check("reduced: fade only", names(tl), "fade")
 	check("reduced: short", MotionPlan.total(tl) <= 0.2, true)
 	tl = MotionPlan.rewardTimeline(30, 0, 30, false, true, true)
-	check("reduced accepted later: nothing plays", #tl, 0)
+	check("reduced later showing: nothing plays", #tl, 0)
 end
 
 local report = string.format("motion checks: %d passed, %d failed", passed, #failures)

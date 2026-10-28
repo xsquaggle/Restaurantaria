@@ -35,6 +35,10 @@ local Widgets = {}
 
 export type Button = {
 	frame: Frame,
+	-- The art and label move together inside the body; `press` is its press scale, which an
+	-- accent (a call-to-action pop) may also use, so a real press always takes over.
+	body: Frame,
+	press: UIScale,
 	hit: TextButton,
 	label: TextLabel,
 	setEnabled: (Button, boolean) -> (),
@@ -178,6 +182,8 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 
 	self = {
 		frame = frame,
+		body = body,
+		press = press,
 		hit = hit,
 		label = label,
 		enabled = true,

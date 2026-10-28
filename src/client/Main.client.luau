@@ -1008,12 +1008,14 @@ local function refreshSummary(snap: any)
 	local summary = ui.summary
 	summary.Visible = snap.finished == true
 	ui.hudScrim.Visible = snap.finished == true
-	-- Rebuilt when the save result arrives, which can be after the shift ends.
-	local key = if snap.finished then string.format("%s|%s|%s", snap.shiftId, tostring(snap.settlement), tostring(snap.saveMessage)) else nil
+	-- Refreshed when the save result arrives (which can be after the shift ends) and when a
+	-- newer snapshot changes any shown amount, even with the same save wording (Astra r17
+	-- R17-06); the play-once cue below keeps a refresh from replaying anything.
+	local key = if snap.finished then SummaryLines.receiptKey(snap) else nil
 	if not snap.finished then
-		-- The shift moved on: the old card's motion ends with it.
+		-- The shift moved on: the old card's motion and resting glints end with it.
 		if ctx.summaryShow then
-			SummaryCard.finish(ctx.summaryShow)
+			SummaryCard.close(ctx.summaryShow)
 			ctx.summaryShow = nil
 		end
 		return
@@ -1025,14 +1027,16 @@ local function refreshSummary(snap: any)
 	local area = ui.root.AbsoluteSize
 	-- Why this card is being built (play-once presentation state, kept in ctx outside the UI
 	-- that buildLayout rebuilds, keyed by shift): only the first showing of a shift fades the
-	-- scrim in, reveals its earnings and counts its XP; the save's acceptance fills the bar
-	-- once; a resize or late notification shows the final state at once.
+	-- scrim in, reveals its earnings and counts its XP into the bar (as a labelled projection
+	-- while the save runs); the save's acceptance locks it in once without replaying it; a
+	-- resize, correction or late notification shows the final state at once.
 	local cue = SummaryLines.presentation(ctx.presented, snap, Config.Rewards.xpPerRank)
 	-- Values from SummaryLines, layout from SummaryCard (V25-01..03); the XP bar uses the
 	-- server's own per-rank threshold (Astra r12 rule), never a number of the UI's own.
 	local model = SummaryLines.model(snap, Config.Rewards.xpPerRank)
-	-- A save result for the card already on screen updates it in place, so a count or fill
-	-- in progress carries on; anything that changes the card's rows or size rebuilds it.
+	-- A save result or a corrected amount for the card already on screen updates it in place,
+	-- so a count or fill in progress carries on; anything that changes the card's rows or
+	-- size rebuilds it (on final values, never replayed).
 	local shape = string.format("%s|%dx%d|%s|%s|%s", tostring(snap.shiftId), area.X, area.Y, tostring(ctx.compact), tostring(model.bar ~= nil), tostring(model.bonus > 0))
 	local card = summary:FindFirstChild("Card")
 	if ctx.summaryShow and ctx.summaryShape == shape and card and ctx.summaryShow.view.card == card then
@@ -1041,7 +1045,7 @@ local function refreshSummary(snap: any)
 		return
 	end
 	if ctx.summaryShow then
-		SummaryCard.finish(ctx.summaryShow)
+		SummaryCard.close(ctx.summaryShow)
 		ctx.summaryShow = nil
 	end
 	Ui.clear(summary)

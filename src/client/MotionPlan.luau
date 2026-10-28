@@ -1,10 +1,12 @@
 --!strict
 -- The game-wide motion language as numbers and curves (Astra r15 motion-and-reward-spec):
 -- press, pop (one restrained overshoot), settle, the slowing count-up, the rate-limited count
--- ticks, the XP fill across rank thresholds and the shift reward timeline. Pure: no services,
--- no instances, so the timing and the values a presentation ends on can be checked offline.
--- Motion (the Roblox side) plays these; the starting settings are Astra's, not measured
--- Papa's timings, and are tuned here only.
+-- ticks, the XP fill across rank thresholds, the shift reward timeline and the curves its
+-- light effects follow (twinkle, coin spin, ring, sweep). Pure: no services, no instances, so
+-- the timing and the values a presentation ends on can be checked offline. Motion and Shine
+-- (the Roblox side) play these. The starting settings are Astra's; the end-of-shift sequence
+-- is retuned here for Lawson's 2026-10-28 direction (a richer, more rewarding card), not from
+-- measured Papa's timings.
 
 local MotionPlan = {}
 
@@ -14,32 +16,77 @@ MotionPlan.T = {
 	pressScale = 0.97,
 	pressIn = 0.07,
 	pressOut = 0.11,
-	-- Panel enter: 0.96 -> 1.01 -> 1.00 with a small upward settle, 220 ms (spec 4).
-	panelFrom = 0.96,
-	panelPeak = 1.01,
-	panelEnter = 0.22,
-	panelRise = 8, -- px the panel settles up from
-	-- Heading: begins about 100 ms after the panel, 140 ms fade/slide.
-	headingDelay = 0.10,
-	headingIn = 0.14,
-	headingRise = 6,
-	-- Coin impact: lands from a few px above, 0.94 -> 1.035 -> 1.00, about 140 ms.
-	impactFrom = 0.94,
-	impactPeak = 1.035,
-	impact = 0.14,
-	impactDrop = 6,
-	-- Coin count: 1,200 ms baseline, 900 to 1,500 ms by size of the award.
+	-- End-of-shift panel. Astra's start was 0.96 -> 1.01 -> 1.00 in 220 ms; Lawson asked for
+	-- a fluid, much more rewarding card (2026-10-28), so it lands from further, with a fuller
+	-- overshoot, a short fade and a longer upward settle.
+	panelFrom = 0.9,
+	panelPeak = 1.03,
+	panelEnter = 0.36,
+	panelRise = 18, -- px the panel settles up from
+	panelFade = 0.14,
+	-- Heading: begins after the panel starts to land, fades and rises.
+	headingDelay = 0.12,
+	headingIn = 0.24,
+	headingRise = 10,
+	-- The completion emblem stamps in: small and tilted, one overshoot, upright.
+	emblemFrom = 0.35,
+	emblemPeak = 1.18,
+	emblemTilt = -16, -- degrees
+	emblemStamp = 0.46,
+	-- Coin impact: the row lands from above with one overshoot.
+	impactFrom = 0.86,
+	impactPeak = 1.06,
+	impact = 0.2,
+	impactDrop = 12,
+	-- The coin spins in as it lands: turns about its upright axis, slowing to face-on.
+	coinSpin = 0.75,
+	coinTurns = 2,
+	-- Coin count: 1,200 ms baseline, 900 to 1,500 ms by size of the award. The row swells
+	-- slightly while it counts, then releases in the payoff.
 	coinCountMin = 0.9,
 	coinCount = 1.2,
 	coinCountMax = 1.5,
-	-- XP arrival rises 4 to 8 phone px and settles, 180 ms; count/fill 900 ms (700 to 1,200).
-	xpArrive = 0.18,
-	xpRise = 6,
+	countSwell = 1.04,
+	-- Payoff when the count lands: the row pops, a ring of light and sparkles leave the coin.
+	coinFlourish = 0.55,
+	flourishPeak = 1.1,
+	flourishPop = 0.42,
+	-- XP arrival rises 4 to 8 phone px and settles; the star spins in. Count/fill 900 ms
+	-- (700 to 1,200).
+	xpArrive = 0.24,
+	xpRise = 8,
+	starFrom = 0.3,
+	starPeak = 1.22,
+	starTilt = -140, -- degrees
+	starSpin = 0.5,
 	xpCountMin = 0.7,
 	xpCount = 0.9,
 	xpCountMax = 1.2,
-	-- A short pause between phases so each lands before the next asks for attention.
-	gap = 0.08,
+	-- After the bar settles: a flash along it, a ring and sparkles from the star.
+	xpFinale = 0.6,
+	finalePeak = 1.04,
+	finalePop = 0.4,
+	-- A short pause between the coin and XP phases (the coin payoff overlaps it).
+	gap = 0.14,
+	-- Light: the sweep across the whole card, a glint across a coin, bar or button, one
+	-- twinkle's life, and motes shed by the moving fill.
+	cardSheenDelay = 0.22,
+	cardSheen = 0.9,
+	glint = 0.6,
+	twinkle = 0.5,
+	moteEvery = 0.04,
+	mote = 0.45,
+	-- Resting state: the continuation button's call to action once it can be pressed, then a
+	-- glint on the button and the coin now and then while the card stays up.
+	buttonPeak = 1.06,
+	buttonPop = 0.34,
+	buttonGlint = 3.4,
+	coinGlint = 4.8,
+	-- The save accepts an award shown as a projection: the gain locks in (nothing counts
+	-- again); a real rank-up is celebrated only now.
+	lockIn = 0.45,
+	rankPeak = 1.25,
+	rankPop = 0.42,
 	-- Per-order result card: a modest accent, not the shift sequence.
 	cardEnter = 0.2,
 	cardFrom = 0.96,
@@ -71,10 +118,12 @@ function MotionPlan.easeOut(p: number): number
 	return 1 - q * q * q
 end
 
+-- Ease-in-out sine: a light sweep accelerates in and decelerates out.
 local function easeInOut(p: number): number
 	p = clamp01(p)
 	return 0.5 - math.cos(math.pi * p) / 2
 end
+MotionPlan.easeInOut = easeInOut
 
 -- Scale at progress p of a pop from `from` through one overshoot to `peak`, ending on 1.
 function MotionPlan.pop(p: number, from: number, peak: number): number
@@ -84,6 +133,48 @@ function MotionPlan.pop(p: number, from: number, peak: number): number
 		return from + (peak - from) * MotionPlan.easeOut(p / split)
 	end
 	return peak + (1 - peak) * easeInOut((p - split) / (1 - split))
+end
+
+-- Rotation (degrees) at progress p of a turn-in from `tilt` to upright, passing upright once
+-- and coming back (the same overshoot as a pop), ending on exactly 0.
+function MotionPlan.tilt(p: number, tilt: number): number
+	return tilt * (1 - MotionPlan.pop(p, 0, 1.12))
+end
+
+-- A twinkle at q (0..1 of its life): it flares past full size quickly, then shrinks away
+-- while its light fades. Returns scale and transparency; ends at 0 and 1.
+local TWINKLE_FLARE = 0.22
+function MotionPlan.twinkle(q: number): (number, number)
+	q = clamp01(q)
+	local scale: number
+	if q < TWINKLE_FLARE then
+		scale = 1.12 * MotionPlan.easeOut(q / TWINKLE_FLARE)
+	else
+		local d = (q - TWINKLE_FLARE) / (1 - TWINKLE_FLARE)
+		scale = 1.12 * (1 - d * d)
+	end
+	local transparency = if q < 0.5 then 0 else ((q - 0.5) / 0.5) ^ 1.5
+	return scale, transparency
+end
+
+-- A coin spinning `turns` times about its upright axis and slowing to face-on: its shown
+-- width (0.08..1) and how far it shades toward its edge colour (0..0.6), at progress p.
+function MotionPlan.flip(p: number, turns: number): (number, number)
+	local c = math.abs(math.cos(2 * math.pi * turns * MotionPlan.easeOut(p)))
+	return math.max(c, 0.08), (1 - c) * 0.6
+end
+
+-- A ring of light: transparency at q, from `peak` (bright) to gone, holding early.
+function MotionPlan.ringFade(q: number, peak: number): number
+	q = clamp01(q)
+	return peak + (1 - peak) * q ^ 1.6
+end
+
+-- Where a light band is (gradient offset) at progress p of a sweep: off one side to off
+-- the other, easing in and out.
+MotionPlan.SWEEP = 0.95
+function MotionPlan.sweep(p: number): number
+	return -MotionPlan.SWEEP + 2 * MotionPlan.SWEEP * easeInOut(p)
 end
 
 -- Integer shown at `elapsed` of a count from 0 to `final` over `duration`: floor(final * p),
@@ -179,50 +270,51 @@ function MotionPlan.xpAt(segments: { Segment }, p: number): (number, number)
 end
 
 -- The shift reward timeline (spec 4), as named phases with start and duration in seconds.
--- `reveal`: this is the first showing of the shift (coins may count); `advance`: the XP is
--- accepted and may fill the bar; `reduced`: reduced motion (a short fade, final values).
+-- It plays once, on the first showing of a shift (`reveal`); a later showing (a save result,
+-- a resize, a repeated notification) never replays it. `fill`: the XP bar moves with the XP
+-- count, from the real pre-shift progress to the earned endpoint, whether the save has
+-- accepted the award yet or not (a pending one is shown as a labelled projection, Astra r17
+-- R17-06). `reduced`: reduced motion (a short fade, final values).
 export type Phase = { name: string, start: number, duration: number }
 
-function MotionPlan.rewardTimeline(coins: number, bonus: number, xp: number, reveal: boolean, advance: boolean, reduced: boolean): { Phase }
+function MotionPlan.rewardTimeline(coins: number, bonus: number, xp: number, reveal: boolean, fill: boolean, reduced: boolean): { Phase }
 	local T = MotionPlan.T
 	local phases: { Phase } = {}
-	if reduced then
-		if reveal then
-			table.insert(phases, { name = "fade", start = 0, duration = T.reducedFade })
-		end
+	if not reveal then
 		return phases
 	end
-	local t = 0
-	if reveal then
-		table.insert(phases, { name = "panel", start = 0, duration = T.panelEnter })
-		table.insert(phases, { name = "heading", start = T.headingDelay, duration = T.headingIn })
-		t = T.headingDelay + T.headingIn
-		table.insert(phases, { name = "impact", start = t, duration = T.impact })
-		t += T.impact
-		local count = MotionPlan.countDuration(coins, T.coinCount, T.coinCountMin, T.coinCountMax)
-		if count > 0 then
-			table.insert(phases, { name = "coins", start = t, duration = count })
-			t += count
-		end
-		if bonus > 0 then
-			-- With the coin result: a brief reveal of its own row, never added to the coins.
-			table.insert(phases, { name = "bonus", start = t - math.min(count, T.impact), duration = T.impact })
-		end
-		t += T.gap
+	if reduced then
+		table.insert(phases, { name = "fade", start = 0, duration = T.reducedFade })
+		return phases
 	end
-	-- XP arrives with the first showing and its award label counts up from zero; the bar
-	-- moves along the same progress only once the award is accepted (advance). A save that
-	-- confirms later fills the bar alone: the label is not counted again.
-	local count = MotionPlan.countDuration(xp, T.xpCount, T.xpCountMin, T.xpCountMax)
-	if reveal then
-		table.insert(phases, { name = "xpArrive", start = t, duration = T.xpArrive })
-		t += T.xpArrive
-		if count > 0 then
-			table.insert(phases, { name = "xpCount", start = t, duration = count })
-		end
+	table.insert(phases, { name = "panel", start = 0, duration = T.panelEnter })
+	table.insert(phases, { name = "heading", start = T.headingDelay, duration = T.headingIn })
+	local t = T.headingDelay + T.headingIn
+	table.insert(phases, { name = "impact", start = t, duration = T.impact })
+	t += T.impact
+	local count = MotionPlan.countDuration(coins, T.coinCount, T.coinCountMin, T.coinCountMax)
+	if count > 0 then
+		table.insert(phases, { name = "coins", start = t, duration = count })
+		t += count
+		-- The payoff runs on into the XP arrival (overlapping action).
+		table.insert(phases, { name = "coinsDone", start = t, duration = T.coinFlourish })
 	end
-	if advance and count > 0 then
-		table.insert(phases, { name = "xpFill", start = t, duration = count })
+	if bonus > 0 then
+		-- With the coin result: a brief reveal of its own row, never added to the coins.
+		table.insert(phases, { name = "bonus", start = t - math.min(count, T.impact), duration = T.impact })
+	end
+	t += T.gap
+	-- XP arrives after the coins and its award label counts up from zero; the bar moves along
+	-- the same progress.
+	local xpCount = MotionPlan.countDuration(xp, T.xpCount, T.xpCountMin, T.xpCountMax)
+	table.insert(phases, { name = "xpArrive", start = t, duration = T.xpArrive })
+	t += T.xpArrive
+	if xpCount > 0 then
+		table.insert(phases, { name = "xpCount", start = t, duration = xpCount })
+		if fill then
+			table.insert(phases, { name = "xpFill", start = t, duration = xpCount })
+			table.insert(phases, { name = "xpDone", start = t + xpCount, duration = T.xpFinale })
+		end
 	end
 	return phases
 end

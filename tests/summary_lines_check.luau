@@ -49,8 +49,9 @@ for _, settlement in { "pending", "retry", "saved", "session" } do
 	end
 end
 
--- The summary model (SummaryLines.model): the XP bar runs on the real per-rank threshold and
--- only counts the shift once the save has it; the completed day comes from the receipt.
+-- The summary model (SummaryLines.model): the XP bar runs on the real per-rank threshold;
+-- before the save has the shift it shows the award as a labelled projection from the profile
+-- as it stands (Astra r17 R17-06); the completed day comes from the receipt.
 local function snap(settlement: string?, recorded: boolean, profileXp: number?, earned: number): any
 	return {
 		xp = earned,
@@ -71,9 +72,13 @@ check("model pending: served", m.served, 2)
 check("model pending: coins", m.coins, 7)
 check("model pending: xp earned", m.xpEarned, 30)
 check("model pending: bar not counted", m.bar and m.bar.counted, false)
-check("model pending: bar at saved xp", m.bar and m.bar.into, 40)
+check("model pending: bar projected", m.bar and m.bar.projected, true)
+check("model pending: from saved xp", m.bar and m.bar.fromXp, 40)
+check("model pending: to saved + earned", m.bar and m.bar.toXp, 70)
+check("model pending: shows the projection", m.bar and m.bar.into, 70)
+check("model pending: confirmed part solid", m.bar and m.bar.solidFraction, 0.4)
 check("model pending: need = xpPerRank", m.bar and m.bar.need, 100)
-check("model pending: caption", m.xpCaption, "Before this shift: 40 / 100 XP to Rank 2")
+check("model pending: caption says projected", m.xpCaption, "Projected: 70 / 100 XP to Rank 2")
 check("model pending: standby", m.action.mode, "standby")
 check("model pending: standby says wait", m.action.label, "Please wait")
 check("model pending: xp label pending", m.xpLabel, "+30 XP · save pending")
@@ -82,6 +87,8 @@ check("model pending: tone", m.tone, "pending")
 
 m = SummaryLines.model(snap("saved", true, 70, 30), 100)
 check("model saved: bar counted", m.bar and m.bar.counted, true)
+check("model saved: not a projection", m.bar and m.bar.projected, false)
+check("model saved: all solid", m.bar and m.bar.solidFraction, 0.7)
 check("model saved: into", m.bar and m.bar.into, 70)
 check("model saved: fraction", m.bar and m.bar.fraction, 0.7)
 check("model saved: from", m.bar and m.bar.fromXp, 40)
@@ -109,6 +116,7 @@ check("model retry: label", m.action.label, "Retry save")
 check("model retry: not counted", m.bar and m.bar.counted, false)
 check("model retry: tone", m.tone, "warn")
 check("model retry: xp label pending", m.xpLabel, "+30 XP · save pending")
+check("model retry: still a projection", m.bar and m.bar.projected, true)
 
 m = SummaryLines.model(snap("session", true, 70, 30), 100)
 check("model session: ready", m.action.mode, "ready")
@@ -138,9 +146,59 @@ old = snap("saved", true, 70, 30)
 old.day, old.completedShiftDay = nil, nil
 check("model day fallback saved", SummaryLines.model(old, 100).day, 3)
 
--- Zero XP earned: no qualifier while pending.
+-- Zero XP earned: no qualifier while pending, nothing projected.
 m = SummaryLines.model(snap("pending", false, 40, 0), 100)
 check("model pending zero: xp label", m.xpLabel, "+0 XP")
+check("model pending zero: no projection", m.bar and m.bar.projected, false)
+check("model pending zero: plain caption", m.xpCaption, "40 / 100 XP to Rank 2")
+
+-- A pending award across a threshold: the projected rank is labelled, the confirmed part
+-- belongs to the old rank (none of the new rank is confirmed), no "Rank up!" before the save.
+m = SummaryLines.model(snap("pending", false, 80, 50), 100)
+check("projected rank-up: rank", m.bar and m.bar.rank, 2)
+check("projected rank-up: base rank", m.bar and m.bar.baseRank, 1)
+check("projected rank-up: flagged", m.bar and m.bar.rankUp, true)
+check("projected rank-up: nothing solid in the new rank", m.bar and m.bar.solidFraction, 0)
+check("projected rank-up: caption", m.xpCaption, "Projected: 30 / 100 XP to Rank 3")
+do
+	local bar = m.bar :: any
+	local text, small = SummaryLines.rankText(bar, 2, true, false)
+	check("projected rank-up: rank words", text, "Projected Rank 2")
+	check("projected rank-up: qualifier style", small, true)
+	text = SummaryLines.rankText(bar, 1, false, false)
+	check("projected rank-up: before the threshold", text, "Rank 1")
+	text = SummaryLines.rankText(bar, 1, false, true)
+	check("projected, tight layout: qualifier kept without a caption", text, "Projected Rank 1")
+	check("projected rank-up: never 'Rank up!'", string.find(SummaryLines.rankText(bar, 2, true, true), "Rank up", 1, true), nil)
+end
+m = SummaryLines.model(snap("saved", true, 130, 50), 100)
+do
+	local bar = m.bar :: any
+	check("accepted rank-up: rank words final", (SummaryLines.rankText(bar, 2, true, false)), "Rank 2 · Rank up!")
+	check("accepted rank-up: while filling", (SummaryLines.rankText(bar, 2, false, false)), "Rank 2")
+	check("accepted rank-up: tight unchanged", (SummaryLines.rankText(bar, 2, true, true)), "Rank 2 · Rank up!")
+	check("caption at any point", SummaryLines.caption(bar, 1, 0.905), "90 / 100 XP to Rank 2")
+end
+
+-- The refresh key: any shown amount changes it, even with the same save wording.
+do
+	local a = snap("pending", false, 40, 30)
+	a.shiftId = "K"
+	a.tutorialBonus = 25
+	local b = table.clone(a)
+	check("receipt key: same snapshot, same key", SummaryLines.receiptKey(a), SummaryLines.receiptKey(b))
+	b.tutorialBonus = 0
+	check("receipt key: corrected bonus, same status", SummaryLines.receiptKey(a) ~= SummaryLines.receiptKey(b), true)
+	b = table.clone(a)
+	b.xp = 25
+	check("receipt key: corrected award", SummaryLines.receiptKey(a) ~= SummaryLines.receiptKey(b), true)
+	b = table.clone(a)
+	b.tips = 9
+	check("receipt key: corrected coins", SummaryLines.receiptKey(a) ~= SummaryLines.receiptKey(b), true)
+	b = table.clone(a)
+	b.settlement = "saved"
+	check("receipt key: save result", SummaryLines.receiptKey(a) ~= SummaryLines.receiptKey(b), true)
+end
 
 -- Play-once presentation cues (motion brief rule 1): keyed by shift, outside the UI.
 local state = {}
@@ -152,23 +210,27 @@ end
 local c = cue("pending", false, "A")
 check("cue first: reason", c.reason, "first")
 check("cue first: reveal", c.revealEarnings, true)
-check("cue first pending: no xp advance", c.advanceXp, false)
+check("cue first pending: xp moves as a projection", c.advanceXp, true)
+check("cue first pending: nothing to confirm", c.confirmXp, false)
 c = cue("pending", false, "A")
 check("cue repeat pending: rebuild", c.reason, "rebuild")
 check("cue repeat pending: no reveal", c.revealEarnings, false)
+check("cue repeat pending: no fill", c.advanceXp, false)
 c = cue("retry", false, "A")
 check("cue retry: rebuild", c.reason, "rebuild")
 c = cue("saved", true, "A")
 check("cue saved: settled", c.reason, "settled")
-check("cue saved: advance xp once", c.advanceXp, true)
+check("cue saved: locks in once", c.confirmXp, true)
+check("cue saved: no replayed fill", c.advanceXp, false)
 check("cue saved: no second reveal", c.revealEarnings, false)
 c = cue("saved", true, "A")
 check("cue duplicate saved: rebuild", c.reason, "rebuild")
-check("cue duplicate saved: no advance", c.advanceXp, false)
+check("cue duplicate saved: no second lock-in", c.confirmXp, false)
 c = cue("saved", true, "B")
 check("cue new shift saved at once: first", c.reason, "first")
 check("cue new shift saved at once: reveal", c.revealEarnings, true)
 check("cue new shift saved at once: advance", c.advanceXp, true)
+check("cue new shift saved at once: nothing to confirm later", c.confirmXp, false)
 c = cue("saved", true, "B")
 check("cue resize after: rebuild", c.reason, "rebuild")
 check("cue resize after: no advance", c.advanceXp, false)

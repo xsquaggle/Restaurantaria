@@ -150,7 +150,7 @@ local function cleanMake(act: (string, any) -> (), pizza: any)
 	end
 end
 
-local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true }
+local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true, correctSummary = true }
 local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true }
 
 if RunService:IsStudio() then
@@ -241,6 +241,22 @@ if RunService:IsStudio() then
 			local profile = SaveService.load(player, current and current.store)
 			push(player)
 			return profile.status
+		elseif command == "correctSummary" then
+			-- value = { tutorialBonus, tips, xp } (any of them): changes what the finished
+			-- shift's snapshot shows and pushes it, leaving the settlement and its wording as
+			-- they are, as a newer authoritative receipt with the same save state would (Astra
+			-- r17 R17-06). Display only: the receipt and the save are not touched.
+			local shift = session.shift
+			if not shift.finished or type(value) ~= "table" then
+				return "needs a finished shift and a table"
+			end
+			for _, field in { "tutorialBonus", "tips", "xp" } do
+				if type(value[field]) == "number" then
+					(shift :: any)[field] = value[field]
+				end
+			end
+			push(player)
+			return string.format("tips=%d tutorialBonus=%s xp=%d settlement=%s", shift.tips, tostring(shift.tutorialBonus), shift.xp, tostring(shift.settlement))
 		elseif command == "skipArrivals" then
 			-- Shift the clock so the next customer arrives now.
 			session.shift.startedAt -= (value or 10)

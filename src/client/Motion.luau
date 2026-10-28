@@ -251,7 +251,8 @@ end
 -- visible background under `root` (and root itself) once, when it is made: hide() makes them
 -- all transparent at once, show() fades them back to rest, rest() puts them back at once.
 -- A CanvasGroup fades as one (its GroupTransparency) and is not looked inside, so content
--- that redraws itself (a pizza thumbnail) is covered by the group's fade.
+-- that redraws itself (a pizza thumbnail) is covered by the group's fade. Subtrees listed in
+-- `skip` are left out (they have faders of their own).
 export type Fader = {
 	hide: (Fader) -> (),
 	show: (Fader, number, (() -> ())?) -> (),
@@ -260,9 +261,16 @@ export type Fader = {
 	key: any,
 }
 
-function Motion.fader(root: GuiObject): Fader
+function Motion.fader(root: GuiObject, skip: { Instance }?): Fader
 	local parts: { { inst: Instance, prop: string, rest: number } } = {}
+	local skipped: { [Instance]: boolean } = {}
+	for _, inst in skip or {} do
+		skipped[inst] = true
+	end
 	local function collect(inst: Instance)
+		if skipped[inst] then
+			return
+		end
 		if inst:IsA("CanvasGroup") then
 			table.insert(parts, { inst = inst, prop = "GroupTransparency", rest = inst.GroupTransparency })
 			return
