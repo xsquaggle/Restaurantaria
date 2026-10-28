@@ -83,6 +83,7 @@ export type Run = {
 	shrinks: number, -- samples where the drawn dough got smaller than the sample before
 	pinJump: number, -- largest pin turn between two samples (degrees)
 	pinFlips: number, -- pin turns of 90 degrees or more between two samples
+	pinTravel: number, -- total pin turning over the whole run (degrees)
 	artJump: number, -- largest dough-art turn between two samples (degrees)
 	artTravel: number, -- total dough-art turning over the whole run (degrees)
 	artError: number, -- largest drawn-outline error (px) against the scored dough
@@ -93,7 +94,7 @@ local FRAME = 400 -- a desktop pizza frame (px); the phone's is 190
 -- holds: a list of pointer paths, one per press-to-release (pizza-local samples).
 local function playBefore(holds: { { G.Vec } }): Run
 	local strokes = {}
-	local run = { strokes = 0, mean = 0, round = 0, shrinks = 0, pinJump = 0, pinFlips = 0, artJump = 0, artTravel = 0, artError = 0 }
+	local run = { strokes = 0, mean = 0, round = 0, shrinks = 0, pinJump = 0, pinFlips = 0, pinTravel = 0, artJump = 0, artTravel = 0, artError = 0 }
 	local lastMean, lastPin, lastArt = nil, nil, nil
 	for _, path in holds do
 		local from = path[1]
@@ -109,6 +110,7 @@ local function playBefore(holds: { { G.Vec } }): Run
 				if lastPin then
 					local gap = turnGap(lastPin, pin)
 					run.pinJump = math.max(run.pinJump, gap)
+					run.pinTravel += gap
 					if gap >= 90 then
 						run.pinFlips += 1
 					end
@@ -149,7 +151,7 @@ local function playAfter(holds: { { G.Vec } }, frame: number?): Run
 	local F = frame or FRAME
 	local make = MakeDough.new()
 	make.placed = true
-	local run = { strokes = 0, mean = 0, round = 0, shrinks = 0, pinJump = 0, pinFlips = 0, artJump = 0, artTravel = 0, artError = 0 }
+	local run = { strokes = 0, mean = 0, round = 0, shrinks = 0, pinJump = 0, pinFlips = 0, pinTravel = 0, artJump = 0, artTravel = 0, artError = 0 }
 	local lastMean, lastPin, lastArt = nil, nil, nil
 	local artTurn = 0
 	local pin = -12 -- the pin's rest turn
@@ -182,6 +184,8 @@ local function playAfter(holds: { { G.Vec } }, frame: number?): Run
 		lastArt = art
 	end
 	for _, path in holds do
+		-- Each hold picks the pin up from its rest (the station glides it back there on release).
+		pin = -12
 		local drag = MakeDough.rollDrag(path[1])
 		for i = 1, #path do
 			commit(drag.move(path[i]))
@@ -189,6 +193,7 @@ local function playAfter(holds: { { G.Vec } }, frame: number?): Run
 				local target = MakeDough.pinTurn(drag.axis, pin)
 				local gap = turnGap(pin, target)
 				run.pinJump = math.max(run.pinJump, gap)
+				run.pinTravel += gap
 				if gap >= 90 then
 					run.pinFlips += 1
 				end
@@ -271,8 +276,8 @@ local function sloppy(step: number, wobble: number): { { G.Vec } }
 end
 
 local function row(name: string, r: Run)
-	note(string.format("%-34s rolls %d, mean %.3f, short/long %.3f, shrinks %d, pin jump %.1f deg (%d flips), art jump %.1f deg, art travel %.0f deg, outline error %.2f px",
-		name, r.strokes, r.mean, r.round, r.shrinks, r.pinJump, r.pinFlips, r.artJump, r.artTravel, r.artError))
+	note(string.format("%-36s rolls %d, mean %.3f, short/long %.3f, shrinks %d, pin jump %.1f deg (%d flips, travel %.0f deg), art jump %.1f deg, art travel %.0f deg, outline error %.2f px",
+		name, r.strokes, r.mean, r.round, r.shrinks, r.pinJump, r.pinFlips, r.pinTravel, r.artJump, r.artTravel, r.artError))
 end
 
 for _, case in {
@@ -290,7 +295,7 @@ for _, case in {
 		row("after:  " .. label, after)
 		-- Before: the faults Lawson reported show up on the replica (A is the hold he described).
 		if case.name:sub(1, 2) == "A " then
-			check("before " .. label .. ": the pin flips round", before.pinFlips > 0, true)
+			check("before " .. label .. ": the pin turns round", before.pinTravel >= 170, true)
 			check("before " .. label .. ": the dough art spins", before.artJump >= 90, true)
 		end
 		if case.name:sub(1, 1) == "A" then
@@ -304,6 +309,10 @@ for _, case in {
 		check("after " .. label .. ": round enough", after.round >= cfg.roundFull, true)
 		check("after " .. label .. ": the dough never shrinks back", after.shrinks, 0)
 		check("after " .. label .. ": the pin never flips", after.pinFlips, 0)
+		if case.name:sub(1, 1) ~= "C" then
+			-- Up-and-down passes: the pin only turns from its rest (-12) to level, once per hold.
+			check("after " .. label .. ": the pin turns only as it is picked up", after.pinTravel <= 15 * #holds, true)
+		end
 		check("after " .. label .. ": the outline stays within 1 px", after.artError <= 1 + 1e-9, true)
 	end
 end

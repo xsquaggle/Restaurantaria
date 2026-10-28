@@ -264,7 +264,7 @@ end
 -- line from its start along that direction to the furthest the pointer has gone along it, so it
 -- only ever grows (and the dough with it). It ends when the pointer, going no further, is
 -- rollTurn from where it went furthest (it turned back, or off to the side); the next pass
--- starts at the end of that line. Jitter shorter than that never ends a pass.
+-- starts where the pointer turned. Jitter shorter than that never ends a pass.
 -- move(p) takes the next pointer sample (pizza-local) and returns the pass it ended, if any;
 -- line() is the open pass as it stands (nil before it has a direction); close() ends the drag and
 -- returns the open pass. axis is the open pass's direction (nil before it has one). The server
@@ -309,9 +309,10 @@ function MakeDough.rollDrag(start: Vec): RollDrag
 		end
 		local t = turnAt :: Vec
 		if (p.x - t.x) ^ 2 + (p.y - t.y) ^ 2 >= cfg.rollTurn * cfg.rollTurn then
-			-- Turned without going further: the pass ends, and the next starts where it ended.
+			-- Turned without going further: the pass ends, and the next starts where the pointer
+			-- turned (not at the line's end, which a hand's drift can leave to one side).
 			local ended = lineOf() :: Line
-			from = { x = ended.x2, y = ended.y2 }
+			from = t
 			drag.axis, turnAt, reach = nil, nil, 0
 			drag.move(p)
 			return ended
