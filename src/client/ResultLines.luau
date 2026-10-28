@@ -14,6 +14,7 @@ export type Model = {
 	grade: number,
 	parts: { Part }, -- the grade's components, in order
 	pay: string, -- coins, and Service when it moves the coins only (split join)
+	payLines: { string }, -- the same as separate lines, for a narrow card
 	notes: { string },
 }
 
@@ -93,6 +94,7 @@ function ResultLines.model(result: any, label: string): Model
 		grade = r.overall,
 		parts = parts,
 		pay = if split then string.format("%s · Service %d", coins, r.wait.score) else coins,
+		payLines = if split then { coins, string.format("Service %d", r.wait.score) } else { coins },
 		notes = notes,
 	}
 end

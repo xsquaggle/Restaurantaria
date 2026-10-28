@@ -1065,9 +1065,21 @@ function ctx.showResult(ticketId: number)
 	}, {
 		Ui.new("UIListLayout", { Padding = UDim.new(0, if compact then 4 else 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	-- Head: the grade and its parts on the left, the served pizza on the right (56 px on
-	-- phones, 72 px on wide screens; Astra r13's result view).
-	local head = Ui.new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, thumb), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1, ZIndex = 10, Parent = content })
+	-- Title across the card, then the grade's parts as short rows beside the served pizza (56
+	-- px on phones, 72 px on wide screens; Astra r13's result view).
+	Ui.text({
+		Name = "Title",
+		Text = model.title,
+		FontFace = Theme.Font.display,
+		TextSize = titleSize,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextWrapped = false,
+		Size = UDim2.new(1, 0, 0, titleSize + 4),
+		LayoutOrder = 0,
+		ZIndex = 10,
+		Parent = content,
+	})
+	local head = Ui.new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, thumb), LayoutOrder = 1, ZIndex = 10, Parent = content })
 	local served = nil
 	for _, p in snap.pizzas do
 		if p.ticketId == ticketId then
@@ -1087,63 +1099,40 @@ function ctx.showResult(ticketId: number)
 		local seconds = served.bakeSeconds or 0
 		pic:set(served, Widgets.doneness(seconds), ctx.ovenStatus(customer.order.bake, seconds).burnt)
 	end
-	local left = Ui.new("Frame", {
-		Name = "Grade",
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -inset, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		ZIndex = 10,
-		Parent = head,
-	}, {
-		Ui.new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
-	})
-	Ui.text({
-		Name = "Title",
-		Text = model.title,
-		FontFace = Theme.Font.display,
-		TextSize = titleSize,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextWrapped = false,
-		Size = UDim2.new(1, 0, 0, titleSize + 6),
-		LayoutOrder = 1,
-		ZIndex = 10,
-		Parent = left,
-	})
-	-- The grade's parts as short rows: one per line on phones, one row of cells on wide screens.
 	local parts = Ui.new("Frame", {
 		Name = "Parts",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		LayoutOrder = 2,
+		Size = UDim2.new(1, -inset, 1, 0),
 		ZIndex = 10,
-		Parent = left,
+		Parent = head,
 	}, {
-		if compact
-			then Ui.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder })
-			else Ui.new("UIGridLayout", { CellPadding = UDim2.fromOffset(0, 0), CellSize = UDim2.new(1 / #model.parts, 0, 0, partSize + 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+		Ui.new("UIListLayout", { VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	-- Four parts (the earlier average join, with Wait) share the thumbnail's height.
+	local rowH = math.min(partSize + 4, math.floor(thumb / #model.parts))
 	for i, part in model.parts do
 		Ui.text({
 			Name = part.name,
 			Text = string.format("%s %d", part.name, part.score),
 			FontFace = Theme.Font.bodySemi,
-			TextSize = partSize,
+			TextSize = math.min(partSize, rowH),
 			TextWrapped = false,
-			Size = UDim2.new(1, 0, 0, partSize + 2),
+			Size = UDim2.new(1, 0, 0, rowH),
 			LayoutOrder = i,
 			ZIndex = 10,
 			Parent = parts,
 		})
 	end
 	-- Pay: what the order earned, apart from the grade (Astra r14 QA 6).
-	local pay = Ui.new("Frame", { Name = "Pay", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, partSize + 8), LayoutOrder = 2, ZIndex = 10, Parent = content })
+	-- A narrow (phone) card puts coins and Service on two lines.
+	local payText = if compact then table.concat(model.payLines, "\n") else model.pay
+	local payLines = if compact then #model.payLines else 1
+	local pay = Ui.new("Frame", { Name = "Pay", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, payLines * (partSize + 4) + 4), LayoutOrder = 2, ZIndex = 10, Parent = content })
 	Ui.new("Frame", { Name = "Rule", BackgroundColor3 = C.mutedInk, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), ZIndex = 10, Parent = pay })
 	local coin = Ui.new("ImageLabel", {
 		BackgroundTransparency = 1,
 		ScaleType = Enum.ScaleType.Fit,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 0, 0.5, 2),
+		Position = UDim2.fromOffset(0, 5),
 		Size = UDim2.fromOffset(partSize + 2, partSize + 2),
 		ZIndex = 10,
 		Parent = pay,
@@ -1151,14 +1140,13 @@ function ctx.showResult(ticketId: number)
 	Art.apply(coin, "icon_coin")
 	Ui.text({
 		Name = "Text",
-		Text = model.pay,
+		Text = payText,
 		FontFace = Theme.Font.bodySemi,
 		TextSize = partSize,
 		TextWrapped = false,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, partSize + 8, 0.5, 2),
-		Size = UDim2.new(1, -(partSize + 8), 0, partSize + 4),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.fromOffset(partSize + 8, 4),
+		Size = UDim2.new(1, -(partSize + 8), 0, payLines * (partSize + 4)),
 		ZIndex = 10,
 		Parent = pay,
 	})

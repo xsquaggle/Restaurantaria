@@ -192,7 +192,9 @@ function Tutorial.new(parent: GuiObject, compact: boolean, avoid: GuiObject?)
 			pressed.Visible = tapping and reach >= CONTACT
 			pivot.Rotation = ROTATION[from]
 			-- The halo rings the tap point on the target's edge, clear of its label.
-			halo.Position = UDim2.fromOffset(tipAt.X - towards.X * haloSize * 0.15, tipAt.Y - towards.Y * haloSize * 0.15)
+			halo.Position = if glove
+				then UDim2.fromOffset(tipAt.X - towards.X * haloSize * 0.15, tipAt.Y - towards.Y * haloSize * 0.15)
+				else UDim2.fromOffset(p.X + s.X / 2, p.Y + s.Y / 2)
 		end
 	end
 	return self

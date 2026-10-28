@@ -224,12 +224,12 @@ function Make.new(ctx: any, container: Frame)
 				Parent = guide,
 			}, {
 				Ui.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-				Ui.new("UIStroke", { Color = C.paper, Thickness = thickness, Transparency = transparency }),
+				Ui.new("UIStroke", { Color = C.ink, Thickness = thickness, Transparency = transparency }),
 			})
 		end
-		ring("Band", low * R, (high - low) * R, 0.55)
+		ring("Band", low * R, (high - low) * R, 0.72)
 		local line = if compact then 1 else 2
-		ring("Line", R - line / 2, line, 0.15)
+		ring("Line", R - line / 2, line, 0.35)
 	end
 	local dustLayer = Ui.new("Frame", { Name = "Flour", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = dough })
 	local ball = Ui.new("ImageLabel", { Name = "Ball", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 4, Visible = false, Parent = dough })

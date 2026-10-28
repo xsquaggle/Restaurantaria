@@ -125,6 +125,7 @@ check("split: three grade parts", #m.parts, 3)
 check("split: parts order", m.parts[1].name .. m.parts[2].name .. m.parts[3].name, "MakeBakeCut")
 check("split: service not a grade part", m.parts[4], nil)
 check("split: pay row", m.pay, "+12 coins · Service 100")
+check("split: pay lines", table.concat(m.payLines, "|"), "+12 coins|Service 100")
 check("perfect: no notes", #m.notes, 0)
 
 m = ResultLines.model(result({ tip = 1, wait = part(62, { "Waited longer than they liked" }) }), "Ana")
@@ -135,6 +136,7 @@ m = ResultLines.model(result({ join = "average", wait = part(80) }), "Cy")
 check("average: wait is a grade part", m.parts[1].name, "Wait")
 check("average: four parts", #m.parts, 4)
 check("average: pay coins only", m.pay, "+12 coins")
+check("average: one pay line", #m.payLines, 1)
 
 -- A held grade: the food problem first, the hold after it, whatever part held it.
 m = ResultLines.model(result({
