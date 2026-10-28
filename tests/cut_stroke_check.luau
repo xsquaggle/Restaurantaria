@@ -555,8 +555,17 @@ do
 		end
 		return pts
 	end
+	-- Same points by value (so 0 and -0 match: an output is its sample plus a zero correction).
 	local function same(a: { any }, b: { any }): boolean
-		return ser(a) == ser(b)
+		if #a ~= #b then
+			return false
+		end
+		for i = 1, #a do
+			if a[i].x ~= b[i].x or a[i].y ~= b[i].y then
+				return false
+			end
+		end
+		return true
 	end
 	local function prefix(a: { any }, n: number): { any }
 		return table.move(a, 1, math.min(n, #a), 1, {})
@@ -675,9 +684,9 @@ do
 			check(label .. ": before, sample 48 had moved to the release", same({ before[cfg.maxPoints] }, { qp(events[n]) }), true)
 			check(label .. ": after, sample 48 is event 48, not the release", same({ st.points[cfg.maxPoints] }, { qp(events[cfg.maxPoints]) }), true)
 			-- A release after the limit adds or moves nothing.
-			local held = ser(st.points)
+			local held = table.clone(st.points)
 			CutStroke.record(st, P(0, -0.9), true)
-			check(label .. ": a later release changes nothing", ser(st.points), held)
+			check(label .. ": a later release changes nothing", same(st.points, held), true)
 		end
 	end
 
