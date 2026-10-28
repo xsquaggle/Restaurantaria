@@ -584,6 +584,14 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		pr:own(xpKey, function()
 			writeXpLabel(view, show.model)
 		end)
+		-- The coin row is centred, so the counting label keeps its final width (the final
+		-- text is in it now) and the icon does not slide sideways as digits are added.
+		local finalW = math.ceil(view.coins.TextBounds.X)
+		if finalW > 0 then
+			view.coins.AutomaticSize = Enum.AutomaticSize.Y
+			view.coins.Size = UDim2.fromOffset(finalW, 0)
+			view.coins.TextXAlignment = Enum.TextXAlignment.Left
+		end
 		view.coins.Text = coinText(0)
 		view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
 
