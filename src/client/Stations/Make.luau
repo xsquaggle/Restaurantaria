@@ -255,6 +255,8 @@ function Make.new(ctx: any, container: Frame)
 		Art.apply(img, name)
 		keys[i] = img
 	end
+	-- Every dough picture loads with the station, so none is blank the first time it shows.
+	Art.preload({ "food_dough_ball", table.unpack(ROLLS) })
 	local hand = Ui.new("Frame", { Name = "Hand", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 20, Parent = dough })
 	local pinLen = F * PIN_LENGTH
 	local pin = Ui.new("ImageLabel", {
@@ -583,6 +585,14 @@ function Make.new(ctx: any, container: Frame)
 	end
 
 	local ballShown = true
+	-- Uploaded art draws nothing until it has loaded, and a label that is not on screen does not
+	-- start loading: in Studio play each rolled key first showed blank for a frame or more, so
+	-- the dough flashed see-through as its picture changed (Lawson 2026-10-28, real mouse: "I
+	-- could see gaps of the asset switching"). The keys load with the station (Art.preload,
+	-- where they are made), and until the key that should cover the dough has loaded, the key
+	-- that last did stays drawn under it, or the ball stays up.
+	local coverKey: ImageLabel? = nil -- the last base key drawn once it had loaded
+	local waitKey: ImageLabel? = nil -- a base key drawn before it loaded (the tick redraws on load)
 	-- The dough art's last turn (radians) and the pizza it was drawn for: each drawing turns the
 	-- art as little as the outline allows (PrepGeometry.steadyEllipse), so it never spins.
 	local artTurn = 0
@@ -606,11 +616,12 @@ function Make.new(ctx: any, container: Frame)
 			for _, k in keys do
 				k.Visible = false
 			end
-			ballShown = true
+			ballShown, waitKey = true, nil
 			return
 		end
 		-- The ball until the first roll; then the rolled keys either side of the mean radius,
-		-- the upper one crossfaded in. The ball hands off over 0.1 s on the same oval.
+		-- the upper one crossfaded in. The ball hands off over 0.1 s on the same oval once a
+		-- loaded key is under it.
 		place(ball)
 		ball.Visible = true
 		if not rolled then
@@ -621,22 +632,35 @@ function Make.new(ctx: any, container: Frame)
 			for _, k in keys do
 				k.Visible = false
 			end
+			waitKey = nil
 			return
 		end
-		if ballShown then
-			ballShown = false
-			ball.ImageTransparency = 0
-			TweenService:Create(ball, HANDOFF, { ImageTransparency = 1 }):Play()
-		end
 		local i1, i2, w = G.stateBlend(G.meanRadius(S))
+		local base = keys[i1]
+		local under: ImageLabel? = nil
+		if base.IsLoaded then
+			coverKey, waitKey = base, nil
+		else
+			under, waitKey = coverKey, base
+		end
 		for i, k in keys do
-			local on = i == i1 or (i == i2 and w > 0)
+			local top = i == i2 and i2 ~= i1
+			local on = i == i1 or (top and w > 0) or k == under
 			k.Visible = on
 			if on then
 				place(k)
-				k.ZIndex = if i == i2 and i2 ~= i1 then 4 else 3
-				k.ImageTransparency = if i == i2 and i2 ~= i1 then 1 - w else 0
+				if k == under then
+					k.ZIndex, k.ImageTransparency = 2, 0
+				else
+					k.ZIndex = if top then 4 else 3
+					k.ImageTransparency = if top then 1 - w else 0
+				end
 			end
+		end
+		if ballShown and (base.IsLoaded or under ~= nil) then
+			ballShown = false
+			ball.ImageTransparency = 0
+			TweenService:Create(ball, HANDOFF, { ImageTransparency = 1 }):Play()
 		end
 	end
 
@@ -1360,6 +1384,11 @@ function Make.new(ctx: any, container: Frame)
 	function station.tick(now: number)
 		toppings.tick(now)
 		pinTick()
+		-- A base key drawn before its picture loaded: draw again once it has (drawDough).
+		if waitKey and waitKey.IsLoaded then
+			waitKey = nil
+			redraw()
+		end
 		local st = live
 		if st and st.kind == "cheese" then
 			flushCheese(st, false)
