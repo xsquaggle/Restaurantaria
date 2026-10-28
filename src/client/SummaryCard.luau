@@ -479,6 +479,7 @@ local function fill(show: Show, duration: number)
 		show.filling = false
 		writeBar(view, show.model)
 	end)
+	Motion.trace("phase", "xpFill")
 	local segments = MotionPlan.xpSegments(bar.fromXp, bar.toXp, bar.need)
 	Motion.run(key, duration, function(p)
 		local rank, fraction = MotionPlan.xpAt(segments, MotionPlan.easeOut(p))
@@ -587,16 +588,19 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
 
 		-- Panel enter: 0.96 -> 1.01 -> 1.00 with a small upward settle.
+		Motion.trace("phase", "panel")
 		Motion.pop(cardScale, T.panelFrom, T.panelPeak, T.panelEnter)
 		Motion.settle(view.card, T.panelRise, T.panelEnter)
 		Motion.hook("impact", "panel")
 		local heading = phase("heading") :: MotionPlan.Phase
 		pr:at(heading.start, function()
+			Motion.trace("phase", "heading")
 			headFade:show(heading.duration)
 			Motion.settle(view.header, T.headingRise, heading.duration)
 		end)
 		local impact = phase("impact") :: MotionPlan.Phase
 		pr:at(impact.start, function()
+			Motion.trace("phase", "impact")
 			-- The coin group lands from a few px above with one overshoot.
 			earnFade:show(impact.duration * 0.6)
 			Motion.pop(earnScale, T.impactFrom, T.impactPeak, impact.duration)
@@ -606,6 +610,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		local coins = phase("coins")
 		if coins then
 			pr:at(coins.start, function()
+				Motion.trace("phase", "coins")
 				Motion.count(coinKey, show.model.coins, coins.duration, function(n)
 					view.coins.Text = coinText(n)
 				end, "coinTick", function()
@@ -616,11 +621,13 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		local bonus = phase("bonus")
 		if bonus and bonusFade then
 			pr:at(bonus.start, function()
+				Motion.trace("phase", "bonus")
 				bonusFade:show(bonus.duration)
 			end)
 		end
 		local arrive = phase("xpArrive") :: MotionPlan.Phase
 		pr:at(arrive.start, function()
+			Motion.trace("phase", "xpArrive")
 			show.xpStarted = true
 			if not phase("xpCount") then
 				show.xpLabelDone = true
@@ -633,6 +640,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		local countStart = arrive.start + arrive.duration
 		if count then
 			pr:at(count.start, function()
+				Motion.trace("phase", "xpCount")
 				Motion.count(xpKey, show.model.xpEarned, count.duration, function(n)
 					view.xpEarned.Text = string.format("+%d XP", n) .. xpSuffix(show.model)
 				end, "xpTick", function()
@@ -643,11 +651,13 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		end
 		show.fillWanted = advance
 		pr:at(countStart, function()
+			Motion.trace("phase", "xpFillCheck")
 			if show.fillWanted then
 				fill(show, fillDuration(show.model))
 			end
 		end)
 		pr:at(MotionPlan.total(phases), function()
+			Motion.trace("phase", "timelineEnd")
 			if show.filling then
 				show.endAfterFill = true
 			else

@@ -12,6 +12,11 @@
 --
 -- Reduced motion (GuiService.ReducedMotionEnabled, or the Studio-only LocalPlayer attribute
 -- RestaurantariaReducedMotion for tests): callers show final values, at most a short fade.
+--
+-- Studio-only test hooks (LocalPlayer attributes; ignored in a live game):
+-- RestaurantariaMotionClock (number) holds every motion at that time, so stills can be taken
+-- frame by frame at exact points of a sequence; RestaurantariaMotionTraceOn (true) appends
+-- "real clock, event, value" lines to RestaurantariaMotionTrace for measured timings.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -23,6 +28,38 @@ local Motion = {}
 
 Motion.T = MotionPlan.T
 
+local STUDIO = RunService:IsStudio()
+
+-- The motion clock: os.clock, or in Studio the held test time when one is set.
+function Motion.now(): number
+	if STUDIO then
+		local player = Players.LocalPlayer
+		local held = player and player:GetAttribute("RestaurantariaMotionClock")
+		if type(held) == "number" then
+			return held
+		end
+	end
+	return os.clock()
+end
+
+-- Studio-only timing trace (see above). Real clock, so it measures what the player saw.
+function Motion.trace(event: string, value: any?)
+	if not STUDIO then
+		return
+	end
+	local player = Players.LocalPlayer
+	if not player or player:GetAttribute("RestaurantariaMotionTraceOn") ~= true then
+		return
+	end
+	local log = player:GetAttribute("RestaurantariaMotionTrace")
+	local line = string.format("%.3f %s %s", os.clock(), event, tostring(value or ""))
+	local text = if type(log) == "string" and log ~= "" then log .. "\n" .. line else line
+	if #text > 60000 then
+		text = string.sub(text, -60000)
+	end
+	player:SetAttribute("RestaurantariaMotionTrace", text)
+end
+
 export type Hooks = {
 	coinTick: ((n: number) -> ())?,
 	xpTick: ((n: number) -> ())?,
@@ -33,6 +70,7 @@ export type Hooks = {
 Motion.hooks = {} :: Hooks
 
 local function hook(name: string, ...: any)
+	Motion.trace(name, (...))
 	local f = (Motion.hooks :: any)[name]
 	if f then
 		-- A broken sound or haptic hook must never stop the presentation or its values.
@@ -60,17 +98,25 @@ local running: { [any]: Running } = {}
 local connection: RBXScriptConnection? = nil
 
 local function frame()
-	local now = os.clock()
+	local now = Motion.now()
+	-- A done callback may start or stop motions, so walk a copy and skip any that changed.
+	local batch = {}
 	for key, r in running do
-		local p = if r.duration > 0 then (now - r.start) / r.duration else 1
-		if p >= 1 then
-			running[key] = nil
-			r.step(1)
-			if r.done then
-				r.done()
+		table.insert(batch, { key = key, r = r })
+	end
+	for _, item in batch do
+		local key, r = item.key, item.r
+		if running[key] == r then
+			local p = if r.duration > 0 then (now - r.start) / r.duration else 1
+			if p >= 1 then
+				running[key] = nil
+				r.step(1)
+				if r.done then
+					r.done()
+				end
+			else
+				r.step(math.max(p, 0))
 			end
-		else
-			r.step(p)
 		end
 	end
 	if next(running) == nil and connection then
@@ -82,7 +128,7 @@ end
 -- Plays step(p) for p from 0 to 1 over `duration` seconds under `key`, replacing whatever
 -- ran there (that one neither finishes nor calls its done). step(0) runs at once.
 function Motion.run(key: any, duration: number, step: (number) -> (), done: (() -> ())?)
-	running[key] = { start = os.clock(), duration = duration, step = step, done = done }
+	running[key] = { start = Motion.now(), duration = duration, step = step, done = done }
 	step(0)
 	if duration <= 0 then
 		frame()
@@ -266,7 +312,7 @@ function Motion.count(key: any, final: number, duration: number, render: (number
 			local changed = shown >= 0
 			shown = n
 			render(n)
-			if tick and MotionPlan.tick(ticker, os.clock(), changed) then
+			if tick and MotionPlan.tick(ticker, Motion.now(), changed) then
 				hook(tick, n)
 			end
 		end
@@ -296,12 +342,15 @@ function Motion.presentation(): Presentation
 		alive = true,
 		keys = {},
 		finals = {},
+		-- On the motion clock (not task.delay), so a held test clock holds the whole timeline.
 		at = function(pr: Presentation, t: number, f: () -> ())
 			if t <= 0 then
 				f()
 				return
 			end
-			task.delay(t, function()
+			local key = {}
+			table.insert(pr.keys, key)
+			Motion.run(key, t, function() end, function()
 				if pr.alive then
 					f()
 				end
@@ -316,6 +365,7 @@ function Motion.presentation(): Presentation
 				return
 			end
 			pr.alive = false
+			Motion.trace("finish", #pr.keys)
 			for _, key in pr.keys do
 				Motion.stop(key, false)
 			end

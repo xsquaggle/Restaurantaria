@@ -1056,7 +1056,10 @@ local function refreshSummary(snap: any)
 	})
 	Art.apply(scrim, "ui_scrim")
 	if cue.revealEarnings and not Motion.reduced() then
-		TweenService:Create(scrim, NAV_SLIDE, { ImageTransparency = 0.55 }):Play()
+		-- On the motion clock with the panel's entry.
+		Motion.run(Motion.keyOf(scrim, "fade"), Motion.T.panelEnter, function(p)
+			scrim.ImageTransparency = 1 - 0.45 * p
+		end)
 	else
 		scrim.ImageTransparency = 0.55
 	end
