@@ -21,7 +21,6 @@ PrepGeometry.CRUST = 0.95 -- dough-local radius of the outline; also the full-si
 PrepGeometry.SAUCE_EDGE = 0.84 -- dough-local sauce, cheese and topping limit (proposal)
 PrepGeometry.CAP = 1.1 -- largest semi-axis (proposal)
 PrepGeometry.BALL = 0.35 -- the ball's radius (proposal); body 0.35 F across
-PrepGeometry.STRETCH = 0.35 -- largest stretch of one full-length stroke (proposal)
 PrepGeometry.MAT_OVER_FRAME = 1 / 0.9 -- boardOverPizza (Assets.Meta)
 PrepGeometry.BAKE_FLATTEN = 0.7 -- StationLayout.OVEN.flatten (0.58 before slice 4); layout check keeps them equal
 PrepGeometry.PHONE_FRAME = 190 -- ceil(180 / 0.95): at least 180 px of visible crust
@@ -180,23 +179,30 @@ function PrepGeometry.localStretch(S: Mat2, frame: number, flatten: number?): Ma
 	return mat(K.a / PrepGeometry.CRUST, K.b / PrepGeometry.CRUST, K.c / PrepGeometry.CRUST, K.d / PrepGeometry.CRUST)
 end
 
--- Roll model (provisional, plan 3.1; the taper revised 2026-10-26). A stroke p1 -> p2 must
--- cross the dough. It stretches the dough along its own direction u by up to 35 % x (the share
--- of the dough's longest chord along u the stroke covers). The stretch is applied in ROLL_STEPS
--- equal parts, and each part is tapered by the dough's radius along u at that moment: 1 until
--- TAPER_FROM, falling to 0 at the 1.1 cap. So thin dough resists more as the stroke goes on and
--- a full stroke on a nearly full-size dough lands near full size instead of jumping to the cap
--- (the first model tapered once, by the radius before the stroke: 0.861 -> 1.1 in one stroke).
--- Semi-axes stop at 1.1. Judged on the two end points only, so equal physical strokes give
--- equal shapes whatever the event rate.
+-- Roll model (provisional; revised 2026-10-28 for Lawson's "three smooth, consistent swipes roll
+-- it out"). A stroke p1 -> p2 must cross the dough. It is one pass of the pin: the dough grows
+-- along the pass direction u and, less, across it, as a ball flattens under a pin. A full pass
+-- (one covering at least COVER_FULL of the dough's longest chord along u) adds GROW_ALONG to the
+-- dough's radius along u and GROW_ACROSS across it; a shorter pass adds that share. The growth is
+-- applied in ROLL_STEPS equal parts, each tapered by the radius it grows at that moment: 1 until
+-- TAPER_FROM, falling to 0 at the 1.1 cap, so thin dough resists more and over-rolling slows to a
+-- stop at the cap. Three full passes take the 0.35 ball to the 0.95 .. 1.05 full-size band, round
+-- enough for full marks whichever way they run (crossing them evens it further); two leave it
+-- small; a fourth runs just past full size. Judged on the two end points only, so equal physical
+-- strokes give equal shapes whatever the event rate. (Before: one pass stretched along u only, by
+-- up to 35 %, so a round full-size dough took seven or eight passes at changing angles.)
 PrepGeometry.TAPER_FROM = 0.85 -- proposal
 PrepGeometry.ROLL_STEPS = 16
+PrepGeometry.GROW_ALONG = 0.25 -- proposal
+PrepGeometry.GROW_ACROSS = 0.21 -- proposal
+PrepGeometry.COVER_FULL = 0.85 -- proposal
 
 -- The dough's radius along direction u (half its longest chord in that direction).
 local function radiusAlong(S: Mat2, u: Vec): number
 	local v = PrepGeometry.apply(PrepGeometry.inverse(S), u)
 	return 1 / math.sqrt(v.x * v.x + v.y * v.y)
 end
+PrepGeometry.radiusAlong = radiusAlong
 
 -- Length of the part of segment p1 -> p2 inside the dough, or 0.
 function PrepGeometry.chordInside(S: Mat2, p1: Vec, p2: Vec): number
@@ -221,6 +227,10 @@ function PrepGeometry.chordInside(S: Mat2, p1: Vec, p2: Vec): number
 	return (t2 - t1) * len
 end
 
+local function taper(radius: number): number
+	return math.clamp((PrepGeometry.CAP - radius) / (PrepGeometry.CAP - PrepGeometry.TAPER_FROM), 0, 1)
+end
+
 function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 	local dx, dy = p2.x - p1.x, p2.y - p1.y
 	local len = math.sqrt(dx * dx + dy * dy)
@@ -232,15 +242,18 @@ function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 		return nil
 	end
 	local u = { x = dx / len, y = dy / len }
+	local v = { x = -u.y, y = u.x }
 	local cover = math.clamp(chord / (2 * radiusAlong(S, u)), 0, 1)
-	-- Untapered, the parts multiply to exactly 1 + 0.35 x cover, as one undivided stretch would.
-	local part = (1 + PrepGeometry.STRETCH * cover) ^ (1 / PrepGeometry.ROLL_STEPS) - 1
-	for _ = 1, PrepGeometry.ROLL_STEPS do
-		local half = radiusAlong(S, u)
-		local taper = math.clamp((PrepGeometry.CAP - half) / (PrepGeometry.CAP - PrepGeometry.TAPER_FROM), 0, 1)
-		local k = part * taper
-		-- New outline = (I + k u u^T) applied to the old one; keep the symmetric factor of A S^2 A^T.
-		local A = mat(1 + k * u.x * u.x, k * u.x * u.y, k * u.x * u.y, 1 + k * u.y * u.y)
+	local push = math.min(cover / PrepGeometry.COVER_FULL, 1)
+	local n = PrepGeometry.ROLL_STEPS
+	for _ = 1, n do
+		local ru, rv = radiusAlong(S, u), radiusAlong(S, v)
+		-- A = I + ku u u^T + kv v v^T keeps u and v as directions and scales the radius along each
+		-- by 1 + k, so each part adds GROW x push x taper / n to it.
+		local ku = PrepGeometry.GROW_ALONG * push * taper(ru) / n / ru
+		local kv = PrepGeometry.GROW_ACROSS * push * taper(rv) / n / rv
+		local A = mat(1 + ku * u.x * u.x + kv * v.x * v.x, ku * u.x * u.y + kv * v.x * v.y, ku * u.x * u.y + kv * v.x * v.y, 1 + ku * u.y * u.y + kv * v.y * v.y)
+		-- New outline = A applied to the old one; keep the symmetric factor of A S^2 A^T.
 		local AS = PrepGeometry.mul(A, S)
 		local l1, l2, angle = symEigen(PrepGeometry.mul(AS, transpose(AS)))
 		local a = math.min(math.sqrt(l1), PrepGeometry.CAP)
@@ -248,6 +261,31 @@ function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 		S = fromEigen(a, b, angle)
 	end
 	return S
+end
+
+-- The same outline drawn so the art turns as little as possible (Lawson 2026-10-28: the dough
+-- spun while it was rolled). An unsheared image draws R(t) diag(w, h), so the exact outline
+-- allows t = angle + k x 90 degrees (w and h swapped for odd k); near round the long axis's
+-- angle swings freely, and following it turns the art with it. Of those angles take the one
+-- nearest the art's last turn `turn` (radians), then turn short of it by as much as keeps the
+-- drawn outline within `tol` (px of the ellipse's own units) of the exact one: an outline with
+-- semi-axes a >= b drawn delta off its angle is at most (a - b) (a / b) |sin delta| away, so a
+-- nearly round dough keeps its art still. Returns the ellipse to draw (major = the semi-axis
+-- along angle, which may be the shorter one) and that outline error bound.
+function PrepGeometry.steadyEllipse(e: Ellipse, turn: number, tol: number): (Ellipse, number)
+	local quarter = math.pi / 2
+	local k = math.floor((turn - e.angle) / quarter + 0.5)
+	local nearest = e.angle + k * quarter
+	local d = e.major - e.minor
+	local grow = if e.minor > 0 then d * e.major / e.minor else math.huge
+	local allowed = if grow <= tol then quarter / 2 else math.asin(tol / grow)
+	local delta = math.clamp(turn - nearest, -allowed, allowed)
+	local angle = nearest + delta
+	local err = grow * math.abs(math.sin(delta))
+	if k % 2 == 0 then
+		return { major = e.major, minor = e.minor, angle = angle }, err
+	end
+	return { major = e.minor, minor = e.major, angle = angle }, err
 end
 
 -- The dough after a list of committed strokes ({ x1, y1, x2, y2 }); strokes that miss are skipped.

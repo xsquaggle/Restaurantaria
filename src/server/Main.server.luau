@@ -86,8 +86,8 @@ end)
 -- the real save (TestStore.guard), so a test run needs fakeStore first (or a test or memory
 -- backend, SaveBackend). Server-wide test settings are refused while anyone is on it.
 -- Test hooks: a clean Make dough step through the real actions (three flour sweeps, the ball
--- pulled on, eight full rolls at 0, 90, 45 and 135 degrees: round, mean radius 1.03), then on
--- to the sauce. `act` reports refusals.
+-- pulled on, three full passes at 90, 0 and 90 degrees: round, inside the full-size band), then
+-- on to the sauce. `act` reports refusals.
 local function cleanDough(act: (string, any) -> (), pizzaId: number)
 	local reach = Config.Make.flourReach
 	for _, y in { -0.45, 0, 0.45 } do
@@ -102,7 +102,7 @@ local function cleanDough(act: (string, any) -> (), pizzaId: number)
 		act("flour", { pizzaId = pizzaId, points = points })
 	end
 	act("placeDough", { pizzaId = pizzaId })
-	for _, deg in { 0, 90, 45, 135, 90, 0, 135, 45 } do
+	for _, deg in { 90, 0, 90 } do
 		local a = math.rad(deg)
 		act("rollDough", { pizzaId = pizzaId, x1 = -1.2 * math.cos(a), y1 = -1.2 * math.sin(a), x2 = 1.2 * math.cos(a), y2 = 1.2 * math.sin(a) })
 	end

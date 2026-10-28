@@ -1,6 +1,7 @@
 -- Checks for the Make tab's dough steps (flour the board, pull the dough, roll): the shared
 -- flour sampler, stroke check and drag batching, the flour coverage under the finished dough,
--- the revised roll taper, the Dough score, the first shift's roll advice, the Make part of the
+-- the three-pass roll model and the held drag's passes (before/after evidence for Lawson's
+-- 2026-10-28 rolling report), the Dough score, the first shift's roll advice, the Make part of the
 -- order grade and the server's actions, which refuse bad input without changing the pizza. Expected values are worked by hand from the
 -- rules (see the comments), never from the helpers under test. Run offline with
 -- tests/offline/run.py, or in Studio Edit after a sync. Arithmetic only: how the art looks and
@@ -286,30 +287,67 @@ near("coverage: one stamp covers the ball", MakeDough.flourCoverage(centre, G.ba
 near("coverage: one stamp on a full dough", MakeDough.flourCoverage(centre, G.shape(0.95, 0.95, 0)), 7 / 61, 1e-12)
 near("coverage: no flour", MakeDough.flourCoverage(newMake(), G.ball()), 0, 1e-12)
 
--- 4. Roll. Below TAPER_FROM the parts multiply to exactly 1.35: one full stroke on the ball
--- gives semi-axes 0.4725 x 0.35 (0.35 x 1.35).
+-- 4. Roll (revised 2026-10-28 for "three smooth, consistent swipes"). Below TAPER_FROM a full
+-- pass adds exactly GROW_ALONG = 0.25 to the radius along it and GROW_ACROSS = 0.21 across it:
+-- one full pass on the 0.35 ball gives 0.60 x 0.56, long side along the pass.
+check("proposal: grow along", G.GROW_ALONG, 0.25)
+check("proposal: grow across", G.GROW_ACROSS, 0.21)
+check("proposal: cover full", G.COVER_FULL, 0.85)
 local e1 = G.axes(G.doughShape({ line(0, 1.2) }))
-near("roll: one full stroke, long axis", e1.major, 0.4725, 1e-9)
-near("roll: one full stroke, short axis", e1.minor, 0.35, 1e-9)
--- Alternating full strokes, worked from 1.35 per stroke while under 0.85: 0.35, 0.4725, 0.6379,
--- 0.8611 (each axis every second stroke): six strokes = 0.8611 round, untapered.
-local six = {}
-for i = 1, 6 do
-	six[i] = line(if i % 2 == 1 then 0 else 90, 1.2)
+near("roll: one full pass, long axis", e1.major, 0.60, 1e-9)
+near("roll: one full pass, short axis", e1.minor, 0.56, 1e-9)
+near("roll: one full pass, long axis along the pass", e1.angle, 0, 1e-9)
+-- A second full pass the same way: the long side's sixteenth part starts at 0.6 + 15 x 0.25 / 16
+-- = 0.834, under 0.85, so still untapered: 0.85 x 0.77.
+local e2 = G.axes(G.doughShape({ line(0, 1.2), line(0, 1.2) }))
+near("roll: two passes one way, long axis", e2.major, 0.85, 1e-9)
+near("roll: two passes one way, short axis", e2.minor, 0.77, 1e-9)
+-- Crossed instead: the second pass adds 0.25 to the 0.56 side and 0.21 to the 0.60 side: 0.81
+-- round.
+local e2x = G.axes(G.doughShape({ line(0, 1.2), line(90, 1.2) }))
+near("roll: two crossed passes, round", e2x.major, 0.81, 1e-9)
+near("roll: two crossed passes, other axis", e2x.minor, 0.81, 1e-9)
+-- Three full passes reach the full-size band (0.95 .. 1.05 mean) round enough for full marks
+-- (0.9), whichever way they run. Bounds, not exact figures: the tapered parts have no closed
+-- form.
+local function inBand(strokes: { any }): (boolean, number, number)
+	local e = G.axes(G.doughShape(strokes))
+	local mean = (e.major + e.minor) / 2
+	return mean >= cfg.sizeFullLow and mean <= cfg.sizeFullHigh and e.minor / e.major >= cfg.roundFull, mean, e.minor / e.major
 end
-local e6 = G.axes(G.doughShape(six))
-near("roll: six alternating strokes, round", e6.major, 0.35 * 1.35 ^ 3, 1e-9)
-near("roll: six alternating strokes, other axis", e6.minor, 0.35 * 1.35 ^ 3, 1e-9)
--- The seventh: with the taper read as the stroke goes on, it lands between 0.95 and 1.05 (the
--- old model jumped to the 1.1 cap). Bounds, not an exact figure: the 16-part integration has
--- no closed form; the continuous limit (dr = r (1.1 - r) / 0.25 past 0.85) gives 1.038.
-local seven = table.clone(six)
-seven[7] = line(0, 1.2)
-local e7 = G.axes(G.doughShape(seven))
-check("roll: seventh stroke lands in 0.95 .. 1.05", e7.major >= 0.95 and e7.major <= 1.05, true)
-note(string.format("rolls: six alternating full strokes %.4f round; the seventh stretches one axis to %.4f (old model: 1.1)", e6.major, e7.major))
+for _, case in { { "one way", { 0, 0, 0 } }, { "crossed", { 90, 0, 90 } }, { "fanned", { 90, 30, 150 } }, { "diagonals", { 45, 135, 45 } } } do
+	local strokes = {}
+	for i, deg in case[2] do
+		strokes[i] = line(deg, 1.2)
+	end
+	local ok, mean, round = inBand(strokes)
+	check("roll: three passes " .. case[1] .. " land full size and round", ok, true)
+	note(string.format("rolls: three passes %s -> mean radius %.4f, short/long %.3f", case[1], mean, round))
+end
+-- Two are short of it; a fourth runs just past it (over-rolled, under the cap).
+check("roll: two passes are small", (e2x.major + e2x.minor) / 2 < cfg.sizeFullLow, true)
+local four = { line(0, 1.2), line(0, 1.2), line(0, 1.2), line(0, 1.2) }
+local e4 = G.axes(G.doughShape(four))
+check("roll: a fourth pass runs past full size", (e4.major + e4.minor) / 2 > cfg.sizeFullHigh, true)
+check("roll: a fourth pass stays under the cap", e4.major < G.CAP, true)
+note(string.format("rolls: four passes one way -> %.4f x %.4f (mean %.4f)", e4.major, e4.minor, (e4.major + e4.minor) / 2))
+-- One way never drops under the 0.9 roundness mark: the worst is after two passes (0.77 / 0.85
+-- = 0.906), so the "uneven" rule cannot be reached by rolling alone in this model.
+local worst = 1
+local oneWay = {}
+for i = 1, 8 do
+	oneWay[i] = line(0, 1.2)
+	local e = G.axes(G.doughShape(oneWay))
+	worst = math.min(worst, e.minor / e.major)
+end
+near("roll: one way, worst roundness is after two passes", worst, 0.77 / 0.85, 1e-9)
+-- A pass covering part of the dough adds that share: from the centre out over the ball covers
+-- 0.35 of its 0.70 chord, 0.5, so it pushes 0.5 / 0.85 of a full pass: 0.35 + 0.25 x 0.5882.
+local half = G.axes(G.doughShape({ { x1 = 0, y1 = 0, x2 = 1.2, y2 = 0 } }))
+near("roll: half a pass adds its share", half.major, 0.35 + 0.25 * 0.5 / 0.85, 1e-9)
+near("roll: half a pass, across", half.minor, 0.35 + 0.21 * 0.5 / 0.85, 1e-9)
 -- Over-rolling still reaches the cap but no further.
-local many = table.clone(six)
+local many = {}
 for i = 1, 30 do
 	table.insert(many, line(if i % 2 == 1 then 0 else 90, 1.2))
 end
@@ -340,9 +378,9 @@ rollRefused("the 25th", line(0, 1.2), "too many rolls")
 -- 6. The Dough score.
 -- Nothing placed: 0.
 check("grade: no dough", MakeDough.grade(newMake()).score, 0)
--- Ball rolled once (0.4725 x 0.35), fully floured: mean 0.41125 is under 0.6, size 0; round =
--- (0.35 / 0.4725 - 0.5) / 0.4 = 0.60185; roll = 100 x (0 + 0.5 x 0.60185) = 30.093; flour 100;
--- Dough = 0.8 x 30.093 + 0.2 x 100 = 44.07 -> 44.
+-- Ball rolled once (0.60 x 0.56), fully floured: mean 0.58 is under 0.6, size 0; short/long
+-- 0.9333 is past 0.9, round 1; roll = 100 x (0 + 0.5 x 1) = 50; flour 100;
+-- Dough = 0.8 x 50 + 0.2 x 100 = 60.
 local onceFloured = newMake()
 local grid = {}
 for gx = -7, 7 do
@@ -359,13 +397,13 @@ onceFloured.flour = grid
 onceFloured.placed = true
 onceFloured.strokes = { line(0, 1.2) }
 local g1 = MakeDough.grade(onceFloured)
-near("grade: ball rolled once, roll part", g1.detail.roll, 100 * 0.5 * ((0.35 / 0.4725 - 0.5) / 0.4), 1e-9)
+near("grade: ball rolled once, roll part", g1.detail.roll, 50, 1e-9)
 near("grade: ball rolled once, flour coverage", g1.detail.coverage, 1, 1e-12)
-check("grade: ball rolled once", g1.score, 44)
+check("grade: ball rolled once", g1.score, 60)
 check("grade: too small note", table.find(g1.notes, "Dough too small") ~= nil, true)
-check("grade: uneven note", table.find(g1.notes, "Dough uneven") ~= nil, true)
+check("grade: no uneven note (0.933 is round enough)", table.find(g1.notes, "Dough uneven") == nil, true)
 check("grade: no flour note when floured", table.find(g1.notes, "Flour the whole board first") == nil, true)
--- The same dough with one flour stamp at the centre: under the 0.4725 x 0.35 oval the stamp
+-- The same dough with one flour stamp at the centre: under the 0.60 x 0.56 oval the stamp
 -- (radius 0.35) covers every sample point whose oval position is within 0.35 of the centre.
 -- Coverage is read, not worked; the flour part follows the ramp from it.
 local thin = table.clone(onceFloured)
@@ -373,18 +411,17 @@ thin.flour = { { P(0, 0) } }
 local gt = MakeDough.grade(thin)
 near("grade: flour part follows the ramp", gt.detail.flour, 100 * math.clamp((gt.detail.coverage - 0.2) / 0.6, 0, 1), 1e-9)
 check("grade: no-flour-under note", (gt.detail.coverage < 0.8) == (table.find(gt.notes, "Flour the whole board first") ~= nil), true)
--- The clean test-hook dough (eight rolls at 0, 90, 45, 135, 90, 0, 135, 45; fully floured):
--- round inside 0.95 .. 1.05, so 100.
+-- The clean test-hook dough (three passes at 90, 0 and 90; fully floured): round inside
+-- 0.95 .. 1.05, so 100.
 local clean = table.clone(onceFloured)
-clean.strokes = { line(0, 1.2), line(90, 1.2), line(45, 1.2), line(135, 1.2), line(90, 1.2), line(0, 1.2), line(135, 1.2), line(45, 1.2) }
+clean.strokes = { line(90, 1.2), line(0, 1.2), line(90, 1.2) }
 local gc = MakeDough.grade(clean)
 check("grade: clean dough", gc.score, 100)
 check("grade: clean dough mean radius in the full band", gc.detail.meanRadius >= 0.95 and gc.detail.meanRadius <= 1.05, true)
 -- 6b. The first shift's pointer after a roll (MakeDough.rollAdvice). Worked from the shapes above:
--- nothing rolled -> nil; once (0.4725 x 0.35) and six (0.8611 round) -> small; seven (1.028 x
--- 0.8611, minor/major 0.84 < 0.9 with the long side full size) -> uneven; the clean eight ->
--- ready; ten alternating (both axes past 1.05) -> big; six one way (long side at the cap, short
--- side 0.35) -> uneven.
+-- nothing rolled -> nil; once (0.60 x 0.56) and two crossed (0.81 round) -> small; the clean
+-- three -> ready; four one way (mean past 1.05, round) -> big. "uneven" is not reachable by
+-- passes alone (section 4).
 local function advice(strokes: { any }): string?
 	local m = newMake()
 	m.placed = true
@@ -393,33 +430,20 @@ local function advice(strokes: { any }): string?
 end
 check("advice: before the first roll", advice({}), nil)
 check("advice: rolled once", advice({ line(0, 1.2) }), "small")
-check("advice: six alternating", advice(six), "small")
-check("advice: seven", advice(seven), "uneven")
-check("advice: clean eight", advice(clean.strokes), "ready")
-local ten = {}
-for i = 1, 10 do
-	ten[i] = line(if i % 2 == 1 then 0 else 90, 1.2)
-end
-local e10 = G.axes(G.doughShape(ten))
-check("advice: ten alternating are past full size", e10.minor > 1.05, true)
-check("advice: ten alternating", advice(ten), "big")
-local oneWay = {}
-for i = 1, 6 do
-	oneWay[i] = line(0, 1.2)
-end
-check("advice: six one way", advice(oneWay), "uneven")
-note(string.format("roll advice: ten alternating %.4f x %.4f (big); six one way %.4f x %.4f (uneven)", e10.major, e10.minor, G.axes(G.doughShape(oneWay)).major, G.axes(G.doughShape(oneWay)).minor))
+check("advice: two crossed", advice({ line(0, 1.2), line(90, 1.2) }), "small")
+check("advice: clean three", advice(clean.strokes), "ready")
+check("advice: four one way", advice(four), "big")
 
-note(string.format("dough grades: ball rolled once = %d; clean eight rolls = %d (mean radius %.4f, %.4f x %.4f)", g1.score, gc.score, gc.detail.meanRadius, gc.detail.major, gc.detail.minor))
+note(string.format("dough grades: ball rolled once = %d; clean three passes = %d (mean radius %.4f, %.4f x %.4f)", g1.score, gc.score, gc.detail.meanRadius, gc.detail.major, gc.detail.minor))
 
 -- 7. The Make part of the order grade: the mean of Dough, Sauce, Cheese and (only when the ticket
 -- has toppings) Toppings; a cheese order has no free topping score. Here the sauce and cheese
 -- steps are empty (each 0; sauce_cheese_check covers them), so a cheese order is
--- (44 + 0 + 0) / 3 = 14.67 -> 15, under both coverage ceilings (35, nothing covered), so not
--- held. A pepperoni order's mean is (44 + 0 + 0 + 100) / 4 = 36, over the empty sauce's ceiling of
--- 35, so it is held to 35.
+-- (60 + 0 + 0) / 3 = 20, under both coverage ceilings (35, nothing covered), so not held. A
+-- pepperoni order's mean is (60 + 0 + 0 + 100) / 4 = 40, over the empty sauce's ceiling of 35, so
+-- it is held to 35.
 local cheese = Recipes.ById.cheese
-check("make: cheese order = mean of dough, sauce, cheese", Scoring.make(cheese, onceFloured, {}).score, 15)
+check("make: cheese order = mean of dough, sauce, cheese", Scoring.make(cheese, onceFloured, {}).score, 20)
 local pep = Recipes.ById.pepperoni
 local pieces = {}
 for i = 1, 8 do
@@ -432,7 +456,7 @@ check("make: pepperoni toppings perfect", tops, 100)
 local saved = table.clone(Config.Grade)
 Config.Grade.ceilingsOn, Config.Grade.completeness = "make", false
 local gp = Scoring.make(pep, onceFloured, pieces)
-check("make: pepperoni order mean of four", gp.detail.mean, 36)
+check("make: pepperoni order mean of four", gp.detail.mean, 40)
 check("make: pepperoni order held by the sauce ceiling", gp.score, 35)
 check("make: pepperoni hold noted", gp.notes[1], "Most of the pizza has no sauce: Make held to 35")
 -- The grade split's default (ceilings on the order grade): Make stays the mean, and the lowest
@@ -441,7 +465,7 @@ for k, v in saved do
 	Config.Grade[k] = v
 end
 local go = Scoring.make(pep, onceFloured, pieces)
-check("make (order ceilings): Make is the mean", go.score, 36)
+check("make (order ceilings): Make is the mean", go.score, 40)
 check("make (order ceilings): lowest ceiling is the sauce coverage", go.detail.ceilings[1].name .. "=" .. go.detail.ceilings[1].value, "sauceCover=35")
 local anyHeld = false
 for _, n in go.notes do

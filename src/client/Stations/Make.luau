@@ -13,6 +13,11 @@
 -- bowl (P10) and the pinches (P11). Every input is drawn at once and sent to the server, which
 -- checks and keeps it (MakeDough, MakeSauce, MakeCheese); a refusal snaps the view back.
 --
+-- Roll: a held drag is split into passes where the pointer turns (MakeDough.rollDrag), so rolling
+-- back and forth in one hold is several passes, each sent as it ends; the open pass is previewed
+-- and only grows. The pin lies across its pass and keeps its turn when the pass reverses; the
+-- dough art turns as little as its outline allows (PrepGeometry.steadyEllipse).
+--
 -- Sauce: a press on the dough is a pour unless it moves Config.Sauce.tapPixels first, then it is
 -- a spread (plan rev 6, D8); a drag from the pot pours where it is released. The live spread is
 -- the server's own spread function applied to the path so far. Cheese: hold and drag to
@@ -43,6 +48,8 @@ local PrepFood = require(Shared.PrepFood)
 local Recipes = require(Shared.Recipes)
 local Parent = script.Parent.Parent
 local MakeLayers = require(Parent.MakeLayers)
+local Motion = require(Parent.Motion)
+local MotionPlan = require(Parent.MotionPlan)
 local StationLayout = require(Parent.StationLayout)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
@@ -72,6 +79,14 @@ local LADLE_HEIGHT = 0.5
 local DUST_OPACITY = 0.55
 local DRAG_START = 6 -- pixels of travel before a press on the tub becomes a drag
 local HANDOFF = TweenInfo.new(0.1, Enum.EasingStyle.Linear) -- ball out, rolled key in, same oval
+-- Rolling motion (Lawson 2026-10-28, proposals): the dough art keeps its turn while its drawn
+-- outline stays within ART_TOL px of the scored one (PrepGeometry.steadyEllipse); the pin eases
+-- to its pass's turn with time constant PIN_EASE s, pops as it is picked up and glides back to
+-- its rest over PIN_HOME s when let go.
+local ART_TOL = 1
+local PIN_EASE = 0.045
+local PIN_HOME = 0.26
+local PIN_REST_TURN = -12
 local SNAP = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local STEP_NAMES = { flour = "Flour", dough = "Dough", roll = "Roll", sauce = "Sauce", cheese = "Cheese", toppings = "Toppings" }
@@ -325,7 +340,7 @@ function Make.new(ctx: any, container: Frame)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromOffset(x + cellW / 2, y + cellH / 2),
 			Size = UDim2.fromOffset(cellW * 1.05, cellW * 1.05),
-			Rotation = -12,
+			Rotation = PIN_REST_TURN,
 			ZIndex = 5,
 			Parent = dough,
 		})
@@ -431,6 +446,8 @@ function Make.new(ctx: any, container: Frame)
 	-- the view applies it locally.
 
 	local current: any = nil
+	local pinHome: (glide: boolean) -> ()
+	local pinTick: () -> ()
 	local queues: { [number]: { inFlight: any?, waiting: { any } } } = {}
 	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball" | "ladle" | "pot" | "cheese", input, mouse, button, ... }
 	local finishing: number? = nil -- the pizza whose Next is on its way
@@ -566,15 +583,24 @@ function Make.new(ctx: any, container: Frame)
 	end
 
 	local ballShown = true
+	-- The dough art's last turn (radians) and the pizza it was drawn for: each drawing turns the
+	-- art as little as the outline allows (PrepGeometry.steadyEllipse), so it never spins.
+	local artTurn = 0
+	local artFor: number? = nil
 	local function drawDough(m: any, S: any)
-		local e = G.ellipseOf(G.viewMatrix(S, F))
-		local pl = G.bodyPlacement(e, DOUGH_BODY)
+		local id = if current then current.id else nil
+		if not m.placed or id ~= artFor then
+			artTurn, artFor = 0, id
+		end
+		local drawn = G.steadyEllipse(G.ellipseOf(G.viewMatrix(S, F)), artTurn, ART_TOL)
+		artTurn = drawn.angle
+		local pl = G.bodyPlacement(drawn, DOUGH_BODY)
 		local function place(img: ImageLabel)
 			img.Size = UDim2.fromOffset(pl.width, pl.height)
 			img.Rotation = pl.rotation
 			img.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
 		end
-		local rolled = #m.strokes > 0 or (live ~= nil and live.kind == "roll" and live.moved)
+		local rolled = #m.strokes > 0 or (live ~= nil and live.kind == "roll" and live.drag.line() ~= nil)
 		if not m.placed then
 			ball.Visible = false
 			for _, k in keys do
@@ -627,8 +653,10 @@ function Make.new(ctx: any, container: Frame)
 		end
 		local m = shown(current)
 		local S = MakeDough.shape(m)
-		if live and live.kind == "roll" and live.moved then
-			S = G.roll(S, live.from, live.to) or S
+		-- The open pass of a held roll, as it stands: it only grows, so the dough never shrinks.
+		local open = if live and live.kind == "roll" then live.drag.line() else nil
+		if open then
+			S = G.roll(S, { x = open.x1, y = open.y1 }, { x = open.x2, y = open.y2 }) or S
 		end
 		drawFlour(m, if live and live.kind == "flour" then live.drag.points else nil)
 		drawDough(m, S)
@@ -717,6 +745,86 @@ function Make.new(ctx: any, container: Frame)
 		if current and phaseOf() == "dough" then
 			push("placeDough", {})
 		end
+	end
+
+	-- One pass of the pin (MakeDough.rollDrag), sent if the server would keep it.
+	local function commitPass(line: any)
+		if not current then
+			return
+		end
+		local args = { x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2 }
+		if (args.x2 - args.x1) ^ 2 + (args.y2 - args.y1) ^ 2 >= Config.Make.minStroke ^ 2 and MakeDough.validateRoll(shown(current), args) then
+			push("rollDough", args)
+		end
+	end
+
+	-- The pin in the hand: picked up from its rest (it pops as it is lifted), eased onto each
+	-- pass's turn by the tick, and glided back to the rest when let go. pinOut while it is away
+	-- from the rest, so the resting pin is never drawn twice.
+	local pinOut = false
+	local pinAngle = PIN_REST_TURN -- drawn
+	local pinTarget = PIN_REST_TURN
+	local pinClock: number? = nil
+	local pinKey = {}
+	local pinScale = Motion.scale(pin)
+	local function pinPickUp()
+		Motion.stop(pinKey)
+		pin.Size = UDim2.fromOffset(pinLen / PIN_SHARE, pinLen / PIN_SHARE)
+		if not pinOut then
+			pinOut = true
+			pinRest.Visible = false
+			pinAngle, pinTarget = PIN_REST_TURN, PIN_REST_TURN
+			if not Motion.reduced() then
+				Motion.pop(pinScale, 0.9, 1.06, 0.22)
+			end
+		end
+		pinTarget = pinAngle
+		pin.Rotation = pinAngle
+		pinClock = nil
+	end
+	local function pinAway()
+		pin.Visible = false
+		Motion.stop(pinScale)
+		pinScale.Scale = 1
+		pinOut = false
+		pinRest.Visible = current ~= nil and shown(current).step == "dough"
+	end
+	function pinHome(glide: boolean)
+		if not pinOut or (live and live.kind == "roll") then
+			return
+		end
+		if not glide or not pin.Visible or Motion.reduced() then
+			Motion.stop(pinKey)
+			pinAway()
+			return
+		end
+		-- Back to the rest along an ease-out, turning the short way to the rest's own turn.
+		local fromPos, fromSize, fromTurn = pin.Position, pin.Size, pinAngle
+		local toPos, toSize = pinRest.Position, pinRest.Size
+		local toTurn = PIN_REST_TURN + 360 * math.floor((fromTurn - PIN_REST_TURN) / 360 + 0.5)
+		Motion.run(pinKey, PIN_HOME, function(t: number)
+			local e = MotionPlan.easeOut(t)
+			pin.Position = fromPos:Lerp(toPos, e)
+			pin.Size = fromSize:Lerp(toSize, e)
+			pinAngle = fromTurn + (toTurn - fromTurn) * e
+			pin.Rotation = pinAngle
+		end, pinAway)
+	end
+	function pinTick()
+		local st = live
+		if not st or st.kind ~= "roll" then
+			pinClock = nil
+			return
+		end
+		local now = Motion.now()
+		local dt = if pinClock then math.clamp(now - pinClock, 0, 0.1) else 0
+		pinClock = now
+		if Motion.reduced() then
+			pinAngle = pinTarget
+		else
+			pinAngle += (pinTarget - pinAngle) * (1 - math.exp(-dt / PIN_EASE))
+		end
+		pin.Rotation = pinAngle
 	end
 
 	-- Sauce and cheese are stored dough-local: the screen position mapped through the dough as
@@ -874,7 +982,9 @@ function Make.new(ctx: any, container: Frame)
 		end
 		live = nil
 		scoop.Visible = false
-		pin.Visible = false
+		if st.kind ~= "roll" then
+			pin.Visible = false
+		end
 		carried.Visible = false
 		ladle.Visible = false
 		if st.kind == "flour" then
@@ -883,13 +993,11 @@ function Make.new(ctx: any, container: Frame)
 				sendFlour(batch)
 			end
 		elseif st.kind == "roll" then
-			if commit and st.moved and current then
-				local d = st.to - st.from
-				local args = { x1 = st.from.X, y1 = st.from.Y, x2 = st.to.X, y2 = st.to.Y }
-				if d.Magnitude >= Config.Make.minStroke and MakeDough.validateRoll(shown(current), args) then
-					push("rollDough", args)
-				end
+			local last = st.drag.close()
+			if commit and last then
+				commitPass(last)
 			end
+			pinHome(commit)
 		elseif st.kind == "ball" then
 			if commit and input then
 				local p = toLocal(input.Position)
@@ -938,12 +1046,16 @@ function Make.new(ctx: any, container: Frame)
 		end
 		local p = toLocal(position)
 		p = Vector2.new(math.clamp(p.X, -Config.Make.strokeReach, Config.Make.strokeReach), math.clamp(p.Y, -Config.Make.strokeReach, Config.Make.strokeReach))
-		st.to = p
-		local d = p - st.from
-		if d.Magnitude > 0.02 then
-			st.moved = true
-			-- The pin lies across the stroke and rolls along it.
-			pin.Rotation = math.deg(math.atan2(d.Y, d.X)) + 90
+		local ended = st.drag.move({ x = p.X, y = p.Y })
+		if ended then
+			-- A turn: the pass just rolled is kept, and the next one starts where it turned.
+			commitPass(ended)
+		end
+		local axis = st.drag.axis
+		if axis then
+			-- The pin lies across the pass and rolls along it; a pass back the other way keeps
+			-- its turn (MakeDough.pinTurn). The tick eases it there.
+			pinTarget = MakeDough.pinTurn(axis, pinTarget)
 		end
 		local o = dough.AbsolutePosition
 		pin.Position = UDim2.fromOffset(position.X - o.X, position.Y - o.Y)
@@ -1011,7 +1123,8 @@ function Make.new(ctx: any, container: Frame)
 			end
 		elseif phase == "roll" then
 			live = hold("roll", input)
-			live.from, live.to, live.moved = p, p, false
+			live.drag = MakeDough.rollDrag({ x = p.X, y = p.Y })
+			pinPickUp()
 			rollAt(input.Position)
 		elseif shown(current).step == "sauce" then
 			-- Undecided until it moves tapPixels (a spread) or ends (a pour).
@@ -1224,7 +1337,9 @@ function Make.new(ctx: any, container: Frame)
 		if onBoard and m then
 			-- Each step's own tools in the two tool cells.
 			local inDough = step == "dough"
-			crock.Visible, tub.Visible, pinRest.Visible = inDough, inDough, inDough
+			crock.Visible, tub.Visible = inDough, inDough
+			-- The resting pin is away while it is in the hand or gliding back.
+			pinRest.Visible = inDough and not pinOut
 			pot.Visible, bowl.Visible = not inDough, not inDough
 			undo:setEnabled(canUndo(m))
 			local busy = finishing ~= nil
@@ -1244,6 +1359,7 @@ function Make.new(ctx: any, container: Frame)
 
 	function station.tick(now: number)
 		toppings.tick(now)
+		pinTick()
 		local st = live
 		if st and st.kind == "cheese" then
 			flushCheese(st, false)
@@ -1253,6 +1369,7 @@ function Make.new(ctx: any, container: Frame)
 	function station.setActive(active: boolean)
 		if not active then
 			endLive(false)
+			pinHome(false)
 		end
 	end
 

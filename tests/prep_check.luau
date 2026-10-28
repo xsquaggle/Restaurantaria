@@ -198,7 +198,7 @@ do
 	local committed = G.meanRadius(G.roll(S, p1, p2) :: any)
 	near("preview end = committed", prev, committed, 1e-12)
 	note(string.format("one full stroke on the ball: mean radius 0.350 -> %.4f, largest preview step %.4f", committed, biggest))
-	-- Alternating full strokes: how many reach a round full-size base.
+	-- Alternating full passes: how many reach a round full-size base (Lawson 2026-10-28: three).
 	local strokes = {}
 	local n = 0
 	repeat
@@ -207,8 +207,8 @@ do
 		table.insert(strokes, { x1 = -1.5 * math.cos(a), y1 = -1.5 * math.sin(a), x2 = 1.5 * math.cos(a), y2 = 1.5 * math.sin(a) })
 	until G.meanRadius(G.doughShape(strokes)) >= 0.95 or n >= 30
 	local ax = G.axes(G.doughShape(strokes))
-	note(string.format("alternating full strokes to mean radius 0.95: %d (round %.3f x %.3f)", n, ax.major, ax.minor))
-	check("full size takes at least 7 strokes (1.35^7)", n >= 7, true)
+	note(string.format("alternating full passes to mean radius 0.95: %d (round %.3f x %.3f)", n, ax.major, ax.minor))
+	check("full size takes three passes", n, 3)
 	for _ = 1, 30 do
 		table.insert(strokes, { x1 = -1.5, y1 = 0, x2 = 1.5, y2 = 0 })
 	end

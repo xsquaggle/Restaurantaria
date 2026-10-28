@@ -74,11 +74,15 @@ Config.Make = {
 	flourCoverZero = 0.2,
 	-- Flour's share of the Dough score; the roll (size and roundness) is the rest.
 	flourWeight = 0.2,
-	-- Rolling: a stroke runs press to release, is judged on its two end points
-	-- (PrepGeometry.roll) and must cross the dough.
+	-- Rolling: a held drag is split into passes (MakeDough.rollDrag): a pass picks its direction
+	-- once it has travelled rollLock from where it began and ends at its farthest point once the
+	-- pointer, going no further, is rollTurn away from it (a turn), or at the release. Each pass is a stroke, judged on its
+	-- two end points (PrepGeometry.roll); it must cross the dough and be minStroke long.
 	strokeReach = 1.6,
 	minStroke = 0.3,
 	maxStrokes = 24,
+	rollLock = 0.12,
+	rollTurn = 0.1,
 	-- Size (mean semi-axis): full marks from sizeFullLow to sizeFullHigh, none at sizeZeroLow
 	-- and at sizeZeroHigh (the 1.1 cap). Roundness (short / long axis): full at roundFull, none
 	-- at roundZero. The roll part is half size, half roundness (cooking plan rev 6, 3.1).

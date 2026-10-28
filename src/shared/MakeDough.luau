@@ -256,6 +256,102 @@ end
 ------------------------------------------------------------------------------------------
 -- Dough
 
+-- One held roll drag, split into passes the way a pin is pushed and pulled (Lawson 2026-10-28:
+-- rolling back and forth in one hold spun the dough and pin and left it unrolled, because the
+-- old drag was one press-to-release line whose direction came from the press point). A pass
+-- starts where the drag began or where the last pass turned; it has no direction until the
+-- pointer has travelled rollLock from its start, then it points at its farthest point (the last
+-- sample that went further along it). It ends when the pointer, going no further, is rollTurn
+-- away from that point (it turned back, or off to the side), and the next pass starts there.
+-- Jitter shorter than that never ends a pass, and the preview line only grows, so the dough never
+-- shrinks back while it is rolled.
+-- move(p) takes the next pointer sample (pizza-local) and returns the pass it ended, if any;
+-- line() is the open pass as it stands (nil before it has a direction); close() ends the drag and
+-- returns the open pass. axis is the open pass's unit direction (nil before it has one). The
+-- server judges each pass on its own, as one stroke.
+export type RollDrag = {
+	axis: Vec?,
+	move: (p: Vec) -> Line?,
+	line: () -> Line?,
+	close: () -> Line?,
+}
+
+function MakeDough.rollDrag(start: Vec): RollDrag
+	local cfg = Config.Make
+	local drag = {} :: RollDrag
+	local from: Vec = { x = start.x, y = start.y }
+	local far: Vec? = nil
+	local reach = 0
+	local function lineOf(): Line?
+		if not far then
+			return nil
+		end
+		return { x1 = from.x, y1 = from.y, x2 = far.x, y2 = far.y }
+	end
+	function drag.move(p: Vec): Line?
+		local dx, dy = p.x - from.x, p.y - from.y
+		local axis = drag.axis
+		if not axis then
+			local len = math.sqrt(dx * dx + dy * dy)
+			if len >= cfg.rollLock then
+				far = { x = p.x, y = p.y }
+				reach = len
+				drag.axis = { x = dx / len, y = dy / len }
+			end
+			return nil
+		end
+		local along = dx * axis.x + dy * axis.y
+		if along > reach then
+			-- Further along: the pass now reaches here and points here.
+			local len = math.sqrt(dx * dx + dy * dy)
+			far = { x = p.x, y = p.y }
+			reach = len
+			drag.axis = { x = dx / len, y = dy / len }
+			return nil
+		end
+		local f = far :: Vec
+		if (p.x - f.x) ^ 2 + (p.y - f.y) ^ 2 >= cfg.rollTurn * cfg.rollTurn then
+			-- Turned (back, or off to the side) without going further: the pass ends at its
+			-- farthest point and the next one starts there.
+			local ended = lineOf()
+			from = far :: Vec
+			far = nil
+			reach = 0
+			drag.axis = nil
+			drag.move(p)
+			return ended
+		end
+		return nil
+	end
+	drag.line = lineOf
+	function drag.close(): Line?
+		local ended = lineOf()
+		far = nil
+		drag.axis = nil
+		return ended
+	end
+	return drag
+end
+
+-- The rolling pin's drawn Rotation (degrees) for a pass along `axis`: the pin lies across the
+-- pass (its art is level at 0). Turned half way round it lies across the same pass, so of those
+-- turns take the one nearest `current`: a pass rolled back the other way never turns the pin.
+-- Turns stay within PIN_LIMIT of level, so the art's light never ends up underneath.
+MakeDough.PIN_LIMIT = 135
+
+function MakeDough.pinTurn(axis: Vec, current: number): number
+	local across = math.deg(math.atan2(axis.y, axis.x)) + 90
+	local best = across
+	local bestGap = math.huge
+	for k = -3, 3 do
+		local t = across + 180 * k
+		if math.abs(t) <= MakeDough.PIN_LIMIT and math.abs(t - current) < bestGap then
+			best, bestGap = t, math.abs(t - current)
+		end
+	end
+	return best
+end
+
 function MakeDough.validateRoll(make: Make, args: any): (Line?, string?)
 	local cfg = Config.Make
 	if make.step ~= "dough" then

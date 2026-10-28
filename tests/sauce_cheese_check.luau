@@ -393,7 +393,7 @@ local function cleanDough(): any
 		local a = math.rad(deg)
 		return { x1 = -1.2 * math.cos(a), y1 = -1.2 * math.sin(a), x2 = 1.2 * math.cos(a), y2 = 1.2 * math.sin(a) }
 	end
-	for _, deg in { 0, 90, 45, 135, 90, 0, 135, 45 } do
+	for _, deg in { 90, 0, 90 } do
 		table.insert(m.strokes, line(deg))
 	end
 	return m

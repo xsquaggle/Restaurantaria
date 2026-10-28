@@ -8,7 +8,6 @@
 
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Scoring = require(Shared.Scoring)
-local MakeDough = require(Shared.MakeDough)
 local G = require(Shared.PrepGeometry)
 
 local failures = {}
@@ -25,6 +24,28 @@ local function P(x: number, y: number)
 	return { x = x, y = y }
 end
 
+-- The 2026-10-27 roll model (PrepGeometry.roll until 2026-10-28: one stroke stretched the dough
+-- along itself only, by up to 35 %, tapered from 0.85 to the 1.1 cap in 16 parts). The pizzas
+-- below were rolled under it in play, so their outlines are rebuilt with it, not the current one.
+local function rollBefore(S: G.Mat2, p1: G.Vec, p2: G.Vec): G.Mat2?
+	local dx, dy = p2.x - p1.x, p2.y - p1.y
+	local len = math.sqrt(dx * dx + dy * dy)
+	local chord = G.chordInside(S, p1, p2)
+	if len < 1e-9 or chord <= 0 then
+		return nil
+	end
+	local u = { x = dx / len, y = dy / len }
+	local cover = math.clamp(chord / (2 * G.radiusAlong(S, u)), 0, 1)
+	local part = (1 + 0.35 * cover) ^ (1 / 16) - 1
+	for _ = 1, 16 do
+		local k = part * math.clamp((1.1 - G.radiusAlong(S, u)) / (1.1 - 0.85), 0, 1)
+		local AS = G.mul(G.mat(1 + k * u.x * u.x, k * u.x * u.y, k * u.x * u.y, 1 + k * u.y * u.y), S)
+		local e = G.ellipseOf(AS)
+		S = G.shape(math.min(e.major, 1.1), math.min(e.minor, 1.1), e.angle)
+	end
+	return S
+end
+
 -- The dough each pizza was rolled to in play (the debug hook rolled full-width strokes at these
 -- angles, through the server's own validateRoll).
 local ROLLS = {
@@ -35,14 +56,12 @@ local ROLLS = {
 local SLICES = { [3] = 8, [4] = 6, [6] = 4 }
 local footprint = {}
 for id, rolls in ROLLS do
-	local make = MakeDough.new()
-	make.placed = true
+	local S = G.ball()
 	for _, deg in rolls do
 		local a = math.rad(deg)
-		local line = MakeDough.validateRoll(make, { x1 = -1.2 * math.cos(a), y1 = -1.2 * math.sin(a), x2 = 1.2 * math.cos(a), y2 = 1.2 * math.sin(a) })
-		table.insert(make.strokes, (assert(line, "roll refused")))
+		S = assert(rollBefore(S, { x = -1.2 * math.cos(a), y = -1.2 * math.sin(a) }, { x = 1.2 * math.cos(a), y = 1.2 * math.sin(a) }), "roll missed")
 	end
-	footprint[id] = Scoring.footprint(make)
+	footprint[id] = S
 end
 -- The outlines match what the play snapshot reported (to the 4 decimals it printed).
 local function near4(S: G.Mat2, a: number, b: number, d: number): boolean

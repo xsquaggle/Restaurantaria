@@ -419,22 +419,21 @@ check("server: undo", (ShiftService.apply(session, "undoCut", { pizzaId = 7 })),
 check("server: undo removed the last", #pizza.cuts, cfg.maxLines - 1)
 _ = reason
 -- The server grades against the pizza's own dough from its made record (never the client's):
--- the worst oval, rolled eight times along x.
+-- one full pass along x, 0.60 x 0.56 (the three-pass roll model, 2026-10-28; this was the 1.1 x
+-- 0.35 oval of eight passes before).
 local ovalMake = { step = "toppings", placed = true, flour = {}, strokes = {}, sauce = { actions = {} }, cheese = { strokes = {} } }
-for _ = 1, 8 do
-	table.insert(ovalMake.strokes, { x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 })
-end
+table.insert(ovalMake.strokes, { x1 = -1.2, y1 = 0, x2 = 1.2, y2 = 0 })
 local ovalPizza = { id = 9, ticketId = 2, stage = "cutting", make = ovalMake, toppings = {}, cuts = {} }
 session.shift.pizzas[9] = ovalPizza
 local e = G.axes(Scoring.footprint(ovalMake))
-check("server oval: footprint is the rolled dough", e.major > 1.09 and math.abs(e.minor - 0.35) < 1e-9, true)
+check("server oval: footprint is the rolled dough", math.abs(e.major - 0.60) < 1e-9 and math.abs(e.minor - 0.56) < 1e-9, true)
 check("server oval: footprint without a dough on the board is the round crust", Scoring.footprint({ placed = false, strokes = {} }).a, 0.95)
 local okB, whyB = ShiftService.apply(session, "cut", { pizzaId = 9, path = { P(-1.05, 0.6), P(1.05, 0.6) } })
 check("server oval: bare-board drag refused", okB, false)
 check("server oval: bare-board reason", whyB, "cut missed the pizza")
 check("server oval: nothing stored", #ovalPizza.cuts, 0)
-check("server oval: short-axis stroke accepted", (ShiftService.apply(session, "cut", { pizzaId = 9, path = { P(0, -0.4), P(0, 0.4) } })), true)
-near("server oval: stored chord ends at the dough's edge", ovalPizza.cuts[1].y2, 0.35, 1e-6)
+check("server oval: short-axis stroke accepted", (ShiftService.apply(session, "cut", { pizzaId = 9, path = { P(0, -0.7), P(0, 0.7) } })), true)
+near("server oval: stored chord ends at the dough's edge", ovalPizza.cuts[1].y2, 0.56, 1e-6)
 near("server oval: stored completeness", ovalPizza.cuts[1].completeness, 1, 1e-6)
 
 for _, l in report do

@@ -150,25 +150,23 @@ local function line(deg: number): any
 end
 local function cleanDough(): any
 	local m = flouredDough()
-	for _, deg in { 0, 90, 45, 135, 90, 0, 135, 45 } do
+	for _, deg in { 90, 0, 90 } do
 		table.insert(m.strokes, line(deg))
 	end
 	return m
 end
--- The worst allowed oval: every stroke one way, to within 0.002 of the 1.1 cap along x (the taper
--- nears the cap without reaching it) with the short axis left at the ball's 0.35 (plan row 47;
--- the capture's oval is staged the same way).
+-- The smallest dough Next allows: one full pass along x, 0.60 x 0.56 (plan row 47's under-rolled
+-- case). Until 2026-10-28 this was the worst oval, every stroke one way to 1.1 x 0.35; the
+-- three-pass roll model grows both axes, so that oval can no longer be rolled.
 local function ovalDough(): any
 	local m = flouredDough()
-	for _ = 1, 8 do
-		table.insert(m.strokes, line(0))
-	end
+	table.insert(m.strokes, line(0))
 	return m
 end
 local oval = PrepGeometry.axes(MakeDough.shape(ovalDough()))
-check("oval: long axis within 0.002 of the 1.1 cap", oval.major > 1.098 and oval.major <= 1.1, true)
-note(string.format("worst oval: %.4f x %.4f, area share %.4f", oval.major, oval.minor, oval.major * oval.minor / 0.9025))
-check("oval: short axis stays 0.35", math.abs(oval.minor - 0.35) < 1e-9, true)
+check("one pass: long axis 0.60", math.abs(oval.major - 0.60) < 1e-9, true)
+note(string.format("one-pass dough: %.4f x %.4f, area share %.4f", oval.major, oval.minor, oval.major * oval.minor / 0.9025))
+check("one pass: short axis 0.56", math.abs(oval.minor - 0.56) < 1e-9, true)
 
 local cheeseOrder = Recipes.ById.cheese
 local function makeOf(dough: any, sauce: any, cheese: any): any
@@ -190,7 +188,7 @@ local cases: { Case } = {
 	{ name = "spilled sauce", make = makeOf(cleanDough(), sauces.spilled, cheeses.clean), bake = 100, cut = 100, wait = 100 },
 	{ name = "sparse cheese", make = makeOf(cleanDough(), sauces.clean, cheeses.sparse), bake = 100, cut = 100, wait = 100 },
 	{ name = "clustered cheese", make = makeOf(cleanDough(), sauces.clean, cheeses.clustered), bake = 100, cut = 100, wait = 100 },
-	{ name = "worst oval dough", make = makeOf(ovalDough(), sauces.clean, cheeses.clean), bake = 100, cut = 100, wait = 100 },
+	{ name = "one-pass dough", make = makeOf(ovalDough(), sauces.clean, cheeses.clean), bake = 100, cut = 100, wait = 100 },
 	{ name = "Lawson's real cuts (Cut 89)", make = makeOf(cleanDough(), sauces.clean, cheeses.clean), bake = 100, cut = 89, wait = 100 },
 	{ name = "clean, served slowly (Wait 40)", make = makeOf(cleanDough(), sauces.clean, cheeses.clean), bake = 100, cut = 100, wait = 40 },
 	{ name = "clean, burnt (Bake 0)", make = makeOf(cleanDough(), sauces.clean, cheeses.clean), bake = 0, cut = 100, wait = 100 },
@@ -300,9 +298,9 @@ check("sparse cheese: grade 46", row("sparse cheese").full.o.grade, 46)
 check("sparse cheese: tie names the coverage ceiling", row("sparse cheese").full.o.held.name, "cheeseCover")
 -- Clustered cheese: spread 0.25 -> 35; 24 pinches -> no amount ceiling.
 check("clustered: grade 35", row("clustered cheese").full.o.grade, 35)
--- Worst oval: area 1.1 x 0.35 / 0.9025 = 0.4266 -> 35 + 65 x 0.3532 = 57.96 -> 58 (plan row 47).
-check("oval: dough completeness ceiling 58", row("worst oval dough").full.o.grade, 58)
-check("oval: no ceiling with completeness off", row("worst oval dough").cover.o.held, nil)
+-- One pass: area 0.60 x 0.56 / 0.9025 = 0.3723 -> 35 + 65 x 0.2446 = 50.90 -> 51 (plan row 47).
+check("one pass: dough completeness ceiling 51", row("one-pass dough").full.o.grade, 51)
+check("one pass: no ceiling with completeness off", row("one-pass dough").cover.o.held, nil)
 -- Lawson's cuts (89): 0.5 x 99 + 30 + 17.8 = 97.3 -> 97; slice 2: (100 + 99 + 100 + 89) / 4 = 97.
 check("cuts 89: split grade 97", row("Lawson's real cuts (Cut 89)").full.o.grade, 97)
 check("cuts 89: slice 2 grade 97", row("Lawson's real cuts (Cut 89)").slice2.o.grade, 97)
@@ -326,7 +324,7 @@ check("switch make: hold note on Make", mk.notes[1], "Not enough sauce poured: M
 check("switch make: order not held again", o.held, nil)
 check("switch make: weighted from the held Make", o.weighted, whole(0.5 * 46 + 30 + 20))
 setGrade({ doughCompleteness = false })
-check("switch dough off: oval not held", (select(2, viaCode(cases[8]))).held, nil)
+check("switch dough off: one-pass dough not held", (select(2, viaCode(cases[8]))).held, nil)
 setGrade({ join = "average" })
 local _, oa = viaCode(cases[10])
 check("switch average: Wait back in the grade", oa.grade, whole((40 + 99 + 100 + 100) / 4))
@@ -484,14 +482,14 @@ check("oval halves: the short ingredient is the pepperoni", half.detail.short.in
 -- A round dough: dough-local and pizza-local agree, so the grade is today's.
 check("round dough: toppings unchanged", Scoring.toppings(Recipes.ById.pepperoni, ring("pepperoni", 8, 0, 360)).score, Scoring.toppings(Recipes.ById.pepperoni, ring("pepperoni", 8, 0, 360), Scoring.ROUND).score)
 
--- The server stores and checks dough-local positions: on the worst oval (rolled along x) a
--- piece at q = (0.8, 0) sits inside the sauce edge (0.84) though its screen position,
--- x = 1.098 x 0.8 / 0.95 = 0.925, is past the old round 0.84 limit; q = (0.9, 0) is refused.
+-- The server stores and checks dough-local positions: on the one-pass dough (0.60 x 0.56) a piece
+-- at q = (0.8, 0) sits inside the sauce edge (0.84), drawn at x = 0.60 x 0.8 / 0.95 = 0.505;
+-- q = (0.9, 0) is refused.
 local ovalMade = makeOf(ovalDough(), sauces.clean, cheeses.clean)
 ovalMade.step = "toppings"
 local tp = { id = 81, ticketId = 80, stage = "topping", make = ovalMade, toppings = {}, cuts = {} }
 local tSession = { shift = { customers = {}, pizzas = { [81] = tp }, ovens = { false, false }, ingredients = { "pepperoni" } } } :: any
-check("server topping: q (0.8, 0) on the oval accepted", (ShiftService.apply(tSession, "placeTopping", { pizzaId = 81, ingredient = "pepperoni", x = 0.8, y = 0 })), true)
+check("server topping: q (0.8, 0) on the one-pass dough accepted", (ShiftService.apply(tSession, "placeTopping", { pizzaId = 81, ingredient = "pepperoni", x = 0.8, y = 0 })), true)
 check("server topping: stored dough-local", tp.toppings[1] and tp.toppings[1].x, 0.8)
 local okT, whyT = ShiftService.apply(tSession, "placeTopping", { pizzaId = 81, ingredient = "pepperoni", x = 0.9, y = 0 })
 check("server topping: q (0.9, 0) refused", okT, false)
