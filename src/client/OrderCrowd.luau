@@ -1,6 +1,7 @@
 --!strict
 -- Native avatar customers in the 3D Order room (QA-002). Each waiting customer is a clone of
--- their look from ReplicatedStorage.CustomerLooks, which the server builds offstage. They walk
+-- their look from the server's CustomerLooks folder (LooksFolder: the one the server stamped,
+-- never a stale saved folder of the same name), which the server builds offstage. They walk
 -- in from the left along a lane behind the counter, step up to a free spot, idle there and
 -- walk out to the right once their order is taken. Only the root is anchored and moved; the
 -- walk and idle animations drive the limbs, and the walk plays at the speed its planted foot
@@ -8,6 +9,8 @@
 -- projected head box so the station can place its name tag.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LooksFolder = require(ReplicatedStorage.Shared.LooksFolder)
 
 local OrderCrowd = {}
 
@@ -57,7 +60,10 @@ type Figure = {
 }
 
 function OrderCrowd.new(room: any)
-	local looks = ReplicatedStorage:WaitForChild("CustomerLooks")
+	-- The server's container (QA18-01): never just the first folder of the name, which a saved
+	-- place can leave empty.
+	local container = LooksFolder.binder(ReplicatedStorage)
+	local warned = false
 	local origin = room.origin :: Vector3
 	local size = room.size :: Vector3
 	local back = size.Z / 2
@@ -183,11 +189,16 @@ function OrderCrowd.new(room: any)
 			table.insert(ids, id)
 		end
 		table.sort(ids)
+		local looks = if #ids > 0 then container() else nil
 		for _, id in ids do
 			local p = pending[id]
-			local template = looks:FindFirstChild(p.look)
-			if not template and clock - p.since > LOOK_WAIT then
+			local template = if looks then looks:FindFirstChild(p.look) else nil
+			if looks and not template and clock - p.since > LOOK_WAIT then
 				template = looks:FindFirstChildOfClass("Model")
+			end
+			if not looks and not warned and clock - p.since > LOOK_WAIT then
+				warned = true
+				warn("[OrderCrowd] the server's CustomerLooks folder has not arrived; customers show once it does")
 			end
 			if template then
 				pending[id] = nil

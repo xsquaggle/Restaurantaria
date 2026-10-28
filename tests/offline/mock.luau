@@ -135,6 +135,14 @@ function Methods.FindFirstChild(self: any, name: string, recursive: boolean?): a
 	end
 	return nil
 end
+function Methods.FindFirstChildOfClass(self: any, className: string): any
+	for _, c in rawget(self, "_children") do
+		if c.ClassName == className then
+			return c
+		end
+	end
+	return nil
+end
 function Methods.WaitForChild(self: any, name: string): any
 	return assert(self:FindFirstChild(name), "mock: no child " .. name)
 end
@@ -216,6 +224,14 @@ local function service(name: string): any
 	elseif name == "Players" then
 		function s.GetPlayers(): { any }
 			return {}
+		end
+		-- An avatar stand-in: a Model with a Humanoid, root and head (no engine, no assets).
+		function s.CreateHumanoidModelFromDescription(_self: any, _description: any, _rig: any): any
+			local model = newInstance("Model")
+			newInstance("Humanoid", "Humanoid", model)
+			newInstance("Part", "HumanoidRootPart", model)
+			newInstance("Part", "Head", model)
+			return model
 		end
 	elseif name == "StarterPlayer" then
 		newInstance("StarterPlayerScripts", "StarterPlayerScripts", s)

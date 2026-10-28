@@ -1,18 +1,21 @@
 --!strict
 -- Customer appearances (QA-002). Every customer is a native Roblox avatar: an R15 model built
--- offstage from a HumanoidDescription and kept in ReplicatedStorage.CustomerLooks, which
--- each client clones into its own Order room. Friends' avatars are one source; the curated
--- fallbacks are the other, and they are built as soon as the server starts, so a customer
--- is only admitted once their look exists and nothing ever waits on loading.
+-- offstage from a HumanoidDescription and kept in the server's CustomerLooks folder in
+-- ReplicatedStorage (LooksFolder), which each client clones into its own Order room.
+-- Friends' avatars are one source; the curated fallbacks are the other, and they are built as
+-- soon as the server starts, so a customer is only admitted once their look exists and nothing
+-- ever waits on loading.
 --
 -- Appearance, personality and visit stay separate (dialogue-plan, "Who gets which pool"):
 -- the look key (`friend:<userId>` or `fallback:<id>`) is the appearance, `pool` indexes
 -- Recipes.Cast, and the customer record in ShiftService is the visit.
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
+local LooksFolder = require(ReplicatedStorage.Shared.LooksFolder)
 local Recipes = require(ReplicatedStorage.Shared.Recipes)
 
 local CustomerLooks = {}
@@ -31,9 +34,9 @@ local FALLBACKS = {
 -- Friends tried per player; a shift has six customers, so a dozen gives plenty of variety.
 local MAX_FRIENDS = 12
 
-local folder = Instance.new("Folder")
-folder.Name = "CustomerLooks"
-folder.Parent = ReplicatedStorage
+-- The live container, made by start() (QA18-01). Requiring this module creates nothing, so a
+-- require in Studio's Edit mode can no longer leave a folder behind in the saved place.
+local folder: Folder? = nil
 
 type Friend = { key: string, name: string, username: string, id: number }
 local friends: { [Player]: { Friend } } = {}
@@ -44,10 +47,10 @@ local function failing(what: string): boolean
 	return RunService:IsStudio() and workspace:GetAttribute("DebugLookFailure") == what
 end
 
--- Builds and stores one look. A description whose items fail to load is retried with its
--- body only (skin, proportions, no clothes or accessories), so a look is never a broken rig;
--- dress, when given, colours that body's torso and legs so it still reads as dressed.
-local function store(key: string, description: HumanoidDescription, dress: { top: Color3, bottom: Color3 }?)
+-- Builds one look and stores it in into. A description whose items fail to load is retried
+-- with its body only (skin, proportions, no clothes or accessories), so a look is never a
+-- broken rig; dress, when given, colours that body's torso and legs so it still reads as dressed.
+local function store(into: Folder, key: string, description: HumanoidDescription, dress: { top: Color3, bottom: Color3 }?)
 	local ok, model = pcall(function()
 		if failing("assets") then
 			error("simulated asset failure")
@@ -92,10 +95,26 @@ local function store(key: string, description: HumanoidDescription, dress: { top
 	end
 	model.Name = key
 	model:SetAttribute("Plain", plain)
-	model.Parent = folder
+	model.Parent = into
 end
 
-function CustomerLooks.start()
+-- Makes the one live container, once per server: a second call returns the same folder and
+-- builds nothing more. Stale CustomerLooks folders saved in the place are handled by
+-- LooksFolder.claim (empty ones removed, others left alone and never bound). parent is
+-- ReplicatedStorage unless a check passes its own. Then the fallbacks are built into it.
+function CustomerLooks.start(parent: Instance?): Folder
+	local existing = folder
+	if existing then
+		return existing
+	end
+	local into, removed, kept = LooksFolder.claim(parent or ReplicatedStorage, HttpService:GenerateGUID(false))
+	folder = into
+	if removed > 0 then
+		print(string.format("[CustomerLooks] removed %d stale empty CustomerLooks folder(s) saved in the place", removed))
+	end
+	if kept > 0 then
+		warn(string.format("[CustomerLooks] left %d saved CustomerLooks folder(s) with contents alone; customers use this server's own", kept))
+	end
 	for _, f in FALLBACKS do
 		task.spawn(function()
 			local d = Instance.new("HumanoidDescription")
@@ -112,9 +131,10 @@ function CustomerLooks.start()
 			d.HatAccessory = f.hat
 			d.Shirt = f.shirt
 			d.Pants = f.pants
-			store("fallback:" .. f.id, d, { top = f.top, bottom = f.bottom })
+			store(into, "fallback:" .. f.id, d, { top = f.top, bottom = f.bottom })
 		end)
 	end
+	return into
 end
 
 -- Loads the player's friends in the background: the list first (every page until
@@ -144,15 +164,16 @@ function CustomerLooks.loadFriends(player: Player)
 		warn(string.format("[CustomerLooks] friends of %d: %s; fallbacks only", player.UserId, tostring(err)))
 	end
 	for _, f in list do
-		if friends[player] ~= list then
+		local into = folder
+		if friends[player] ~= list or not into then
 			return
 		end
-		if folder:FindFirstChild(f.key) then
+		if into:FindFirstChild(f.key) then
 			continue
 		end
 		local got, description = pcall(Players.GetHumanoidDescriptionFromUserId, Players, f.id)
 		if got then
-			store(f.key, description)
+			store(into, f.key, description)
 		else
 			warn(string.format("[CustomerLooks] %s: %s", f.key, tostring(description)))
 		end
@@ -179,9 +200,13 @@ end
 -- fallback's fictional name must not repeat. Friends come first, the least-seen first;
 -- fallbacks rotate with the arrival number.
 function CustomerLooks.pick(player: Player, present: { [string]: boolean }, visits: { [string]: number }, names: { [string]: boolean }, arrival: number): Look?
+	local into = folder
+	if not into then
+		return nil
+	end
 	local best: Friend? = nil
 	for _, f in friends[player] or {} do
-		if present[f.key] or not folder:FindFirstChild(f.key) then
+		if present[f.key] or not into:FindFirstChild(f.key) then
 			continue
 		end
 		if best == nil or (visits[f.key] or 0) < (visits[best.key] or 0) then
@@ -195,7 +220,7 @@ function CustomerLooks.pick(player: Player, present: { [string]: boolean }, visi
 		local f = FALLBACKS[((arrival - 1 + k) % #FALLBACKS) + 1]
 		local key = "fallback:" .. f.id
 		local name = Recipes.Cast[f.pool].name
-		if not present[key] and not names[name:lower()] and folder:FindFirstChild(key) then
+		if not present[key] and not names[name:lower()] and into:FindFirstChild(key) then
 			return { key = key, name = name, pool = f.pool }
 		end
 	end
@@ -205,7 +230,11 @@ end
 -- What exists right now (Studio debug and evidence).
 function CustomerLooks.describe(): { string }
 	local rows = {}
-	for _, m in folder:GetChildren() do
+	local into = folder
+	if not into then
+		return rows
+	end
+	for _, m in into:GetChildren() do
 		local head = m:FindFirstChild("Head") :: BasePart?
 		local root = m:FindFirstChild("HumanoidRootPart") :: BasePart?
 		local humanoid = m:FindFirstChildOfClass("Humanoid")
