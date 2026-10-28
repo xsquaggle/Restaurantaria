@@ -341,11 +341,16 @@ for i = 1, 8 do
 	worst = math.min(worst, e.minor / e.major)
 end
 near("roll: one way, worst roundness is after two passes", worst, 0.77 / 0.85, 1e-9)
--- A pass covering part of the dough adds that share: from the centre out over the ball covers
--- 0.35 of its 0.70 chord, 0.5, so it pushes 0.5 / 0.85 of a full pass: 0.35 + 0.25 x 0.5882.
-local half = G.axes(G.doughShape({ { x1 = 0, y1 = 0, x2 = 1.2, y2 = 0 } }))
-near("roll: half a pass adds its share", half.major, 0.35 + 0.25 * 0.5 / 0.85, 1e-9)
-near("roll: half a pass, across", half.minor, 0.35 + 0.21 * 0.5 / 0.85, 1e-9)
+-- From the middle out over the edge is a full pass (its 0.35 on the ball is the whole radius):
+-- the same 0.60 x 0.56 as a pass right across.
+local fromMiddle = G.axes(G.doughShape({ { x1 = 0, y1 = 0, x2 = 1.2, y2 = 0 } }))
+near("roll: middle-out pass is full, along", fromMiddle.major, 0.60, 1e-9)
+near("roll: middle-out pass is full, across", fromMiddle.minor, 0.56, 1e-9)
+-- A pass over less of the dough adds that share: from x = 0.175 out over the ball lies 0.175 on
+-- it, half the 0.35 radius, so it pushes 0.5 / 0.85 of a full pass: 0.35 + 0.25 x 0.5882.
+local part = G.axes(G.doughShape({ { x1 = 0.175, y1 = 0, x2 = 1.2, y2 = 0 } }))
+near("roll: part of a pass adds its share", part.major, 0.35 + 0.25 * 0.5 / 0.85, 1e-9)
+near("roll: part of a pass, across", part.minor, 0.35 + 0.21 * 0.5 / 0.85, 1e-9)
 -- Over-rolling still reaches the cap but no further.
 local many = {}
 for i = 1, 30 do

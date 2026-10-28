@@ -230,8 +230,18 @@ local function pressAt(p: G.Vec): { G.Vec }
 	return path
 end
 
--- A: Lawson's report, read literally: one hold, the pin pushed up, pulled down, pushed up again.
+-- A: Lawson's report, read literally: one hold pressed on the dough, the pin pushed up, pulled
+-- down past where it was pressed, pushed up again.
 local function backAndForth(step: number, wobble: number): { { G.Vec } }
+	local top, bottom, press = { x = 0.03, y = -0.9 }, { x = -0.02, y = 0.9 }, { x = 0.04, y = 0.12 }
+	local path = pressAt(press)
+	swipe(path, press, top, step, wobble, 0.3)
+	swipe(path, top, bottom, step, wobble, 1.9)
+	swipe(path, bottom, top, step, wobble, 3.7)
+	return { path }
+end
+-- A2: the same from the board's edge, so the press point is never crossed.
+local function backAndForthFromEdge(step: number, wobble: number): { { G.Vec } }
 	local top, bottom = { x = 0.03, y = -0.9 }, { x = -0.02, y = 0.9 }
 	local path = pressAt(bottom)
 	swipe(path, bottom, top, step, wobble, 0.3)
@@ -267,6 +277,7 @@ end
 
 for _, case in {
 	{ name = "A back and forth, one hold", holds = backAndForth },
+	{ name = "A2 back and forth from the edge", holds = backAndForthFromEdge },
 	{ name = "B three separate swipes", holds = threeSwipes },
 	{ name = "C sloppy diagonals, one hold", holds = sloppy },
 } do
@@ -278,8 +289,11 @@ for _, case in {
 		row("before: " .. label, before)
 		row("after:  " .. label, after)
 		-- Before: the faults Lawson reported show up on the replica (A is the hold he described).
-		if case.name:sub(1, 1) == "A" then
+		if case.name:sub(1, 2) == "A " then
 			check("before " .. label .. ": the pin flips round", before.pinFlips > 0, true)
+			check("before " .. label .. ": the dough art spins", before.artJump >= 90, true)
+		end
+		if case.name:sub(1, 1) == "A" then
 			check("before " .. label .. ": the dough shrinks back while held", before.shrinks > 0, true)
 			check("before " .. label .. ": one roll at most is kept", before.strokes <= 1, true)
 		end
@@ -310,7 +324,8 @@ do
 	check("drag: no line before the lock", d.line(), nil)
 	d.move({ x = 0, y = 0.8 - 0.13 })
 	near("drag: locked upwards", d.axis and d.axis.y or 0, -1, 1e-9)
-	-- Going further moves the far end; jitter back under rollTurn ends nothing.
+	-- Going further moves the far end (along the fixed direction); jitter back under rollTurn
+	-- ends nothing.
 	d.move({ x = 0, y = -0.5 })
 	check("drag: back 0.09 keeps the pass", d.move({ x = 0, y = -0.41 }), nil)
 	local l = d.line() :: any

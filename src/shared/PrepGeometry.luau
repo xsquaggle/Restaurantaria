@@ -182,8 +182,9 @@ end
 -- Roll model (provisional; revised 2026-10-28 for Lawson's "three smooth, consistent swipes roll
 -- it out"). A stroke p1 -> p2 must cross the dough. It is one pass of the pin: the dough grows
 -- along the pass direction u and, less, across it, as a ball flattens under a pin. A full pass
--- (one covering at least COVER_FULL of the dough's longest chord along u) adds GROW_ALONG to the
--- dough's radius along u and GROW_ACROSS across it; a shorter pass adds that share. The growth is
+-- (one whose part on the dough is at least COVER_FULL of the dough's radius along u: from the
+-- middle out over the edge, or right across) adds GROW_ALONG to the dough's radius along u and
+-- GROW_ACROSS across it; a shorter pass adds that share. The growth is
 -- applied in ROLL_STEPS equal parts, each tapered by the radius it grows at that moment: 1 until
 -- TAPER_FROM, falling to 0 at the 1.1 cap, so thin dough resists more and over-rolling slows to a
 -- stop at the cap. Three full passes take the 0.35 ball to the 0.95 .. 1.05 full-size band, round
@@ -243,8 +244,7 @@ function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 	end
 	local u = { x = dx / len, y = dy / len }
 	local v = { x = -u.y, y = u.x }
-	local cover = math.clamp(chord / (2 * radiusAlong(S, u)), 0, 1)
-	local push = math.min(cover / PrepGeometry.COVER_FULL, 1)
+	local push = math.min(chord / (PrepGeometry.COVER_FULL * radiusAlong(S, u)), 1)
 	local n = PrepGeometry.ROLL_STEPS
 	for _ = 1, n do
 		local ru, rv = radiusAlong(S, u), radiusAlong(S, v)

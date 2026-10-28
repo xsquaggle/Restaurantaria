@@ -259,16 +259,16 @@ end
 -- One held roll drag, split into passes the way a pin is pushed and pulled (Lawson 2026-10-28:
 -- rolling back and forth in one hold spun the dough and pin and left it unrolled, because the
 -- old drag was one press-to-release line whose direction came from the press point). A pass
--- starts where the drag began or where the last pass turned; it has no direction until the
--- pointer has travelled rollLock from its start, then it points at its farthest point (the last
--- sample that went further along it). It ends when the pointer, going no further, is rollTurn
--- away from that point (it turned back, or off to the side), and the next pass starts there.
--- Jitter shorter than that never ends a pass, and the preview line only grows, so the dough never
--- shrinks back while it is rolled.
+-- starts where the drag began or where the last pass ended. It has no direction until the
+-- pointer has gone rollLock from its start; its direction is then fixed, and the pass is the
+-- line from its start along that direction to the furthest the pointer has gone along it, so it
+-- only ever grows (and the dough with it). It ends when the pointer, going no further, is
+-- rollTurn from where it went furthest (it turned back, or off to the side); the next pass
+-- starts at the end of that line. Jitter shorter than that never ends a pass.
 -- move(p) takes the next pointer sample (pizza-local) and returns the pass it ended, if any;
 -- line() is the open pass as it stands (nil before it has a direction); close() ends the drag and
--- returns the open pass. axis is the open pass's unit direction (nil before it has one). The
--- server judges each pass on its own, as one stroke.
+-- returns the open pass. axis is the open pass's direction (nil before it has one). The server
+-- judges each pass on its own, as one stroke.
 export type RollDrag = {
 	axis: Vec?,
 	move: (p: Vec) -> Line?,
@@ -280,13 +280,14 @@ function MakeDough.rollDrag(start: Vec): RollDrag
 	local cfg = Config.Make
 	local drag = {} :: RollDrag
 	local from: Vec = { x = start.x, y = start.y }
-	local far: Vec? = nil
+	local turnAt: Vec? = nil -- the pointer where it went furthest along the pass
 	local reach = 0
 	local function lineOf(): Line?
-		if not far then
+		local axis = drag.axis
+		if not axis then
 			return nil
 		end
-		return { x1 = from.x, y1 = from.y, x2 = far.x, y2 = far.y }
+		return { x1 = from.x, y1 = from.y, x2 = from.x + axis.x * reach, y2 = from.y + axis.y * reach }
 	end
 	function drag.move(p: Vec): Line?
 		local dx, dy = p.x - from.x, p.y - from.y
@@ -294,30 +295,24 @@ function MakeDough.rollDrag(start: Vec): RollDrag
 		if not axis then
 			local len = math.sqrt(dx * dx + dy * dy)
 			if len >= cfg.rollLock then
-				far = { x = p.x, y = p.y }
-				reach = len
 				drag.axis = { x = dx / len, y = dy / len }
+				reach = len
+				turnAt = { x = p.x, y = p.y }
 			end
 			return nil
 		end
 		local along = dx * axis.x + dy * axis.y
 		if along > reach then
-			-- Further along: the pass now reaches here and points here.
-			local len = math.sqrt(dx * dx + dy * dy)
-			far = { x = p.x, y = p.y }
-			reach = len
-			drag.axis = { x = dx / len, y = dy / len }
+			reach = along
+			turnAt = { x = p.x, y = p.y }
 			return nil
 		end
-		local f = far :: Vec
-		if (p.x - f.x) ^ 2 + (p.y - f.y) ^ 2 >= cfg.rollTurn * cfg.rollTurn then
-			-- Turned (back, or off to the side) without going further: the pass ends at its
-			-- farthest point and the next one starts there.
-			local ended = lineOf()
-			from = far :: Vec
-			far = nil
-			reach = 0
-			drag.axis = nil
+		local t = turnAt :: Vec
+		if (p.x - t.x) ^ 2 + (p.y - t.y) ^ 2 >= cfg.rollTurn * cfg.rollTurn then
+			-- Turned without going further: the pass ends, and the next starts where it ended.
+			local ended = lineOf() :: Line
+			from = { x = ended.x2, y = ended.y2 }
+			drag.axis, turnAt, reach = nil, nil, 0
 			drag.move(p)
 			return ended
 		end
@@ -326,8 +321,7 @@ function MakeDough.rollDrag(start: Vec): RollDrag
 	drag.line = lineOf
 	function drag.close(): Line?
 		local ended = lineOf()
-		far = nil
-		drag.axis = nil
+		drag.axis, turnAt, reach = nil, nil, 0
 		return ended
 	end
 	return drag
