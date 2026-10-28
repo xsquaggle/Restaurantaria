@@ -453,6 +453,16 @@ export type Show = {
 	phases: { MotionPlan.Phase },
 }
 
+-- The bar at progress p (0..1) of its fill from bar.fromXp to bar.toXp.
+local function fillAt(view: View, bar: any, segments: { MotionPlan.Segment }, p: number)
+	local rank, fraction = MotionPlan.xpAt(segments, p)
+	setFill(view, fraction)
+	view.rank.Text = string.format("Rank %d", rank)
+	if view.caption then
+		view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 0.5), bar.need, rank + 1)
+	end
+end
+
 local function fillDuration(model: any): number
 	local T = Motion.T
 	return MotionPlan.countDuration(model.xpEarned, T.xpCount, T.xpCountMin, T.xpCountMax)
@@ -482,12 +492,7 @@ local function fill(show: Show, duration: number)
 	Motion.trace("phase", "xpFill")
 	local segments = MotionPlan.xpSegments(bar.fromXp, bar.toXp, bar.need)
 	Motion.run(key, duration, function(p)
-		local rank, fraction = MotionPlan.xpAt(segments, MotionPlan.easeOut(p))
-		setFill(view, fraction)
-		view.rank.Text = string.format("Rank %d", rank)
-		if view.caption then
-			view.caption.Text = string.format("%d / %d XP to Rank %d", math.floor(fraction * bar.need + 0.5), bar.need, rank + 1)
-		end
+		fillAt(view, bar, segments, MotionPlan.easeOut(p))
 	end, function()
 		show.filling = false
 		writeBar(view, show.model)
@@ -594,6 +599,10 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		end
 		view.coins.Text = coinText(0)
 		view.xpEarned.Text = "+0 XP" .. xpSuffix(model)
+		-- An accepted award arrives on the real pre-award progress and fills from there.
+		if advance and model.bar then
+			fillAt(view, model.bar, MotionPlan.xpSegments(model.bar.fromXp, model.bar.toXp, model.bar.need), 0)
+		end
 
 		-- Panel enter: 0.96 -> 1.01 -> 1.00 with a small upward settle.
 		Motion.trace("phase", "panel")
