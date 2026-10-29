@@ -137,7 +137,7 @@ local switch = {
 	{ t = -5, kind = "board", pizza = A },
 	{ t = 0, kind = "press" },
 	{ t = 0.1, kind = "board", pizza = B },
-	{ t = 0.6, kind = "release" },
+	{ t = 0.8, kind = "release" },
 }
 check("before: a press held across a ticket switch serves the new ticket", list(oldRun(switch)), "{83}")
 local s4, w4 = newRun(switch)
@@ -160,6 +160,20 @@ local s4b, w4b = newRun(studio)
 check("after: Studio run serves only the cut pizza", list(s4b), "{81}")
 check("after: why", w4b[1], "pressed while the board was changing")
 table.insert(report, "press begun during the swap, released settled: before " .. list(oldRun(studio)) .. ", after " .. list(s4b) .. " " .. list(w4b))
+
+-- 4c. Studio, second run: a second click 0.618 s after the first, the reply having swapped the
+-- board at 0.053 s (0.565 s before it). It got through with a 0.45 s settle; not with 0.6.
+local injected = {
+	{ t = -5, kind = "board", pizza = A },
+	{ t = 0, kind = "press" },
+	{ t = 0, kind = "release" },
+	{ t = 0.053, kind = "reply", pizza = A },
+	{ t = 0.053, kind = "board", pizza = B },
+	{ t = 0.6, kind = "press" },
+	{ t = 0.618, kind = "release" },
+}
+check("before: injected second click serves Bo's pizza", list(oldRun(injected)), "{81,83}")
+check("after: injected second click 0.565 s after the swap is off", list((newRun(injected))), "{81}")
 
 -- 5. Gate edges.
 local g = ServeGate.new()

@@ -15,8 +15,9 @@
 local ServeGate = {}
 
 -- Seconds Serve stays off after the board's pizza changes: longer than the button's repeat
--- guard (Theme.Motion.repeatGuard 0.35), shorter than a deliberate second look. A proposal.
-ServeGate.SETTLE = 0.45
+-- guard (Theme.Motion.repeatGuard 0.35), about a deliberate second look. A proposal: 0.45 let
+-- an injected second tap 0.56 s after the swap through in Studio.
+ServeGate.SETTLE = 0.6
 -- A press older than this no longer binds a release to it (a press that never activated).
 ServeGate.PRESS_LIFE = 2
 
