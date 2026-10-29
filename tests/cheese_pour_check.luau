@@ -224,10 +224,10 @@ local function coverage(pinches: { any }): number
 end
 -- Even: a held spiral sweep from the middle out to the sauce edge.
 local spiral = { P(0, 0) }
-for i = 1, 300 do
-	local t = i / 300
+for i = 1, 150 do
+	local t = i / 150
 	local r = 0.08 + 0.72 * t
-	local a = t * 2 * math.pi * 3.2
+	local a = t * 2 * math.pi * 2.4
 	table.insert(spiral, P(r * math.cos(a), r * math.sin(a)))
 end
 -- Large miss: the same kind of sweep over the left half only.

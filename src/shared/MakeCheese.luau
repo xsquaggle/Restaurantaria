@@ -144,10 +144,13 @@ function MakeCheese.pour(): Pour
 	end
 	function pour.tick(now: number): { Vec }
 		local at = last
-		if pour.stopped or not at or now - lastPinch < Config.Cheese.flowTime then
+		local gap = Config.Cheese.flowTime
+		if pour.stopped or not at or now - lastPinch < gap then
 			return {}
 		end
-		lastPinch = now
+		-- Keep the cadence across frames (a pinch every flowTime, not every whole frame past
+		-- it), but after a stall start afresh instead of catching up.
+		lastPinch = if now - lastPinch < 2 * gap then lastPinch + gap else now
 		return { { x = at.x, y = at.y } }
 	end
 	return pour
