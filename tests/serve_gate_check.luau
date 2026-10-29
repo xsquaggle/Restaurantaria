@@ -144,6 +144,23 @@ local s4, w4 = newRun(switch)
 check("after: it serves nothing", list(s4), "{}")
 check("after: why", w4[1], "board changed during the press")
 
+-- 4b. Studio's first run (slice 7b-1): the second press began 70 ms after the reply swapped
+-- the board and was released once the board had settled. Aimed at the pizza before: nothing.
+local studio = {
+	{ t = -5, kind = "board", pizza = A },
+	{ t = 0, kind = "press" },
+	{ t = 0.054, kind = "release" },
+	{ t = 0.108, kind = "reply", pizza = A },
+	{ t = 0.108, kind = "board", pizza = B },
+	{ t = 0.18, kind = "press" },
+	{ t = 1.15, kind = "release" },
+}
+check("before: Studio run serves Bo's pizza", list(oldRun(studio)), "{81,83}")
+local s4b, w4b = newRun(studio)
+check("after: Studio run serves only the cut pizza", list(s4b), "{81}")
+check("after: why", w4b[1], "pressed while the board was changing")
+table.insert(report, "press begun during the swap, released settled: before " .. list(oldRun(studio)) .. ", after " .. list(s4b) .. " " .. list(w4b))
+
 -- 5. Gate edges.
 local g = ServeGate.new()
 check("nothing shown: not ready", ServeGate.ready(g, 0, false), false)

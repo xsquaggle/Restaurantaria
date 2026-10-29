@@ -4,7 +4,8 @@
 --  * the board's pizza is bound only once it is drawn (show), so a refresh that fails part way
 --    never leaves Serve pointing at a pizza the board does not show;
 --  * a press that began on one pizza and is released after the board changed serves nothing
---    (a tap held across a serve reply, a ticket switch or a pizza taken out of the oven);
+--    (a tap held across a serve reply, a ticket switch or a pizza taken out of the oven), and
+--    neither does a press that began while Serve was off;
 --  * for SETTLE seconds after the board changes, Serve is off, so a second tap aimed at the
 --    pizza just served cannot land on the next one (the impatient double tap: the first serve's
 --    reply swaps the board between the taps, after the button's 0.35 s repeat guard).
@@ -40,9 +41,11 @@ function ServeGate.show(g: Gate, pizzaId: number?, ticketId: number?, now: numbe
 	g.ticket = if pizzaId then ticketId else nil
 end
 
--- A press began on Serve.
+-- A press began on Serve. A press that begins while Serve is off (the board changed under it
+-- moments ago) is bound to nothing, so its release serves nothing: it was aimed at the pizza
+-- before (first Studio run: a second press 70 ms after the swap, released once settled).
 function ServeGate.press(g: Gate, now: number)
-	g.pressOn = g.shown
+	g.pressOn = if ServeGate.wait(g, now) <= 0 then g.shown else nil
 	g.pressAt = now
 end
 
@@ -67,6 +70,8 @@ function ServeGate.intent(g: Gate, now: number, pending: boolean): (number?, num
 		return nil, nil, "nothing shown"
 	elseif pending then
 		return nil, nil, "already serving"
+	elseif pressed and pressOn == nil then
+		return nil, nil, "pressed while the board was changing"
 	elseif pressed and pressOn ~= g.shown then
 		return nil, nil, "board changed during the press"
 	elseif ServeGate.wait(g, now) > 0 then
