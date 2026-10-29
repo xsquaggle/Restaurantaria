@@ -83,6 +83,50 @@ local topGui = Ui.new("ScreenGui", {
 	Parent = player.PlayerGui,
 })
 
+-- Landscape only (Astra r18 QA18-08). The orientation request above holds on phones that honour
+-- it; where the screen is still taller than wide (Studio's device simulator can force it, and a
+-- tall desktop window), the game says so over everything instead of showing a squeezed layout,
+-- and the note takes the input. Plain text on a scrim: a stand-in until a turn-your-device
+-- picture is supplied. The copy is a proposal.
+local landscapeNote = Ui.text({
+	Name = "Note",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(1, -48, 0, 96),
+	FontFace = Theme.Font.display,
+	TextSize = 24,
+	TextColor3 = C.label,
+	TextXAlignment = Enum.TextXAlignment.Center,
+})
+local landscapeOnly = Ui.new("ScreenGui", {
+	Name = "RestaurantariaLandscapeOnly",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	DisplayOrder = 100,
+	Enabled = false,
+	Parent = player.PlayerGui,
+}, {
+	Ui.new("TextButton", {
+		Name = "Scrim",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = C.ink,
+		BackgroundTransparency = 0.06,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+	}, { landscapeNote }),
+})
+local function checkLandscape()
+	local size = gui.AbsoluteSize
+	local tall = size.Y > size.X
+	landscapeOnly.Enabled = tall
+	if tall then
+		landscapeNote.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+			then "Turn your device sideways to play"
+			else "Make the window wider to play"
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Shared client state and helpers handed to every station.
 
@@ -1476,6 +1520,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	checkLandscape()
 	if ui then
 		buildLayout()
 	end
@@ -1487,4 +1532,5 @@ GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(function()
 end)
 
 task.wait()
+checkLandscape()
 buildLayout()
