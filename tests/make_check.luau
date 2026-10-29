@@ -425,8 +425,9 @@ check("grade: clean dough", gc.score, 100)
 check("grade: clean dough mean radius in the full band", gc.detail.meanRadius >= 0.95 and gc.detail.meanRadius <= 1.05, true)
 -- 6b. The first shift's pointer after a roll (MakeDough.rollAdvice). Worked from the shapes above:
 -- nothing rolled -> nil; once (0.60 x 0.56) and two crossed (0.81 round) -> small; the clean
--- three -> ready; four one way (mean past 1.05, round) -> big. "uneven" is not reachable by
--- passes alone (section 4).
+-- three -> ready; four one way -> still ready (option B, Lawson 2026-10-29: the fourth pass
+-- leaves a ready dough as it was; before, its mean ran past 1.05 -> big). "uneven" is not
+-- reachable by passes alone (section 4).
 local function advice(strokes: { any }): string?
 	local m = newMake()
 	m.placed = true
@@ -437,7 +438,7 @@ check("advice: before the first roll", advice({}), nil)
 check("advice: rolled once", advice({ line(0, 1.2) }), "small")
 check("advice: two crossed", advice({ line(0, 1.2), line(90, 1.2) }), "small")
 check("advice: clean three", advice(clean.strokes), "ready")
-check("advice: four one way", advice(four), "big")
+check("advice: four one way (option B)", advice(four), "ready")
 
 note(string.format("dough grades: ball rolled once = %d; clean three passes = %d (mean radius %.4f, %.4f x %.4f)", g1.score, gc.score, gc.detail.meanRadius, gc.detail.major, gc.detail.minor))
 
