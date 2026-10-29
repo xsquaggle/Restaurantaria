@@ -183,8 +183,28 @@ function Cut.new(ctx: any, container: Frame)
 	local cutterScale = Motion.scale(cutter)
 	local liftKey = {}
 	local lifted = false
-	-- The hint's own text while the lift's text shows (refresh keeps it current).
-	local guideRest: string? = nil
+
+	-- One instruction owner for the gesture (Astra r19 R19-02, r20 R20-07): the chip on the
+	-- board and the hint strip (with the first shift's glove) read the same state, so they never
+	-- disagree. A lifted stroke asks to let go on both; a refused stroke shows its correction on
+	-- both for at least REFUSAL_HOLD s (a snapshot refresh does not replace it) or until the next
+	-- press; otherwise the chip shows the cut count and the strip the drag instruction (first
+	-- shift) or nothing. The chip holds two short lines, the strip one.
+	local GESTURE = { lifted = "Let go\nto finish", refused = "Cut all the\nway across" }
+	local REFUSAL_HOLD = 1.6
+	local refusedUntil = 0
+	local countText = ""
+	local function gesture(now: number): string?
+		if lifted then
+			return GESTURE.lifted
+		elseif now < refusedUntil then
+			return GESTURE.refused
+		end
+		return nil
+	end
+	local function paintGuide()
+		guide.Text = gesture(os.clock()) or countText
+	end
 
 	local function toStation(position: Vector3): Vector2
 		-- Keep the whole wheel inside the station so its edge never clips at the panel.
@@ -288,8 +308,7 @@ function Cut.new(ctx: any, container: Frame)
 			return
 		end
 		lifted = true
-		guideRest = guide.Text
-		guide.Text = "Let go\nto finish"
+		paintGuide()
 		liftTo(LIFT_SCALE, LIFT_WHEEL, LIFT_TIME)
 		trace(string.format("stopped %s points=%d", if st.stream.full then "full" else "closed", #st.stream.points))
 	end
@@ -299,10 +318,7 @@ function Cut.new(ctx: any, container: Frame)
 			return
 		end
 		lifted = false
-		if guideRest then
-			guide.Text = guideRest
-			guideRest = nil
-		end
+		paintGuide()
 		liftTo(1, 0, GLIDE.Time)
 	end
 	local function endStroke()
@@ -368,6 +384,9 @@ function Cut.new(ctx: any, container: Frame)
 			view = frozen,
 		}
 		stroke = st
+		-- A new attempt ends the refusal's correction.
+		refusedUntil = 0
+		paintGuide()
 		local s = st.stream.points[1]
 		local point = toStation(input.Position)
 		lastPoint = point
@@ -434,8 +453,8 @@ function Cut.new(ctx: any, container: Frame)
 			end)
 		else
 			trace(string.format("refused locally: %s length=%.3f points=%d", tostring(reason), pathLength(path), #path))
-			guide.Text = "Cut all the\nway across"
-			task.delay(1.5, ctx.refresh)
+			refusedUntil = os.clock() + REFUSAL_HOLD
+			paintGuide()
 		end
 	end)
 
@@ -486,12 +505,8 @@ function Cut.new(ctx: any, container: Frame)
 		if current and customer then
 			local cuts = #current.cuts
 			-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
-			local text = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
-			if lifted then
-				guideRest = text
-			else
-				guide.Text = text
-			end
+			countText = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
+			paintGuide()
 			guideCard.Visible = true
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)
@@ -505,7 +520,14 @@ function Cut.new(ctx: any, container: Frame)
 		serve:setEnabled(ServeGate.enabled(gate))
 	end
 
+	local refusalShown = false
 	function station.tick(_now: number)
+		-- The refusal's correction ends on its own once held long enough.
+		local refusing = os.clock() < refusedUntil
+		if refusalShown and not refusing then
+			paintGuide()
+		end
+		refusalShown = refusing
 		local st = stroke
 		if st then
 			-- The view is frozen for the stroke: a resize or move of the pizza cancels it.
@@ -524,14 +546,30 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end
 
-	-- Why there is nothing to cut, on the hint strip.
+	-- The strip's line on every shift: nothing to cut, or the gesture's instruction (the chip's
+	-- own words on one line).
+	local function gestureLine(): any
+		local g = gesture(os.clock())
+		return if g then { text = (g:gsub("\n", " ")) } else nil
+	end
 	function station.status(_snap: any): any
-		return if current then nil else { text = "Take a pizza out of the oven to cut it" }
+		if not current then
+			return { text = "Take a pizza out of the oven to cut it" }
+		end
+		return gestureLine()
 	end
 
-	-- First-shift pointer: drag across the pizza for the first cut.
+	-- First-shift pointer: drag across the pizza for the first cut. The gesture's instruction
+	-- wins (no glove then), and the glove keeps off the pizza while a stroke is held.
 	function station.hint(_snap: any): any
+		local line = gestureLine()
+		if line then
+			return line
+		end
 		if current and #current.cuts == 0 then
+			if stroke then
+				return { text = "Drag across the pizza to cut" }
+			end
 			return { target = view.frame, text = "Drag across the pizza to cut", from = "left" }
 		end
 		return nil

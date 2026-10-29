@@ -1572,12 +1572,39 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- A tool with nothing left to give (Astra r20, R20-05): the roll cap, the spread cap, the
+	-- shaker's cap. Its line comes before any other advice in the pointer and in the strip, on
+	-- every shift, so no line asks for a pass, spread or pinch the server would refuse. Each
+	-- names the two ways on: Next, or Undo (which gives back the last roll, spread or sprinkle).
+	local function exhaustedLine(m: any): string?
+		if m.step == "dough" then
+			-- A ready dough says so itself (and a pass on it is refused anyway, option B).
+			if m.placed and #m.strokes >= Config.Make.maxStrokes and not MakeDough.ready(MakeDough.shape(m)) then
+				return "No rolls left: tap Next, or Undo to roll again"
+			end
+		elseif m.step == "sauce" then
+			local _, spreads = MakeSauce.counts(m.sauce)
+			if spreads >= Config.Sauce.maxSpreads then
+				return "No spreads left: tap Next, or Undo to spread again"
+			end
+		elseif m.step == "cheese" then
+			if MakeCheese.count(m.cheese) >= PrepFood.MAX_PINCHES then
+				return "The shaker is empty: tap Next, or Undo to shake again"
+			end
+		end
+		return nil
+	end
+
 	-- Why the rail's action is unavailable, on the hint strip.
 	function station.status(snap: any): any
 		if not current or not ON_BOARD[current.make.step] then
 			return toppings.status(snap)
 		end
 		local m = shown(current)
+		local spent = exhaustedLine(m)
+		if spent then
+			return { text = spent }
+		end
 		if m.step == "sauce" then
 			local pours = MakeSauce.counts(m.sauce)
 			if pours == 0 then
@@ -1622,6 +1649,15 @@ function Make.new(ctx: any, container: Frame)
 		end
 		local side = if compact then "left" else "below"
 		local toNext = if compact then "aboveLeft" else "left"
+		-- An empty tool first, before what the step still needs (the strip shows the same line
+		-- on later shifts, station.status).
+		if ON_BOARD[current.make.step] then
+			local spent = exhaustedLine(shown(current))
+			if spent then
+				-- Text only: Next and Undo are both fine ways on, so the glove points at neither.
+				return { text = spent }
+			end
+		end
 		if current.make.step == "sauce" or current.make.step == "cheese" then
 			-- Until the step's first Next: what the sauce or cheese still needs, then Next.
 			local m = shown(current)
@@ -1651,9 +1687,6 @@ function Make.new(ctx: any, container: Frame)
 						return { target = bowl, text = "Tap the cheese to pick up the shaker", from = if compact then "right" else "below" }
 					end
 					return { target = pad, text = "Press and hold over the pizza to shake on cheese", from = side }
-				elseif MakeCheese.count(m.cheese) >= PrepFood.MAX_PINCHES then
-					-- Nothing more pours (the server's cap), so no "shake more" here.
-					return { text = "The shaker is empty: tap Next, or Undo to shake again" }
 				elseif spread < Config.Cheese.bunchedBelow then
 					return { target = pad, text = "Shake over the bare parts too", from = side }
 				end
