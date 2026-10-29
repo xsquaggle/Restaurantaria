@@ -207,19 +207,27 @@ end
 
 -- Load art ahead of first use (e.g. every state of a button) so a state change never shows
 -- an empty frame while the image arrives. Never yields.
+-- PreloadAsync is handed throwaway labels, not the ids: given bare image ids it reports
+-- Failure and loads nothing (Studio play 2026-10-29: an image preloaded by id took 15 frames,
+-- 0.47 s, to show, the same as one never preloaded; through a label, 2 frames).
 function Art.preload(names: { string })
-	local ids = {}
+	local labels = {}
 	for _, name in names do
 		local id = Assets.get(name)
 		if id then
-			table.insert(ids, id)
+			local label = Instance.new("ImageLabel")
+			label.Image = id
+			table.insert(labels, label)
 		else
 			devImage(name)
 		end
 	end
-	if #ids > 0 then
+	if #labels > 0 then
 		task.spawn(function()
-			ContentProvider:PreloadAsync(ids)
+			ContentProvider:PreloadAsync(labels)
+			for _, label in labels do
+				label:Destroy()
+			end
 		end)
 	end
 end

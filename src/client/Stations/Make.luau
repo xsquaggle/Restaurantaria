@@ -255,8 +255,9 @@ function Make.new(ctx: any, container: Frame)
 		Art.apply(img, name)
 		keys[i] = img
 	end
-	-- Every dough picture loads with the station, so none is blank the first time it shows.
-	Art.preload({ "food_dough_ball", table.unpack(ROLLS) })
+	-- The dough step's pictures that first show mid-action (the rolled keys, the pin and scoop
+	-- in the hand, the flour stamps) load with the station, so none is blank the first time.
+	Art.preload({ "food_dough_ball", "tool_rolling_pin", "tool_flour_scoop", "fx_flour_dust", "fx_flour_clump", table.unpack(ROLLS) })
 	local hand = Ui.new("Frame", { Name = "Hand", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 20, Parent = dough })
 	local pinLen = F * PIN_LENGTH
 	local pin = Ui.new("ImageLabel", {
