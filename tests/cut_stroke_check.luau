@@ -194,7 +194,7 @@ for _, d in DOUGHS do
 			local same = ser(batch) == ser(st.out)
 			local cut = CutStroke.grade(sent, d.S, on)
 			if cut and cut.assisted == false then
-				-- The guard kept the raw path (the assisted one graded worse): stored = sent.
+				-- The raw path stands (the assisted one was refused): stored = sent.
 				keptRaw += 1
 				same = same and ser(cut.path) == ser(sent)
 			elseif cut then
@@ -255,7 +255,7 @@ for _, d in DOUGHS do
 		end
 	end
 end
-note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d reached the %d-sample limit, %d finished there; the assist switched itself off in %d; the guard kept the raw path in %d",
+note(string.format("replay: %d/%d strokes (%d doughs x %d cases x off/on) give identical client and server outputs; %d/%d keep every shown output; %d/%d within the %.3f u bound; %d/%d off strokes untouched; %d reached the %d-sample limit, %d finished there; the assist switched itself off in %d; the raw path stood (assisted path refused) in %d",
 	equal, total, #DOUGHS, #CASES, frozen, total, bounded, total, cap, offRaw, total / 2, tails, cfg.maxPoints, finished, latchedCount, keptRaw))
 
 -- 2. Gates. Before 0.10 u of travel nothing is corrected.
@@ -884,7 +884,9 @@ check("sweep: 3,456 strokes", sweep.strokes, 3456)
 check("sweep: the assist never changes whether a stroke is accepted", sweep.mismatch, 0)
 check("sweep: the graded path is the shown (assisted) path on every accepted stroke", sweep.shown, sweep.accepted)
 check("sweep: the assist never costs a stroke more than 0.05 credit", sweep.drop <= 0.05, true)
-check("sweep: unless it moves a cut past the centre tolerance, the assist never costs a one-cut Cut grade more than 5 points", sweep.gradeDrop <= 5, true)
+-- Since 7b-2 the centre penalty ramps in (Config.Cut.centreRamp), so a nudge past the tolerance
+-- costs a little, not the old 25-point step.
+check("sweep: the assist never costs a one-cut Cut grade more than 10 points, centre included", math.max(sweep.gradeDrop, sweep.centreDrop) <= 10, true)
 check("sweep: no groove piece has a corner off the dough", sweep.outside, 0)
 note(string.format("sweep: %d strokes, %d accepted alike, %d refused alike, 0 refused only with the assist; graded on the shown path: credit lower on %d (largest drop %.3f, largest gain %.3f), one-cut Cut grade lower on %d (largest drop %d points, largest gain %d), off-centre only with the assist %d (largest drop there %d points); raw path kept (assisted path refused) %d; the gates switched the assist off in %d",
 	sweep.strokes, sweep.accepted, sweep.refusedBoth, sweep.lower, sweep.drop, sweep.gain, sweep.gradeLower, sweep.gradeDrop, sweep.gradeGain, sweep.centre, sweep.centreDrop, sweep.keptRaw, sweep.latched))

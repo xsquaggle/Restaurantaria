@@ -5,9 +5,11 @@
 --   7b-2 built the 7b-2 sampling by position, 7b-1 straightness (the build Lawson saved 18:20);
 --   now       the 7b-2 sampling, straightness with the tremor allowance (Config.Cut.tremor);
 --   now, 7b-1 sampling  the identical stroke recorded under the old rule and graded now, to show
---             the grade no longer depends much on where the samples happened to land.
+--             how much the grade depends on where the samples happened to land.
 -- Plus the assist turned on (it is off by default; Config.Cut.assist.on), whole pizzas with their
--- notes, and the largest drops over a fixed sweep.
+-- notes, the largest drops over a fixed sweep, and one-cut grades near the centre tolerance. The
+-- 7b-1 Cut grade and notes are a replica of the 7b-1 Scoring.cut (oldCut below), so the 7b-1
+-- columns stay the 7b-1 rules whatever Scoring.cut does now.
 -- Input here is synthetic: "mouse" is dense events with small noise, "touch" sparser events with
 -- more noise, plus Astra's four r20 fixtures. Not recorded human behaviour.
 
@@ -160,6 +162,17 @@ local SHAPES: { { id: string, kind: string, f: (number) -> number } } = {
 	{ id = "S-bend (0.12)", kind = "clearly crooked", f = function(t)
 		return 0.12 * math.sin(math.pi * t / 1.2)
 	end },
+	-- Short sharp features: the tremor allowance averages much of them away (for Lawson to judge).
+	{ id = "kink 0.10 deep, 0.10 wide", kind = "short and sharp", f = function(t)
+		return 0.1 * math.max(0, 1 - math.abs(t) / 0.05)
+	end },
+	{ id = "kink 0.20 deep, 0.18 wide", kind = "short and sharp", f = function(t)
+		return 0.2 * math.max(0, 1 - math.abs(t) / 0.09)
+	end },
+	{ id = "fast zigzag 0.10, period 0.12", kind = "short and sharp", f = function(t)
+		local u = (t / 0.12) % 1
+		return 0.1 * (4 * math.abs(u - 0.5) - 1)
+	end },
 }
 local function f3(v: number?): string
 	return if v then string.format("%.2f", v) else "refused"
@@ -178,7 +191,7 @@ for _, sh in SHAPES do
 			check(sh.id .. " " .. input .. ": full credit now", r.now ~= nil and r.now >= 0.999, true)
 		elseif sh.kind == "mildly shaky" then
 			check(sh.id .. " " .. input .. ": forgiven now (credit at least 0.95)", r.now ~= nil and r.now >= 0.95, true)
-		else
+		elseif sh.kind == "clearly crooked" then
 			check(sh.id .. " " .. input .. ": still loses credit now (under 0.92)", r.now ~= nil and r.now < 0.92, true)
 		end
 	end
@@ -206,19 +219,23 @@ end
 
 -- Whole pizzas: four cuts of one stroke kind at 0/45/90/135 degrees (8 slices), and the same
 -- with one cut turned 12 degrees (uneven slices). Cut score and notes, 7b-1 against now.
-local function oldNotes(slices: number, cuts: { any }): (number, { string })
-	-- The 7b-1 Cut grade: Scoring.cut on 7b-1 straightness; its notes the 7b-1 way (uneven past
-	-- perfectDegrees + 3, a wobble note under straightness 0.75, a short note under 0.9).
-	local olds = {}
-	for _, c in cuts do
-		table.insert(olds, asOld(c))
+-- The 7b-1 Scoring.cut on the round dough, written out: the full 0.25 centre step past
+-- centreTolerance, every penalty charged, notes without a cost check (uneven past
+-- perfectDegrees + 3, wobbly under straightness 0.75, short under 0.9). Cuts carry 7b-1
+-- straightness (asOld).
+local function oldCut(slices: number, cuts: { any }): (number, { string })
+	local needed = slices // 2
+	if #cuts == 0 then
+		return 0, { "The pizza wasn't cut" }
 	end
-	local g = Scoring.cut(slices, olds, ROUND)
-	local notes = {}
-	local angles = {}
-	for _, c in olds do
-		local a = math.deg(math.atan2(c.y2 - c.y1, c.x2 - c.x1)) % 180
-		table.insert(angles, a)
+	local angles, offCentre = {}, 0
+	for _, c in cuts do
+		local dx, dy = c.x2 - c.x1, c.y2 - c.y1
+		local len = math.sqrt(dx * dx + dy * dy)
+		table.insert(angles, math.deg(math.atan2(dy, dx)) % 180)
+		if math.abs(c.x1 * dy - c.y1 * dx) / len > cfg.centreTolerance then
+			offCentre += 1
+		end
 	end
 	table.sort(angles)
 	local ideal = 180 / #angles
@@ -227,17 +244,28 @@ local function oldNotes(slices: number, cuts: { any }): (number, { string })
 		local nxt = if i < #angles then angles[i + 1] else angles[1] + 180
 		err += math.abs((nxt - angles[i]) - ideal)
 	end
-	if #angles > 1 and err / #angles > cfg.perfectDegrees + 3 then
-		table.insert(notes, "Slices were uneven sizes")
+	err /= #angles
+	local even = if #angles == 1 then 1 else clamp01(1 - (err - cfg.perfectDegrees) / (cfg.zeroDegrees - cfg.perfectDegrees))
+	local count = clamp01(1 - math.abs(#cuts - needed) / needed)
+	local layout = clamp01(count * 0.5 + even * 0.5 - offCentre * 0.25)
+	local quality, crooked, short = 0, 0, 0
+	for _, c in cuts do
+		quality += c.straightness * completeCredit(c)
+		crooked += if c.straightness < 0.75 then 1 else 0
+		short += if c.completeness < 0.9 then 1 else 0
 	end
-	local crooked, short = 0, 0
-	for _, c in olds do
-		if c.straightness < 0.75 then
-			crooked += 1
-		end
-		if c.completeness < 0.9 then
-			short += 1
-		end
+	quality /= #cuts
+	local score = 100 * layout * quality
+	local notes = {}
+	if #cuts ~= needed then
+		score = math.min(score, 60)
+		table.insert(notes, string.format("Made %d cut%s, the order needed %d", #cuts, if #cuts == 1 then "" else "s", needed))
+	end
+	if offCentre > 0 then
+		table.insert(notes, string.format("%d cut%s missed the centre", offCentre, if offCentre == 1 then "" else "s"))
+	end
+	if #angles > 1 and err > cfg.perfectDegrees + 3 then
+		table.insert(notes, "Slices were uneven sizes")
 	end
 	if crooked > 0 then
 		table.insert(notes, string.format("%d cut%s wobbled off a straight line", crooked, if crooked == 1 then "" else "s"))
@@ -245,7 +273,14 @@ local function oldNotes(slices: number, cuts: { any }): (number, { string })
 	if short > 0 then
 		table.insert(notes, string.format("%d cut%s stopped short of the crust", short, if short == 1 then "" else "s"))
 	end
-	return g.score, notes
+	return math.floor(score + 0.5), notes
+end
+local function oldNotes(slices: number, cuts: { any }): (number, { string })
+	local olds = {}
+	for _, c in cuts do
+		table.insert(olds, asOld(c))
+	end
+	return oldCut(slices, olds)
 end
 local function pizza(f: (number) -> number, input: string, turn: number?): (any, any)
 	local before, now = {}, {}
@@ -283,6 +318,21 @@ for _, sh in SHAPES do
 		end
 	end
 end
+-- Bowed cuts on either side of the centre tolerance (the fitted line of a bow sits off centre):
+-- under 7b-1 the bow 0.21 pizza dropped to 0, four full centre steps on top of the bend.
+for _, bow in { 0.2, 0.21, 0.25 } do
+	local f = function(t: number): number
+		return bow * (1 - (t / 1.2) ^ 2)
+	end
+	local before, now = pizza(f, "mouse", 0)
+	local s1, n1 = oldNotes(8, before)
+	local g = Scoring.cut(8, now, ROUND)
+	local label = string.format("bowed (%.2f arc)", bow)
+	note(string.format("| %s | mouse | %d (%s) | %d (%s) |", label, s1, if #n1 > 0 then table.concat(n1, "; ") else "no notes",
+		g.score, if #g.notes > 0 then table.concat(g.notes, "; ") else "no notes"))
+	pizzaRows[label] = g
+end
+check("pizza: bow 0.20 and 0.21 score within 5 points of each other", math.abs(pizzaRows["bowed (0.20 arc)"].score - pizzaRows["bowed (0.21 arc)"].score) <= 5, true)
 do
 	local g = pizzaRows["straight/mouse"]
 	check("pizza: straight cuts, 100 and no notes", g.score == 100 and #g.notes == 0, true)
@@ -399,6 +449,63 @@ for i = 1, math.min(6, #rows) do
 end
 check("sweep: no stroke refused now that 7b-1 accepted", refusedNow <= refusedOld, true)
 check("sweep: graded now, no stroke loses more than 0.05 against 7b-1", lower05, 0)
+
+-- Near the centre tolerance: one cut for a 2-slice order, its line offset 0.14 to 0.17 from the
+-- centre, with a bow and a wobble, mouse and touch. The one-cut Cut grade under 7b-1 (sampling,
+-- straightness and the 0.25 centre step) against now.
+do
+	local rows2 = {}
+	local total, lowerN, lower5, higherN, newMiss, noLonger, worst = 0, 0, 0, 0, 0, 0, 0
+	for _, bow in { 0, 0.05, 0.1, 0.15, 0.2 } do
+		for _, amp in { 0, 0.03, 0.06 } do
+			for _, off in { 0.14, 0.15, 0.16, 0.17 } do
+				for deg = 0, 165, 15 do
+					for _, input in { "mouse", "touch" } do
+						local f = function(t: number): number
+							return off + bow * (1 - (t / 1.2) ^ 2) - bow * 2 / 3 + amp * math.sin(2 * math.pi * t / 0.15)
+						end
+						local events = stroke(f, input, deg)
+						local cb = Scoring.cutPath(recordBefore(events), ROUND)
+						local cn = Scoring.cutPath(recordNow(events), ROUND)
+						if cb and cn then
+							total += 1
+							local s1, n1 = oldCut(2, { asOld(cb) })
+							local g = Scoring.cut(2, { cn }, ROUND)
+							local d = g.score - s1
+							if d < 0 then
+								lowerN += 1
+							elseif d > 0 then
+								higherN += 1
+							end
+							if d < -5 then
+								lower5 += 1
+							end
+							worst = math.min(worst, d)
+							local wasMiss = table.find(n1, "1 cut missed the centre") ~= nil
+							local isMiss = table.find(g.notes, "1 cut missed the centre") ~= nil
+							newMiss += if isMiss and not wasMiss then 1 else 0
+							noLonger += if wasMiss and not isMiss then 1 else 0
+							table.insert(rows2, { d = d, bow = bow, amp = amp, off = off, deg = deg, input = input, old = s1, now = g.score })
+						end
+					end
+				end
+			end
+		end
+	end
+	table.sort(rows2, function(x, y)
+		return x.d < y.d
+	end)
+	note("")
+	note(string.format("Near the centre tolerance: %d one-cut strokes (bows 0 to 0.2, wobble 0 to 0.06, line 0.14 to 0.17 from the centre, twelve angles, mouse and touch), one-cut Cut grade 7b-1 against now:", total))
+	note(string.format("- %d higher, %d lower, %d lower by more than 5 points, largest drop %d points; the centre note newly shown on %d, no longer shown on %d", higherN, lowerN, lower5, -worst, newMiss, noLonger))
+	note("| Bow | Wobble | Line offset | Angle | Input | 7b-1 | Now | Change |")
+	note("|---|---|---|---|---|---|---|---|")
+	for i = 1, math.min(6, #rows2) do
+		local r = rows2[i]
+		note(string.format("| %.2f | %.2f | %.2f | %d | %s | %d | %d | %+d |", r.bow, r.amp, r.off, r.deg, r.input, r.old, r.now, r.d))
+	end
+	check("near the centre: no one-cut grade drops more than 10 points against 7b-1", worst >= -10, true)
+end
 
 for _, l in report do
 	print("  " .. l)

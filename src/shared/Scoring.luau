@@ -16,7 +16,7 @@ export type Point = { x: number, y: number }
 -- and that path's grades (0..1). Lines without grades (test hooks) count as straight and full.
 -- With the cutting assist on (CutStroke.grade), `path` is the assisted path and `raw` the samples
 -- the client sent.
-export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number?, raw: { Point }?, assisted: boolean?, rawLine: Line?, rawStraightness: number?, rawCompleteness: number? }
+export type Cut = Line & { path: { Point }?, straightness: number?, completeness: number?, raw: { Point }?, assisted: boolean?, rawDeviation: number? }
 export type Grade = { score: number, notes: { string }, detail: any? }
 
 local Scoring = {}
@@ -706,6 +706,9 @@ end
 -- and the centre are judged in dough-local units (PrepGeometry.toDough): on an oval, equal angles
 -- there are equal-area slices, so a fair layout on a rotated or sheared oval scores like the same
 -- layout on a round pizza.
+-- What a cut that misses the centre by centreRamp or more takes off the layout (unchanged since
+-- slice 1; 7b-2 only ramps it in).
+local CENTRE_STEP = 0.25
 function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Grade
 	local cfg = Config.Cut
 	local dough = S or Scoring.ROUND
@@ -715,16 +718,13 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 		return { score = 0, notes = { "The pizza wasn't cut" } }
 	end
 
-	local angles = {}
-	local offCentre = 0
+	local angles, offsets = {}, {}
 	for _, line in lines do
 		local a = PrepGeometry.toDough(dough, { x = line.x1, y = line.y1 })
 		local b = PrepGeometry.toDough(dough, { x = line.x2, y = line.y2 })
 		local angle, offset = lineAngleAndOffset({ x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y })
 		table.insert(angles, angle)
-		if offset > cfg.centreTolerance then
-			offCentre += 1
-		end
+		table.insert(offsets, offset)
 	end
 	table.sort(angles)
 
@@ -738,23 +738,37 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 	local evenScore = if #angles == 1
 		then 1
 		else clamp01(1 - (meanError - cfg.perfectDegrees) / (cfg.zeroDegrees - cfg.perfectDegrees))
-
 	local countScore = clamp01(1 - math.abs(#lines - needed) / needed)
-	local layout = clamp01(countScore * 0.5 + evenScore * 0.5 - offCentre * 0.25)
-	-- Freehand: the layout score is scaled by the cuts' mean path credit, so crooked or
-	-- partial cuts lower the grade. Each cut's parts are kept for feedback.
-	local quality, crooked, short = 0, 0, 0
-	-- The same mean with every cut straight, and with every cut complete: what the wobble and
-	-- the short cuts cost, so their notes only appear when they cost points (below).
-	local qualityStraight, qualityComplete = 0, 0
+
+	-- Per cut: its path credit, and what missing the centre takes off the layout. Since 7b-2
+	-- (Lawson, 2026-10-29: predictable, no stacked penalties) the centre penalty grows from
+	-- nothing at centreTolerance to the full CENTRE_STEP over centreRamp, instead of the full
+	-- step at once; and a bent cut's line sits off centre because of the bend, so a cut that
+	-- both bends and misses the centre is charged only the larger of the two.
+	local n = #lines
+	local quality, qualityStraight, qualityComplete, centre = 0, 0, 0, 0
+	local crooked, short, offCentre = 0, 0, 0
 	local perCut = {}
-	for _, line in lines do
+	for i, line in lines do
 		local q, straight, complete = Scoring.cutQuality(line)
+		local miss = CENTRE_STEP * clamp01((offsets[i] - cfg.centreTolerance) / cfg.centreRamp)
+		local bendLoss = (complete - q) / n -- what the bend takes off the mean path credit
+		if miss > 0 and bendLoss > 0 then
+			if miss >= bendLoss then
+				q, straight = complete, 1
+			else
+				miss = 0
+			end
+		end
 		quality += q
 		qualityStraight += complete
 		qualityComplete += straight
-		if straight < 0.9 then
+		centre += miss
+		if straight < cfg.wobbleNoteBelow then
 			crooked += 1
+		end
+		if miss > 0 then
+			offCentre += 1
 		end
 		if (line.completeness or 1) < 0.9 then
 			short += 1
@@ -765,25 +779,33 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 			credit = math.floor(q * 100 + 0.5),
 		})
 	end
-	quality /= #lines
-	qualityStraight /= #lines
-	qualityComplete /= #lines
-	local function scoreOf(l: number, q: number): number
-		local v = 100 * l * q
-		return if #lines ~= needed then math.min(v, 60) else v
+	quality /= n
+	qualityStraight /= n
+	qualityComplete /= n
+	local function layoutOf(count: number, even: number, miss: number): number
+		return clamp01(count * 0.5 + even * 0.5 - miss)
 	end
-	local score = scoreOf(layout, quality)
+	local layout = layoutOf(countScore, evenScore, centre)
+	-- Freehand: the layout score is scaled by the cuts' mean path credit, so crooked or
+	-- partial cuts lower the grade. Each cut's parts are kept for feedback.
+	local function scoreOf(l: number, q: number, capped: boolean): number
+		local v = 100 * l * q
+		return if capped then math.min(v, 60) else v
+	end
+	local wrongCount = n ~= needed
+	local score = scoreOf(layout, quality, wrongCount)
 	-- A note names a problem only when it cost at least noteMinPoints of this Cut score
 	-- (Lawson, 2026-10-29: no criticism of tiny deviations); each problem has one note.
-	local evenLayout = clamp01(countScore * 0.5 + 0.5 - offCentre * 0.25)
-	local unevenCost = scoreOf(evenLayout, quality) - score
-	local wobbleCost = scoreOf(layout, qualityStraight) - score
-	local shortCost = scoreOf(layout, qualityComplete) - score
-	if #lines ~= needed then
+	local countCost = scoreOf(layoutOf(1, evenScore, centre), quality, false) - score
+	local centreCost = scoreOf(layoutOf(countScore, evenScore, 0), quality, wrongCount) - score
+	local unevenCost = scoreOf(layoutOf(countScore, 1, centre), quality, wrongCount) - score
+	local wobbleCost = scoreOf(layout, qualityStraight, wrongCount) - score
+	local shortCost = scoreOf(layout, qualityComplete, wrongCount) - score
+	if wrongCount and countCost >= cfg.noteMinPoints then
 		-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
-		table.insert(notes, string.format("Made %d cut%s, the order needed %d", #lines, if #lines == 1 then "" else "s", needed))
+		table.insert(notes, string.format("Made %d cut%s, the order needed %d", n, if n == 1 then "" else "s", needed))
 	end
-	if offCentre > 0 then
+	if offCentre > 0 and centreCost >= cfg.noteMinPoints then
 		table.insert(notes, string.format("%d cut%s missed the centre", offCentre, if offCentre == 1 then "" else "s"))
 	end
 	if #angles > 1 and unevenCost >= cfg.noteMinPoints then

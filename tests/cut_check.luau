@@ -230,13 +230,25 @@ check("grade: short note", table.find(gp.notes, "1 cut stopped short of the crus
 -- One three-quarter cut on a 2-slice order: 1 x 0.5556 = 56.
 near("grade: 2 slices, one three-quarter cut", Scoring.cut(2, { q3 }).score, 56, 1)
 -- Two deep chevrons (straightness 0.466) at 0 and 90 degrees for 4 slices. Each fitted line
--- sits 0.164 off centre, past the 0.16 tolerance, so both miss the centre: layout
--- 0.5 + 0.5 - 2 x 0.25 = 0.5; grade 100 x 0.5 x 0.466 = 23.
+-- sits 0.164 off centre, 0.004 past the 0.16 tolerance. Since 7b-2 the centre penalty ramps in
+-- over centreRamp 0.1: 0.25 x 0.04 = 0.01 off the layout per cut. The line is off centre because
+-- of the bend, and the bend takes more ((1 - 0.466) / 2 = 0.267 off the mean path credit), so
+-- only the bend is charged: layout 1, grade 100 x 1 x 0.466 = 47, and no centre note. (Before
+-- 7b-2 both were charged: 100 x 0.5 x 0.402 = 20.)
 local chev90 = Scoring.cutPath({ P(0, -1.05), P(0.3, 0), P(0, 1.05) }) :: any
 local gc = Scoring.cut(4, { deep, chev90 })
-near("grade: two deep chevrons", gc.score, 23, 1)
+near("grade: two deep chevrons", gc.score, 47, 1)
 check("grade: wobble note", table.find(gc.notes, "2 cuts wobbled off a straight line") ~= nil, true)
-check("grade: centre note", table.find(gc.notes, "2 cuts missed the centre") ~= nil, true)
+check("grade: no centre note when the bend is what is charged", table.find(gc.notes, "2 cuts missed the centre"), nil)
+-- The centre penalty ramps in (7b-2): one straight full cut for 2 slices, offset d from the
+-- centre: layout 1 - 0.25 x clamp((d - 0.16) / 0.1), so d 0.16 -> 100, 0.17 -> 97.5 (98),
+-- 0.21 -> 87.5 (88), 0.26 and 0.30 -> 75. Before 7b-2: 100 up to 0.16, 75 just past it.
+for _, case in { { 0.16, 100 }, { 0.17, 98 }, { 0.21, 88 }, { 0.26, 75 }, { 0.3, 75 } } do
+	local d = case[1]
+	local g1 = Scoring.cut(2, { { x1 = -1, y1 = d, x2 = 1, y2 = d, straightness = 1, completeness = 1 } })
+	check(string.format("centre ramp: offset %.2f", d), g1.score, case[2])
+	check(string.format("centre ramp: offset %.2f note", d), table.find(g1.notes, "1 cut missed the centre") ~= nil, case[2] <= 97)
+end
 -- Lines without path grades (old fixtures) count as straight and full: unchanged score.
 check("grade: plain lines unchanged", Scoring.cut(4, { { x1 = -1, y1 = 0, x2 = 1, y2 = 0 }, { x1 = 0, y1 = -1, x2 = 0, y2 = 1 } }).score, 100)
 check("grade: uncut", Scoring.cut(8, {}).score, 0)

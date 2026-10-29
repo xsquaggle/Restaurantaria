@@ -5,7 +5,7 @@
 --
 -- 1. The stream. The drag is recorded as one append-only list of raw samples in cut units (the
 --    pizza frame, edge 1), each rounded to 1/10000 when recorded: the press point, then a point
---    each time the pointer has moved at least Config.Cut.spacing from the last one, the points
+--    once the pointer is at least Config.Cut.spacing from the last one (see below), the points
 --    where the drag leaves and re-enters the accepted range (+-RANGE), and the release point.
 --    A recorded sample is never moved, thinned or resampled. Since slice 7b-2 the budget is spent
 --    by position along the cut (Astra r19/r20: wobble and dense events used it up before the
@@ -23,15 +23,14 @@
 --    function of the raw samples up to it and nothing later, computed once and kept, so the
 --    output for a raw prefix never changes as the stroke grows, and the server rebuilds the same
 --    output from the same raw list. See CutStroke.filter for the rule.
--- 3. The grade. CutStroke.grade grades the raw list, then the assisted list, with
---    Scoring.cutPath, and keeps the assisted cut only when it does at least as well as the raw
---    one (see there); otherwise the raw cut. So the assist never refuses a stroke, never makes a
---    cut out of a miss, never makes a short stroke longer and never lowers a grade.
+-- 3. The grade. CutStroke.grade grades the raw list with Scoring.cutPath (a refusal stands
+--    either way), then, with the assist on, grades the assisted list: the path the groove showed
+--    is the path graded (slice 7b-2). The raw cut stands only if the assisted one were refused.
+--    So the assist never refuses a stroke; it can cost a stroke a little credit (cut_stroke_check
+--    reports how much).
 -- 4. The drawing. CutStroke.runs merges nearly straight samples into groove runs with a rule
 --    that only looks forward from the last closed run, so runs already drawn never change as
---    the stroke grows, and the committed groove is the live one, except when the guard keeps
---    the raw path: then the committed groove is the raw samples' (at most 0.015 dough units
---    from the live one).
+--    the stroke grows, and the committed groove is the live one.
 
 local Config = require(script.Parent.Config)
 local PrepGeometry = require(script.Parent.PrepGeometry)

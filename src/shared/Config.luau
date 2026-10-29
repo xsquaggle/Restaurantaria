@@ -176,6 +176,10 @@ Config.Cut = {
 	maxLines = 4,
 	-- A cut line must pass this close to the centre (normalized radius) to count.
 	centreTolerance = 0.16,
+	-- Since 7b-2 (Lawson, 2026-10-29: no cliffs, no stacked penalties; provisional): a cut's
+	-- centre penalty grows from nothing at centreTolerance to its full step this much further
+	-- out (dough-local units), instead of the full step just past the tolerance.
+	centreRamp = 0.1,
 	-- Angular error (degrees) that still scores full marks, and where it reaches zero.
 	perfectDegrees = 5,
 	zeroDegrees = 30,
@@ -232,6 +236,8 @@ Config.Cut = {
 	-- least this many points of the Cut score (Lawson, 2026-10-29; provisional). Notes only:
 	-- the score is the same either way.
 	noteMinPoints = 3,
+	-- A cut counts as wobbly for its note below this straightness (with the cost rule above).
+	wobbleNoteBelow = 0.9,
 	straightZero = 0.2,
 	-- Share of the fitted line's chord across the crust the path covers: full credit from
 	-- completeFull, none at completeZero; below minComplete the cut is refused.
