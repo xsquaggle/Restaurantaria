@@ -4,8 +4,8 @@
 --  * the board's pizza is bound only once it is drawn (show), so a refresh that fails part way
 --    never leaves Serve pointing at a pizza the board does not show;
 --  * a press that began on one pizza and is released after the board changed serves nothing
---    (a tap held across a serve reply, a ticket switch or a pizza taken out of the oven), and
---    neither does a press that began while Serve was off;
+--    (a tap held across a serve reply, a ticket switch or a pizza taken out of the oven),
+--    however long it was held, and neither does a press that began inside the settle;
 --  * for SETTLE seconds after the board changes, a Serve press is ignored, so a second tap aimed
 --    at the pizza just served cannot land on the next one (the impatient double tap: the first
 --    serve's reply swaps the board between the taps, after the button's 0.35 s repeat guard).
@@ -22,15 +22,12 @@ local ServeGate = {}
 -- after the swap through in Studio. A deliberate serve that soon is rare, since the next pizza
 -- usually needs cutting first.
 ServeGate.SETTLE = 0.6
--- A press older than this no longer binds a release to it (a press that never activated).
-ServeGate.PRESS_LIFE = 2
-
 export type Gate = {
 	shown: number?, -- the pizza the board shows (drawn)
 	ticket: number?, -- its ticket
 	changedAt: number, -- when the board's pizza last changed
 	pressOn: number?, -- the pizza shown when the current press began
-	pressAt: number,
+	pressAt: number, -- when it began (-math.huge: no press since the last activation)
 }
 
 function ServeGate.new(): Gate
@@ -66,9 +63,12 @@ function ServeGate.enabled(g: Gate): boolean
 end
 
 -- What an activation of Serve serves now: (pizzaId, ticketId) or (nil, nil, reason). Ends the
--- press either way.
+-- press either way. A press binds its activation whatever its age (a long hold across a board
+-- change serves nothing); one that never activated (dragged off) binds only the next activation,
+-- and only refuses it if the board changed since.
 function ServeGate.intent(g: Gate, now: number, pending: boolean): (number?, number?, string?)
-	local pressed = now - g.pressAt <= ServeGate.PRESS_LIFE
+	local pressAt = g.pressAt
+	local pressed = pressAt > -math.huge
 	local pressOn = g.pressOn
 	g.pressOn = nil
 	g.pressAt = -math.huge
@@ -78,7 +78,7 @@ function ServeGate.intent(g: Gate, now: number, pending: boolean): (number?, num
 		return nil, nil, "already serving"
 	elseif pressed and pressOn == nil then
 		return nil, nil, "pressed while the board was changing"
-	elseif pressed and pressOn ~= g.shown then
+	elseif pressed and (pressOn ~= g.shown or g.changedAt > pressAt) then
 		return nil, nil, "board changed during the press"
 	elseif ServeGate.wait(g, now) > 0 then
 		return nil, nil, "board just changed"

@@ -53,7 +53,7 @@ end
 -- The new rule, as Stations/Cut drives the gate: show on every refresh, press on the press,
 -- the button enabled whenever a pizza is shown (the settle is invisible), and the activation's
 -- intent.
-local function newRun(events: { any }): ({ number }, { string })
+local function newRun(events: { any }, countIgnored: boolean?): ({ number }, { string })
 	local g = ServeGate.new()
 	local pending, lastFired, served, why = {}, -math.huge, {}, {}
 	for _, e in events do
@@ -67,6 +67,7 @@ local function newRun(events: { any }): ({ number }, { string })
 			local isPending = g.shown ~= nil and pending[g.shown] == true
 			local enabled = ServeGate.enabled(g)
 			if enabled and e.t - lastFired >= REPEAT then
+				local firedBefore = lastFired
 				lastFired = e.t
 				local id, ticket, reason = ServeGate.intent(g, e.t, isPending)
 				if id then
@@ -75,6 +76,11 @@ local function newRun(events: { any }): ({ number }, { string })
 					table.insert(served, id)
 				else
 					table.insert(why, reason :: string)
+					-- Stations/Cut forgives an ignored activation (Widgets button:forgive): it does
+					-- not start the repeat window. countIgnored replays the guard without that.
+					if not countIgnored then
+						lastFired = firedBefore
+					end
 				end
 			elseif not enabled then
 				-- Nothing on the board: the button is off and does not activate; the press ends.
@@ -176,6 +182,41 @@ local injected = {
 check("before: injected second click serves Bo's pizza", list(oldRun(injected)), "{81,83}")
 check("after: injected second click 0.565 s after the swap is off", list((newRun(injected))), "{81}")
 
+-- 4d. A long hold (coordinator's audit): pressed on the cut pizza, the board switched to Bo's
+-- 0.5 s later, released 2.7 s after the press, well past the settle. Serves nothing however
+-- long the press was held.
+local longHold = {
+	{ t = -5, kind = "board", pizza = A },
+	{ t = 0, kind = "press" },
+	{ t = 0.5, kind = "board", pizza = B },
+	{ t = 2.7, kind = "release" },
+}
+check("before: a long hold across a switch serves the new ticket", list(oldRun(longHold)), "{83}")
+local s4d, w4d = newRun(longHold)
+check("after: a long hold across a switch serves nothing", list(s4d), "{}")
+check("after: why", w4d[1], "board changed during the press")
+table.insert(report, "press held 2.7 s across a ticket switch: before " .. list(oldRun(longHold)) .. ", after " .. list(s4d) .. " " .. list(w4d))
+
+-- 4e. An ignored press does not start the repeat window (coordinator's audit): a second tap
+-- 0.44 s after the swap is ignored; a press 0.25 s after it, once the board has settled, is
+-- the player's and serves the next pizza. Counted as a repeat it would be swallowed.
+local afterIgnored = {
+	{ t = -5, kind = "board", pizza = A },
+	{ t = 0, kind = "press" },
+	{ t = 0.05, kind = "release" },
+	{ t = 0.06, kind = "reply", pizza = A },
+	{ t = 0.06, kind = "board", pizza = B },
+	{ t = 0.5, kind = "press" },
+	{ t = 0.55, kind = "release" },
+	{ t = 0.75, kind = "press" },
+	{ t = 0.8, kind = "release" },
+}
+local s4e, w4e = newRun(afterIgnored)
+check("after: the ignored tap", w4e[1], "pressed while the board was changing")
+check("after: the press after an ignored one is not swallowed", list(s4e), "{81,83}")
+check("guard counting the ignored tap would swallow it", list((newRun(afterIgnored, true))), "{81}")
+table.insert(report, "press 0.25 s after an ignored one, settled: after " .. list(s4e) .. " (counting the ignored tap: " .. list((newRun(afterIgnored, true))) .. ")")
+
 -- 5. Gate edges. Serve looks enabled whenever a pizza is shown; what a press does is intent's.
 local g = ServeGate.new()
 check("nothing shown: looks off", ServeGate.enabled(g), false)
@@ -194,8 +235,15 @@ ServeGate.show(g, 81, 80, 6)
 check("same pizza redrawn: still settled", (ServeGate.intent(g, 6, false)), 81)
 check("activation without a press (keyboard or gamepad) serves the shown pizza", (ServeGate.intent(g, 6, false)), 81)
 ServeGate.press(g, 7)
-ServeGate.show(g, 83, 82, 7.1)
-check("stale press past its life does not bind", (ServeGate.intent(g, 7 + ServeGate.PRESS_LIFE + 1, false)), 83)
+check("a press dragged off binds the next activation: board unchanged, serves", (ServeGate.intent(g, 20, false)), 81)
+ServeGate.press(g, 21)
+ServeGate.show(g, 83, 82, 21.1)
+check("a press however old, board changed since: refused", select(3, ServeGate.intent(g, 40, false)), "board changed during the press")
+check("the next activation is unbound and serves", (ServeGate.intent(g, 41, false)), 83)
+ServeGate.press(g, 42)
+ServeGate.show(g, 81, 80, 42.1)
+ServeGate.show(g, 83, 82, 42.2)
+check("away and back to the same pizza during a press: refused", select(3, ServeGate.intent(g, 45, false)), "board changed during the press")
 check("SETTLE above the repeat guard", ServeGate.SETTLE > REPEAT, true)
 
 -- 6. The server: the pizza must be the shown ticket's.

@@ -448,6 +448,8 @@ function Cut.new(ctx: any, container: Frame)
 		trace(string.format("serve press selected=%s focus=%s shown=%s ticket=%s -> %s", tostring(ctx.selectedTicket), tostring(focus and focus.id),
 			tostring(gate.shown), tostring(gate.ticket), if id then string.format("send pizza=%d ticket=%d", id, ticketId :: number) else "none: " .. tostring(why)))
 		if not id then
+			-- Ignored, not an intent: the next press is not held back by the repeat guard.
+			serve:forgive()
 			return
 		end
 		local ticket = ticketId :: number

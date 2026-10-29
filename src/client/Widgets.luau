@@ -46,6 +46,7 @@ export type Button = {
 	setLabel: (Button, string) -> (),
 	setIcon: (Button, string?) -> (),
 	setStandby: (Button, boolean) -> (),
+	forgive: (Button) -> (),
 	enabled: boolean,
 	highlighted: boolean,
 	standby: boolean,
@@ -180,6 +181,8 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		stroke.Thickness = if h < 64 then 1 else 2
 	end
 
+	-- A second activation inside the repeat window is a double tap, not a new intent.
+	local lastFired, firedBefore = -math.huge, -math.huge
 	self = {
 		frame = frame,
 		body = body,
@@ -215,6 +218,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 				layout()
 			end
 		end,
+		-- Called by the action when it ignored this activation (Serve inside its settle): that
+		-- was no intent, so it does not start the repeat window and the next press counts.
+		forgive = function(_b: Button)
+			lastFired = firedBefore
+		end,
 	}
 	hit.MouseButton1Down:Connect(function()
 		if self.enabled and not self.standby then
@@ -233,12 +241,10 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 	end
 	hit.MouseButton1Up:Connect(release)
 	hit.MouseLeave:Connect(release)
-	-- A second activation inside the repeat window is a double tap, not a new intent.
-	local lastFired = -math.huge
 	hit.Activated:Connect(function()
 		release()
 		if self.enabled and not self.standby and os.clock() - lastFired >= Theme.Motion.repeatGuard then
-			lastFired = os.clock()
+			firedBefore, lastFired = lastFired, os.clock()
 			onActivated()
 		end
 	end)
