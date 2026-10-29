@@ -55,6 +55,8 @@ end
 
 -- Plays one effect instance: hidden() until `delay` has passed, then step(q) for q from 0 to
 -- 1 over `life`, then the instance is removed. An owning presentation removes it on finish.
+-- An effect whose host has gone (the card rebuilt or closed under it) stops at once instead of
+-- running its timer out on a removed instance (Astra r18 M18-03).
 local function play(pr: Owner, inst: Instance, delay: number, life: number, step: (number) -> (), hidden: (() -> ())?)
 	local function remove()
 		inst:Destroy()
@@ -69,6 +71,11 @@ local function play(pr: Owner, inst: Instance, delay: number, life: number, step
 	end
 	local total = delay + life
 	Motion.run(key, total, function(p)
+		if inst.Parent == nil then
+			Motion.stop(key, false)
+			remove()
+			return
+		end
 		local t = p * total - delay
 		if t < 0 then
 			if hidden then

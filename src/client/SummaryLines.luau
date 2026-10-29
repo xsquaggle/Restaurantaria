@@ -93,6 +93,16 @@ function SummaryLines.bar(xp: number?, earned: number, counted: boolean, xpPerRa
 	}
 end
 
+-- Whether two bars fill over the same span: a correction that moves any end of it (or the
+-- rank size) retargets a fill already running (Astra r18 M18-01). Accepting a projection
+-- (projected -> counted at the same numbers) is not a change of span.
+function SummaryLines.sameFill(a: XpBar?, b: XpBar?): boolean
+	if a == nil or b == nil then
+		return a == b
+	end
+	return a.fromXp == b.fromXp and a.toXp == b.toXp and a.need == b.need
+end
+
 -- The bar's caption at `rank` and `fraction` (any point of its fill). The XP inside the rank
 -- rounds down like the counting award label, so the two always add up. A projection says so.
 function SummaryLines.caption(bar: XpBar, rank: number, fraction: number): string

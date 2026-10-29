@@ -210,9 +210,16 @@ local function line(parent: Instance, name: string, font: Font, px: number, colo
 	})
 end
 
+-- A tap on the scrolling body: released within this many pixels and seconds of the press. Any
+-- more movement is a scroll, never a skip (Astra r18 M18-03).
+local TAP_SLOP = 10
+local TAP_TIME = 0.5
+
 -- Lays the card out inside `parent` (the full-screen summary layer) for `model`. The card is
--- as tall as its content, up to the screen. onAction runs for the action button.
-function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, model: any, onAction: () -> ()): View
+-- as tall as its content, up to the screen. onAction runs for the action button; onTap for a
+-- tap (not a scroll) on the reward rows while they scroll, which the full-screen layer behind
+-- may not receive.
+function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, model: any, onAction: () -> (), onTap: (() -> ())?): View
 	local tight = area.Y < SummaryCard.TIGHT_HEIGHT
 	local cardW = math.min(if compact then 420 else 560, area.X - 24)
 	local padX = if compact then 22 else 36
@@ -498,6 +505,25 @@ function SummaryCard.build(parent: Instance, area: Vector2, compact: boolean, mo
 				ZIndex = 22,
 				Parent = body,
 			})
+			local downAt: Vector3? = nil
+			local downTime = 0
+			local function pointer(input: InputObject): boolean
+				return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+			end
+			frame.InputBegan:Connect(function(input: InputObject)
+				if pointer(input) then
+					downAt, downTime = input.Position, os.clock()
+				end
+			end)
+			frame.InputEnded:Connect(function(input: InputObject)
+				local from = downAt
+				if from and pointer(input) then
+					downAt = nil
+					if (input.Position - from).Magnitude <= TAP_SLOP and os.clock() - downTime <= TAP_TIME and onTap then
+						onTap()
+					end
+				end
+			end)
 			content.Parent = frame
 			scroller = frame
 		else
@@ -704,6 +730,15 @@ export type Show = {
 	coinState: string, -- "waiting" | "counting" | "done"
 	xpState: string, -- "waiting" | "counting" | "done"
 	filling: boolean,
+	-- The running fill's own motion key and the light on its leading edge, so a correction
+	-- can stop both (M18-01); fillStarted: the fill has begun (it may have ended).
+	fillKey: any?,
+	fillLightRemove: (() -> ())?,
+	fillStarted: boolean,
+	-- The confirmed rank-up has been celebrated (once per card, M18-02).
+	rankCelebrated: boolean,
+	-- Effects that outlive the timeline but not a skip or the card (the confetti, M18-03).
+	fx: Motion.Presentation?,
 	finaleStarted: boolean,
 	-- The save accepted the award after the sequence's own payoff: lock in at rest.
 	lockInWaiting: boolean,
@@ -732,11 +767,6 @@ local function fillAt(show: Show, segments: { MotionPlan.Segment }, p: number): 
 		view.caption.Text = SummaryLines.caption(bar, rank, fraction)
 	end
 	return rank
-end
-
-local function countDuration(xp: number): number
-	local T = Motion.T
-	return MotionPlan.countDuration(xp, T.xpCount, T.xpCountMin, T.xpCountMax)
 end
 
 -- The top layer of the bar as the model stands: solid once accepted, else the projection.
@@ -868,7 +898,9 @@ local function confetti(show: Show)
 	local screen = host:FindFirstAncestorWhichIsA("ScreenGui")
 	local top = if screen and not screen.IgnoreGuiInset then GuiService:GetGuiInset().Y else 0
 	local size = T.confettiSize * k
-	Shine.confetti(nil, host, {
+	-- Owned by the card's effects, not the timeline: the burst finishes its fall after the
+	-- sequence ends, but a skip or the card closing removes it (Astra r18 M18-03).
+	Shine.confetti(show.fx, host, {
 		at = UDim2.new(0.5, 0, 0.5, lineY),
 		width = w * 0.8,
 		count = if show.view.compact then T.confettiCompact else T.confetti,
@@ -889,7 +921,15 @@ end
 -- Payoffs and the resting state
 
 -- A real (accepted) rank-up: the rank words pop in a warm flare and throw gold sparkles.
+-- Once per card: a fill across several thresholds, the payoff and a later lock-in never
+-- celebrate the same confirmed gain twice, and the rank's impact hook (sound or vibration,
+-- when bound) fires only here, for an accepted award (Astra r18 M18-02).
 local function celebrateRank(show: Show, pr: Motion.Presentation?)
+	if show.rankCelebrated then
+		return
+	end
+	show.rankCelebrated = true
+	Motion.hook("impact", "rank")
 	local view = show.view
 	local T = Motion.T
 	local scale = Motion.scale(view.rank)
@@ -1096,7 +1136,7 @@ end
 
 -- Light on the moving bar: a glow inside the fill's leading edge, a twinkle riding its tip
 -- and motes shed behind it. Returns the per-frame update (linear progress 0..1).
-local function fillLight(show: Show, pr: Motion.Presentation, duration: number): (number) -> ()
+local function fillLight(show: Show, pr: Motion.Presentation, duration: number): ((number) -> (), () -> ())
 	local view = show.view
 	local track = view.track :: ImageLabel
 	local lead = leadClip(show) :: Frame
@@ -1150,7 +1190,7 @@ local function fillLight(show: Show, pr: Motion.Presentation, duration: number):
 		if p >= 1 then
 			remove()
 		end
-	end
+	end, remove
 end
 
 -- Fills the bar from bar.fromXp to bar.toXp over `duration` under the show's presentation,
@@ -1163,8 +1203,10 @@ local function fill(show: Show, duration: number)
 		return
 	end
 	show.filling = true
+	show.fillStarted = true
 	local presentation = pr :: Motion.Presentation
 	local key = Motion.keyOf(view.fillClip :: Frame, "fill")
+	show.fillKey = key
 	presentation:own(key, function()
 		show.filling = false
 		writeBar(view, show.model)
@@ -1172,23 +1214,26 @@ local function fill(show: Show, duration: number)
 	Motion.trace("phase", "xpFill")
 	local segments = MotionPlan.xpSegments(bar.fromXp, bar.toXp, bar.need)
 	local lastRank = if segments[1] then segments[1].rank else bar.baseRank
-	local light = if show.light then fillLight(show, presentation, duration) else nil
+	local light = nil
+	if show.light then
+		light, show.fillLightRemove = fillLight(show, presentation, duration)
+	end
 	Motion.run(key, duration, function(p)
 		local rank = fillAt(show, segments, MotionPlan.easeOut(p))
 		if rank > lastRank then
 			lastRank = rank
-			Motion.hook("impact", "rank")
 			if show.light then
-				-- A threshold: the bar flashes as it carries over; a real rank-up also pops
-				-- the rank. A projection gets no definitive rank-up cue.
+				-- A threshold: the bar flashes as it carries over. Only an accepted award's
+				-- rank-up is celebrated (once, with its hook); a projection gets no definitive
+				-- rank-up cue.
 				local lead = leadClip(show)
 				if lead then
 					Shine.flash(presentation, lead, { life = 0.3, peak = 0.25, z = zAbove(lead, 2), corner = UDim.new(0.5, 0) })
 				end
-				local now = show.model.bar
-				if now and now.counted then
-					celebrateRank(show, presentation)
-				end
+			end
+			local now = show.model.bar
+			if now and now.counted and show.light then
+				celebrateRank(show, presentation)
 			end
 		end
 		if light then
@@ -1199,6 +1244,28 @@ local function fill(show: Show, duration: number)
 		writeBar(view, show.model)
 		Motion.hook("complete", "xp")
 	end)
+end
+
+-- A correction while the bar fills (Astra r18 M18-01): the fill was planned from the old
+-- span, so it stops where it is and the bar, the rank and the caption settle quietly on the
+-- corrected values, together with the award's number. Nothing replays or celebrates.
+local function rebaseFill(show: Show)
+	local view = show.view
+	if show.fillKey then
+		Motion.stop(show.fillKey, false)
+	end
+	if show.fillLightRemove then
+		show.fillLightRemove()
+		show.fillLightRemove = nil
+	end
+	show.filling = false
+	Motion.trace("rebase", show.model.xpEarned)
+	if show.xpState ~= "done" then
+		Motion.stop(Motion.keyOf(view.xpEarned, "count"), false)
+		show.xpState = "done"
+	end
+	writeXpLabel(view, show.model)
+	writeBar(view, show.model)
 end
 
 -- The XP payoff after the bar settles: the block pops, the bar flashes and a sweep crosses
@@ -1235,6 +1302,11 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 		coinState = "done",
 		xpState = "done",
 		filling = false,
+		fillKey = nil,
+		fillLightRemove = nil,
+		fillStarted = false,
+		rankCelebrated = false,
+		fx = nil,
 		finaleStarted = false,
 		lockInWaiting = false,
 		resting = false,
@@ -1274,6 +1346,7 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	end
 	local pr = Motion.presentation()
 	show.pr = pr
+	show.fx = Motion.presentation()
 	pr.onFinished = function()
 		atRest(show)
 	end
@@ -1663,7 +1736,9 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 				end
 			end)
 			if fillBar then
-				fill(show, countDuration(show.model.xpEarned))
+				-- The phase's own length, so the number and the bar end together even if
+				-- the award was corrected before the count began.
+				fill(show, count.duration)
 			end
 		end)
 	end
@@ -1722,12 +1797,19 @@ function SummaryCard.update(show: Show, model: any, cue: any?)
 		else
 			writeBar(view, model)
 		end
-	elseif not show.filling then
-		if show.finaleStarted then
+	elseif show.filling then
+		-- A corrected span stops the fill on the new values (M18-01); an acceptance of the
+		-- same numbers carries on and fills solid.
+		if not SummaryLines.sameFill(old.bar, model.bar) then
+			rebaseFill(show)
+		end
+	else
+		-- After the fill (before or in its payoff) the bar shows the new values at once.
+		if show.fillStarted or show.finaleStarted then
 			writeBar(view, model)
-			if confirm then
-				show.lockInWaiting = true
-			end
+		end
+		if show.finaleStarted and confirm then
+			show.lockInWaiting = true
 		end
 		-- Before the fill starts, the fill itself uses the new model.
 	end
@@ -1747,6 +1829,11 @@ function SummaryCard.finish(show: Show)
 	local pr = show.pr
 	if pr and pr.alive then
 		pr:finish()
+	end
+	-- Foreground effects still in flight (the confetti) go with the skip.
+	local fx = show.fx
+	if fx and fx.alive then
+		fx:finish()
 	end
 	show.filling = false
 	writeValues(show.view, show.model)

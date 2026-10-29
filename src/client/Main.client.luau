@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
 local Art = require(Shared.Art)
@@ -1083,6 +1084,11 @@ local function refreshSummary(snap: any)
 		elseif SummaryLines.settled(latest) then
 			ctx.send("newShift", {})
 		end
+	end, function()
+		-- A tap on the scrolling rows skips like a tap anywhere else; a scroll never does.
+		if ctx.summaryShow and SummaryCard.playing(ctx.summaryShow) then
+			SummaryCard.finish(ctx.summaryShow)
+		end
 	end)
 	ctx.summaryShape = shape
 	ctx.summaryShow = SummaryCard.show(view, model, cue)
@@ -1385,6 +1391,19 @@ Remote.onSnapshot = function(snap: any)
 	end
 	ctx.refresh()
 end
+
+-- Skip the summary's reward motion from a keyboard or gamepad (Astra r18 M18-03): Space or the
+-- gamepad's X while it plays. Never the action: Enter and the gamepad's A stay with whatever
+-- control is selected, and a skip only completes the motion.
+local SKIP_KEYS = { [Enum.KeyCode.Space] = true, [Enum.KeyCode.ButtonX] = true }
+UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
+	if processed or not SKIP_KEYS[input.KeyCode] then
+		return
+	end
+	if ui and ui.summary.Visible and ctx.summaryShow and SummaryCard.playing(ctx.summaryShow) then
+		SummaryCard.finish(ctx.summaryShow)
+	end
+end)
 
 Remote.onRejected = function(action: string, reason: string)
 	-- Rejections are expected for races (e.g. a double tap); log for testing.

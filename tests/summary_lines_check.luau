@@ -260,6 +260,19 @@ check("save cue saved at once: first and fresh", c.reason == "first" and c.saveF
 c = cue("session", true, "F")
 check("save cue session: never lands", c.saveFresh or c.savedAt ~= nil, false)
 
+-- A correction mid-fill (Astra r18 M18-01): which changes move the fill's span.
+local pend = SummaryLines.bar(0, 130, false, 100)
+local corrected = SummaryLines.bar(0, 40, false, 100)
+local accepted = SummaryLines.bar(130, 130, true, 100)
+check("same fill: itself", SummaryLines.sameFill(pend, pend), true)
+check("same fill: a downward correction across Rank 2 moves it", SummaryLines.sameFill(pend, corrected), false)
+check("same fill: the projection accepted at the same numbers does not", SummaryLines.sameFill(pend, accepted), true)
+check("same fill: rank size changed", SummaryLines.sameFill(pend, SummaryLines.bar(0, 130, false, 120)), false)
+check("same fill: bar gone", SummaryLines.sameFill(pend, nil), false)
+check("same fill: no bar either side", SummaryLines.sameFill(nil, nil), true)
+check("corrected: projected rank 1, no rank-up", string.format("%d %s", corrected.rank, tostring(corrected.rankUp)), "1 false")
+check("before correction: projected rank 2", string.format("%d %s %s", pend.rank, tostring(pend.rankUp), tostring(pend.projected)), "2 true true")
+
 local report = string.format("summary lines checks: %d passed, %d failed", passed, #failures)
 if #failures > 0 then
 	error(report .. "\n" .. table.concat(failures, "\n"))
