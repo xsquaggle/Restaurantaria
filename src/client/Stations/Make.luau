@@ -590,8 +590,9 @@ function Make.new(ctx: any, container: Frame)
 	-- start loading: in Studio play each rolled key first showed blank for a frame or more, so
 	-- the dough flashed see-through as its picture changed (Lawson 2026-10-28, real mouse: "I
 	-- could see gaps of the asset switching"). The keys load with the station (Art.preload,
-	-- where they are made), and until the key that should cover the dough has loaded, the key
-	-- that last did stays drawn under it, or the ball stays up.
+	-- where they are made) and are drawn under the ball before the first roll; until the key
+	-- that should cover the dough has loaded, the key that last did stays drawn under it, or
+	-- the ball stays up.
 	local coverKey: ImageLabel? = nil -- the last base key drawn once it had loaded
 	local waitKey: ImageLabel? = nil -- a base key drawn before it loaded (the tick redraws on load)
 	-- The dough art's last turn (radians) and the pizza it was drawn for: each drawing turns the
@@ -630,8 +631,13 @@ function Make.new(ctx: any, container: Frame)
 				ballShown = true
 				ball.ImageTransparency = 0
 			end
+			-- Even preloaded, a key is ready a frame or more after it is first drawn (the fourth
+			-- took 0.38 s in Studio play), so each key not ready yet is drawn as one pixel under
+			-- the ball's centre: by the first roll every key is.
 			for _, k in keys do
-				k.Visible = false
+				k.Visible = not k.IsLoaded
+				k.Size, k.Position, k.Rotation = UDim2.fromOffset(1, 1), ball.Position, 0
+				k.ZIndex, k.ImageTransparency = 3, 0
 			end
 			waitKey = nil
 			return
