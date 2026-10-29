@@ -93,17 +93,28 @@ end
 ------------------------------------------------------------------------------------------
 -- The driver: one Heartbeat connection plays every running motion by elapsed time.
 
-type Running = { start: number, duration: number, step: (number) -> (), done: (() -> ())? }
+type Running = { start: number, duration: number, seq: number, step: (number) -> (), done: (() -> ())? }
 local running: { [any]: Running } = {}
 local connection: RBXScriptConnection? = nil
+local seq = 0
 
 local function frame()
 	local now = Motion.now()
 	-- A done callback may start or stop motions, so walk a copy and skip any that changed.
+	-- In the order the motions fall due (then the order they were started): one long frame
+	-- (a hitch, the app resuming) can end several at once, and a presentation's phases must
+	-- still start in their order, never its finish before a phase it has not yet started.
 	local batch = {}
 	for key, r in running do
 		table.insert(batch, { key = key, r = r })
 	end
+	table.sort(batch, function(a, b)
+		local da, db = a.r.start + a.r.duration, b.r.start + b.r.duration
+		if da ~= db then
+			return da < db
+		end
+		return a.r.seq < b.r.seq
+	end)
 	for _, item in batch do
 		local key, r = item.key, item.r
 		if running[key] == r then
@@ -128,7 +139,8 @@ end
 -- Plays step(p) for p from 0 to 1 over `duration` seconds under `key`, replacing whatever
 -- ran there (that one neither finishes nor calls its done). step(0) runs at once.
 function Motion.run(key: any, duration: number, step: (number) -> (), done: (() -> ())?)
-	running[key] = { start = Motion.now(), duration = duration, step = step, done = done }
+	seq += 1
+	running[key] = { start = Motion.now(), duration = duration, seq = seq, step = step, done = done }
 	step(0)
 	if duration <= 0 then
 		frame()
