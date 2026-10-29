@@ -1554,7 +1554,9 @@ function Make.new(ctx: any, container: Frame)
 				-- Held still, the shaker keeps pouring (one pinch per Config.Cheese.flowTime).
 				local added = emitCheese(st, st.pour.tick(os.clock()))
 				flushCheese(st, false)
-				shaker.Rotation = if st.pour.stopped or Motion.reduced() then 0 else SHAKE_DEGREES * math.sin(os.clock() * SHAKE_RATE)
+				-- The shake stops with the flow: off the board, or no pinches left (the server's cap).
+				local flowing = not st.pour.stopped and cheeseRoom(st) > 0
+				shaker.Rotation = if not flowing or Motion.reduced() then 0 else SHAKE_DEGREES * math.sin(os.clock() * SHAKE_RATE)
 				if added > 0 then
 					redraw()
 				end
@@ -1649,6 +1651,9 @@ function Make.new(ctx: any, container: Frame)
 						return { target = bowl, text = "Tap the cheese to pick up the shaker", from = if compact then "right" else "below" }
 					end
 					return { target = pad, text = "Press and hold over the pizza to shake on cheese", from = side }
+				elseif MakeCheese.count(m.cheese) >= PrepFood.MAX_PINCHES then
+					-- Nothing more pours (the server's cap), so no "shake more" here.
+					return { text = "The shaker is empty: tap Next, or Undo to shake again" }
 				elseif spread < Config.Cheese.bunchedBelow then
 					return { target = pad, text = "Shake over the bare parts too", from = side }
 				end
