@@ -87,6 +87,10 @@ local ART_TOL = 1
 local PIN_EASE = 0.045
 local PIN_HOME = 0.26
 local PIN_REST_TURN = -12
+-- The drawn dough eases onto its shape with time constant DOUGH_EASE s while it grows (a held pass
+-- shows only once the server would keep it, minStroke long, so it takes up its growth here
+-- instead of jumping). Shrinking (Undo) and a new pizza snap. Proposal.
+local DOUGH_EASE = 0.06
 local SNAP = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local STEP_NAMES = { flour = "Flour", dough = "Dough", roll = "Roll", sauce = "Sauce", cheese = "Cheese", toppings = "Toppings" }
@@ -599,7 +603,7 @@ function Make.new(ctx: any, container: Frame)
 	-- art as little as the outline allows (PrepGeometry.steadyEllipse), so it never spins.
 	local artTurn = 0
 	local artFor: number? = nil
-	local function drawDough(m: any, S: any)
+	local function drawDough(m: any, S: any, previewing: boolean)
 		local id = if current then current.id else nil
 		if not m.placed or id ~= artFor then
 			artTurn, artFor = 0, id
@@ -612,7 +616,7 @@ function Make.new(ctx: any, container: Frame)
 			img.Rotation = pl.rotation
 			img.Position = UDim2.fromOffset(cx + pl.offset.x, cy + pl.offset.y)
 		end
-		local rolled = #m.strokes > 0 or (live ~= nil and live.kind == "roll" and live.drag.line() ~= nil)
+		local rolled = #m.strokes > 0 or previewing
 		if not m.placed then
 			ball.Visible = false
 			for _, k in keys do
@@ -677,20 +681,53 @@ function Make.new(ctx: any, container: Frame)
 		return (MakeSauce.replay(m.sauce))
 	end
 
+	-- The dough as it shows: the committed rolls plus the open pass of a held roll once the server
+	-- would keep it (MakeDough.preview). It only grows while a pass is held, and the release
+	-- commits exactly what was shown, so nothing snaps back. Also true when that pass shows.
+	local function shownShape(m: any): (any, boolean)
+		local open = if live and live.kind == "roll" then live.drag.line() else nil
+		return MakeDough.preview(m, open), MakeDough.keptPass(m, open) ~= nil
+	end
+
+	-- The drawn dough, eased onto the shown shape while it grows (DOUGH_EASE).
+	local easedS: any = nil
+	local easedFor: number? = nil
+	local easedClock: number? = nil
+	local doughEasing = false
+	local function easeDough(m: any, S: any): any
+		local id = if current then current.id else nil
+		local now = Motion.now()
+		local dt = if easedClock then math.clamp(now - easedClock, 0, 0.1) else 0
+		easedClock = now
+		if not easedS or easedFor ~= id or not m.placed or Motion.reduced() or G.meanRadius(S) < G.meanRadius(easedS) - 1e-6 then
+			easedS, easedFor, doughEasing = S, id, false
+			return S
+		end
+		local k = 1 - math.exp(-dt / DOUGH_EASE)
+		local E = easedS
+		local next = G.mat(E.a + (S.a - E.a) * k, E.b + (S.b - E.b) * k, E.c + (S.c - E.c) * k, E.d + (S.d - E.d) * k)
+		local gap = math.max(math.abs(S.a - next.a), math.abs(S.b - next.b), math.abs(S.c - next.c), math.abs(S.d - next.d))
+		if gap < 1e-4 then
+			next = S
+		end
+		easedS, doughEasing = next, gap >= 1e-4
+		return next
+	end
+
 	-- The record to draw (server + this client's actions) and the live drag's preview.
 	local function redraw()
 		if not current then
 			return
 		end
 		local m = shown(current)
-		local S = MakeDough.shape(m)
-		-- The open pass of a held roll, as it stands: it only grows, so the dough never shrinks.
-		local open = if live and live.kind == "roll" then live.drag.line() else nil
-		if open then
-			S = G.roll(S, { x = open.x1, y = open.y1 }, { x = open.x2, y = open.y2 }) or S
-		end
+		local S, previewing = shownShape(m)
 		drawFlour(m, if live and live.kind == "flour" then live.drag.points else nil)
-		drawDough(m, S)
+		if m.step == "dough" then
+			drawDough(m, easeDough(m, S), previewing)
+		else
+			easedS, doughEasing = nil, false
+			drawDough(m, S, false)
+		end
 		tubBall.Visible = not m.placed and not (live and live.kind == "ball")
 		guide.Visible = m.step == "dough" and m.placed
 		-- Sauce and cheese, on the dough as it is now (its shape is fixed once rolled).
@@ -1391,6 +1428,10 @@ function Make.new(ctx: any, container: Frame)
 	function station.tick(now: number)
 		toppings.tick(now)
 		pinTick()
+		-- The drawn dough still easing onto its shape: draw the next step.
+		if doughEasing then
+			redraw()
+		end
 		-- A base key drawn before its picture loaded: draw again once it has (drawDough).
 		if waitKey and waitKey.IsLoaded then
 			waitKey = nil
@@ -1506,7 +1547,10 @@ function Make.new(ctx: any, container: Frame)
 			end
 			-- Next works from the first roll, so until the first Next the pointer says what the
 			-- dough still needs and points at Next only when size and roundness get full marks.
-			local advice = if ctx.learned["Make.next"] then nil else MakeDough.rollAdvice(m)
+			-- Read from the dough as it shows, so the pointer changes the moment a held pass makes
+			-- it ready, not on the release (Open 12).
+			local S, previewing = shownShape(m)
+			local advice = if ctx.learned["Make.next"] then nil else MakeDough.rollAdvice(m, if previewing then S else nil)
 			if advice == "ready" then
 				return { target = nextButton.frame, text = "Round and full size: tap Next", from = toNext }
 			elseif advice == "small" then

@@ -11,8 +11,8 @@
 --   strokes  the committed rolls, { x1, y1, x2, y2 } pizza-local press and release points
 --   sauce    MakeSauce's record, { actions }
 --   cheese   MakeCheese's record, { strokes }
--- The dough's shape comes from the strokes alone (PrepGeometry.doughShape), so the grade and
--- every drawing of the dough read the same oval.
+-- The dough's shape comes from the strokes alone (MakeDough.shape), so the grade and every
+-- drawing of the dough read the same oval.
 
 local Config = require(script.Parent.Config)
 local G = require(script.Parent.PrepGeometry)
@@ -59,9 +59,62 @@ function MakeDough.stampCount(make: Make): number
 	return n
 end
 
+-- Ready: full marks for size and roundness (the band the first shift's pointer calls "Round and
+-- full size").
+function MakeDough.ready(S: G.Mat2): boolean
+	local cfg = Config.Make
+	local e = G.axes(S)
+	local mean = (e.major + e.minor) / 2
+	return mean >= cfg.sizeFullLow and mean <= cfg.sizeFullHigh and e.minor / e.major >= cfg.roundFull
+end
+
+-- One pass of the pin over dough S, or nil when it misses the dough. Option B (Lawson
+-- 2026-10-29): passes after the dough is ready do no harm. A ready dough keeps its shape (the
+-- pass is kept, the dough does not change), and no pass rolls a semi-axis past the full-size
+-- band's top, so a pass that reaches full size cannot overshoot it. Stopping too early still
+-- leaves the dough small, and the flour under it is still graded.
+function MakeDough.rollOnce(S: G.Mat2, p1: Vec, p2: Vec): G.Mat2?
+	local after = G.roll(S, p1, p2, Config.Make.sizeFullHigh)
+	if after and MakeDough.ready(S) then
+		return S
+	end
+	return after
+end
+
 -- The dough's current outline matrix (the ball until a roll lands).
 function MakeDough.shape(make: Make): G.Mat2
-	return G.doughShape(make.strokes)
+	local S = G.ball()
+	for _, l in make.strokes do
+		S = MakeDough.rollOnce(S, { x = l.x1, y = l.y1 }, { x = l.x2, y = l.y2 }) or S
+	end
+	return S
+end
+
+-- The open pass of a held roll as the server would keep it: at least minStroke long, under
+-- maxStrokes, crossing the dough. Anything shorter is not shown (Open 11: a 0.12 to 0.3 push
+-- used to show growth that snapped back when the pass was refused). Returns the line or nil.
+function MakeDough.keptPass(make: Make, line: Line?): Line?
+	if not line then
+		return nil
+	end
+	if (line.x2 - line.x1) ^ 2 + (line.y2 - line.y1) ^ 2 < Config.Make.minStroke ^ 2 then
+		return nil
+	end
+	if not MakeDough.validateRoll(make, line) then
+		return nil
+	end
+	return line
+end
+
+-- The dough as it shows while a pass is held: the committed rolls plus the open pass when the
+-- server would keep it (MakeDough.keptPass). Releasing then commits exactly what was shown.
+function MakeDough.preview(make: Make, open: Line?): G.Mat2
+	local S = MakeDough.shape(make)
+	local line = MakeDough.keptPass(make, open)
+	if line then
+		S = MakeDough.rollOnce(S, { x = line.x1, y = line.y1 }, { x = line.x2, y = line.y2 }) or S
+	end
+	return S
 end
 
 -- Which part of the dough step the player is on: "flour" (nothing on the board yet), "dough"
@@ -367,7 +420,7 @@ function MakeDough.validateRoll(make: Make, args: any): (Line?, string?)
 	if (line.x2 - line.x1) ^ 2 + (line.y2 - line.y1) ^ 2 < cfg.minStroke ^ 2 then
 		return nil, "roll too short"
 	end
-	if not G.roll(MakeDough.shape(make), { x = line.x1, y = line.y1 }, { x = line.x2, y = line.y2 }) then
+	if not MakeDough.rollOnce(MakeDough.shape(make), { x = line.x1, y = line.y1 }, { x = line.x2, y = line.y2 }) then
 		return nil, "roll missed the dough"
 	end
 	return line, nil
@@ -381,14 +434,17 @@ end
 
 -- What the first shift's pointer says once the dough is rolled, checked in this order:
 -- "uneven" when the long side is already full size and the dough is not round enough (roll
--- along the short side), "small" (keep rolling), "big" (past full size: Undo), "uneven" for any
--- other oval, else "ready" (full marks for size and roundness). nil before the first roll.
-function MakeDough.rollAdvice(make: Make): string?
+-- along the short side), "small" (keep rolling), "big" (past full size: Undo; no longer
+-- reachable under option B, kept for the grade's own check), "uneven" for any other oval, else "ready" (full marks
+-- for size and roundness). nil before the first roll.
+-- S (optional) is the dough as shown, open pass included (MakeDough.preview), so the pointer
+-- says "ready" the moment the dough shows ready, not after the release (Open 12).
+function MakeDough.rollAdvice(make: Make, S: G.Mat2?): string?
 	local cfg = Config.Make
-	if not MakeDough.canFinish(make) then
+	if not MakeDough.canFinish(make) and not S then
 		return nil
 	end
-	local e = G.axes(MakeDough.shape(make))
+	local e = G.axes(S or MakeDough.shape(make))
 	local mean = (e.major + e.minor) / 2
 	local round = e.minor / e.major >= cfg.roundFull
 	if not round and e.major >= cfg.sizeFullLow then

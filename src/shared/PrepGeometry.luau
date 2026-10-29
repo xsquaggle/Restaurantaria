@@ -232,7 +232,10 @@ local function taper(radius: number): number
 	return math.clamp((PrepGeometry.CAP - radius) / (PrepGeometry.CAP - PrepGeometry.TAPER_FROM), 0, 1)
 end
 
-function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
+-- cap (optional) bounds each semi-axis below CAP: MakeDough passes the full-size band's top, so
+-- no pass rolls the dough past full size (Lawson 2026-10-29, option B). The taper is unchanged.
+function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec, cap: number?): Mat2?
+	local limit = math.min(cap or PrepGeometry.CAP, PrepGeometry.CAP)
 	local dx, dy = p2.x - p1.x, p2.y - p1.y
 	local len = math.sqrt(dx * dx + dy * dy)
 	if len < 1e-9 then
@@ -256,8 +259,8 @@ function PrepGeometry.roll(S: Mat2, p1: Vec, p2: Vec): Mat2?
 		-- New outline = A applied to the old one; keep the symmetric factor of A S^2 A^T.
 		local AS = PrepGeometry.mul(A, S)
 		local l1, l2, angle = symEigen(PrepGeometry.mul(AS, transpose(AS)))
-		local a = math.min(math.sqrt(l1), PrepGeometry.CAP)
-		local b = math.min(math.sqrt(math.max(l2, 0)), PrepGeometry.CAP)
+		local a = math.min(math.sqrt(l1), limit)
+		local b = math.min(math.sqrt(math.max(l2, 0)), limit)
 		S = fromEigen(a, b, angle)
 	end
 	return S
