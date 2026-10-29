@@ -127,8 +127,6 @@ function Cut.new(ctx: any, container: Frame)
 	serve.hit.MouseButton1Down:Connect(function()
 		ServeGate.press(gate, os.clock())
 	end)
-	-- A refresh is queued for the end of Serve's settle time, so it comes back on by itself.
-	local settleQueued = false
 
 	-- The cutter: the generated wheel on its handle, resting on the board right of the
 	-- pizza. While cutting it follows the pointer, its handle trailing the stroke and the
@@ -501,16 +499,8 @@ function Cut.new(ctx: any, container: Frame)
 			guideCard.Visible = false
 			ServeGate.show(gate, nil, nil, os.clock())
 		end
-		local now = os.clock()
-		serve:setEnabled(ServeGate.ready(gate, now, gate.shown ~= nil and ctx.pending[gate.shown] == true))
-		local wait = ServeGate.wait(gate, now)
-		if gate.shown ~= nil and wait > 0 and not settleQueued then
-			settleQueued = true
-			task.delay(wait + 0.02, function()
-				settleQueued = false
-				ctx.refresh()
-			end)
-		end
+		-- Serve keeps its look while settling or serving; ServeGate.intent ignores those presses.
+		serve:setEnabled(ServeGate.enabled(gate))
 	end
 
 	function station.tick(_now: number)

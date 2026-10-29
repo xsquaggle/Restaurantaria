@@ -51,7 +51,8 @@ local function oldRun(events: { any }): { number }
 end
 
 -- The new rule, as Stations/Cut drives the gate: show on every refresh, press on the press,
--- the button enabled from ready, and the activation's intent.
+-- the button enabled whenever a pizza is shown (the settle is invisible), and the activation's
+-- intent.
 local function newRun(events: { any }): ({ number }, { string })
 	local g = ServeGate.new()
 	local pending, lastFired, served, why = {}, -math.huge, {}, {}
@@ -64,7 +65,7 @@ local function newRun(events: { any }): ({ number }, { string })
 			ServeGate.press(g, e.t)
 		elseif e.kind == "release" then
 			local isPending = g.shown ~= nil and pending[g.shown] == true
-			local enabled = ServeGate.ready(g, e.t, isPending)
+			local enabled = ServeGate.enabled(g)
 			if enabled and e.t - lastFired >= REPEAT then
 				lastFired = e.t
 				local id, ticket, reason = ServeGate.intent(g, e.t, isPending)
@@ -76,9 +77,9 @@ local function newRun(events: { any }): ({ number }, { string })
 					table.insert(why, reason :: string)
 				end
 			elseif not enabled then
-				-- A disabled button does not activate; the press ends.
+				-- Nothing on the board: the button is off and does not activate; the press ends.
 				ServeGate.intent(g, e.t, isPending)
-				table.insert(why, "disabled")
+				table.insert(why, "off: nothing shown")
 			end
 		end
 	end
@@ -121,8 +122,8 @@ local quick = {
 }
 check("before: quick second tap serves Bo's pizza", list(oldRun(quick)), "{81,83}")
 local s2, w2 = newRun(quick)
-check("after: quick second tap is off while the board settles", list(s2), "{81}")
-check("after: why", w2[1], "disabled")
+check("after: quick second tap is ignored while the board settles", list(s2), "{81}")
+check("after: why", w2[1], "pressed while the board was changing")
 table.insert(report, "quick second tap: before " .. list(oldRun(quick)) .. ", after " .. list(s2) .. " " .. list(w2))
 
 -- 3. A deliberate serve of B once it has been on the board past the settle time.
@@ -175,17 +176,22 @@ local injected = {
 check("before: injected second click serves Bo's pizza", list(oldRun(injected)), "{81,83}")
 check("after: injected second click 0.565 s after the swap is off", list((newRun(injected))), "{81}")
 
--- 5. Gate edges.
+-- 5. Gate edges. Serve looks enabled whenever a pizza is shown; what a press does is intent's.
 local g = ServeGate.new()
-check("nothing shown: not ready", ServeGate.ready(g, 0, false), false)
+check("nothing shown: looks off", ServeGate.enabled(g), false)
 check("nothing shown: no intent", select(3, ServeGate.intent(g, 0, false)), "nothing shown")
 ServeGate.show(g, 81, 80, 0)
-check("just shown: not ready", ServeGate.ready(g, 0.1, false), false)
-check("settled: ready", ServeGate.ready(g, ServeGate.SETTLE, false), true)
-check("pending: not ready", ServeGate.ready(g, 5, true), false)
+check("just shown: looks enabled (no grey-out)", ServeGate.enabled(g), true)
+check("just shown: a key press is ignored", select(3, ServeGate.intent(g, 0.1, false)), "board just changed")
+check("just shown: a mouse press is ignored", (function()
+	ServeGate.press(g, 0.1)
+	return select(3, ServeGate.intent(g, 0.18, false))
+end)(), "pressed while the board was changing")
+check("settled: serves", (ServeGate.intent(g, ServeGate.SETTLE, false)), 81)
+check("pending: looks enabled", ServeGate.enabled(g), true)
 check("pending: no intent", select(3, ServeGate.intent(g, 5, true)), "already serving")
 ServeGate.show(g, 81, 80, 6)
-check("same pizza redrawn: still settled", ServeGate.ready(g, 6, false), true)
+check("same pizza redrawn: still settled", (ServeGate.intent(g, 6, false)), 81)
 check("activation without a press (keyboard or gamepad) serves the shown pizza", (ServeGate.intent(g, 6, false)), 81)
 ServeGate.press(g, 7)
 ServeGate.show(g, 83, 82, 7.1)

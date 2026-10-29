@@ -6,17 +6,21 @@
 --  * a press that began on one pizza and is released after the board changed serves nothing
 --    (a tap held across a serve reply, a ticket switch or a pizza taken out of the oven), and
 --    neither does a press that began while Serve was off;
---  * for SETTLE seconds after the board changes, Serve is off, so a second tap aimed at the
---    pizza just served cannot land on the next one (the impatient double tap: the first serve's
---    reply swaps the board between the taps, after the button's 0.35 s repeat guard).
--- The request carries the ticket the board showed, and the server refuses a pizza that is not
--- that ticket's. Pure state, no instances: the offline checks drive it (tests/serve_gate_check).
+--  * for SETTLE seconds after the board changes, a Serve press is ignored, so a second tap aimed
+--    at the pizza just served cannot land on the next one (the impatient double tap: the first
+--    serve's reply swaps the board between the taps, after the button's 0.35 s repeat guard).
+-- The settle is invisible: Serve keeps its normal look (Lawson, slice 7b-1: a Serve that greyed
+-- out after every serve felt dead), and a press inside it gets the button's press-down and
+-- nothing else. The request carries the ticket the board showed, and the server refuses a pizza
+-- that is not that ticket's. Pure state, no instances: the offline checks drive it
+-- (tests/serve_gate_check).
 
 local ServeGate = {}
 
--- Seconds Serve stays off after the board's pizza changes: longer than the button's repeat
--- guard (Theme.Motion.repeatGuard 0.35), about a deliberate second look. A proposal: 0.45 let
--- an injected second tap 0.56 s after the swap through in Studio.
+-- Seconds a press is ignored after the board's pizza changes: longer than the button's repeat
+-- guard (Theme.Motion.repeatGuard 0.35). Not shorter: 0.45 let an injected second tap 0.565 s
+-- after the swap through in Studio. A deliberate serve that soon is rare, since the next pizza
+-- usually needs cutting first.
 ServeGate.SETTLE = 0.6
 -- A press older than this no longer binds a release to it (a press that never activated).
 ServeGate.PRESS_LIFE = 2
@@ -42,7 +46,7 @@ function ServeGate.show(g: Gate, pizzaId: number?, ticketId: number?, now: numbe
 	g.ticket = if pizzaId then ticketId else nil
 end
 
--- A press began on Serve. A press that begins while Serve is off (the board changed under it
+-- A press began on Serve. A press that begins inside the settle (the board changed under it
 -- moments ago) is bound to nothing, so its release serves nothing: it was aimed at the pizza
 -- before (first Studio run: a second press 70 ms after the swap, released once settled).
 function ServeGate.press(g: Gate, now: number)
@@ -50,14 +54,15 @@ function ServeGate.press(g: Gate, now: number)
 	g.pressAt = now
 end
 
--- Seconds until Serve may be pressed again after a change (0 when settled).
+-- Seconds until a press is no longer ignored after a change (0 when settled).
 function ServeGate.wait(g: Gate, now: number): number
 	return math.max(0, g.changedAt + ServeGate.SETTLE - now)
 end
 
--- Serve may be pressed: a pizza is shown, settled, and not already being served.
-function ServeGate.ready(g: Gate, now: number, pending: boolean): boolean
-	return g.shown ~= nil and not pending and ServeGate.wait(g, now) <= 0
+-- Serve looks enabled: a pizza is shown. Not while settling or serving: those presses are
+-- ignored without a look of their own.
+function ServeGate.enabled(g: Gate): boolean
+	return g.shown ~= nil
 end
 
 -- What an activation of Serve serves now: (pizzaId, ticketId) or (nil, nil, reason). Ends the
