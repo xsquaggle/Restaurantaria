@@ -198,6 +198,10 @@ Config.Cut = {
 	-- Proposal: 0.07 = 26 px at 1920x1080 and 6 px on a 667x375 phone.
 	maxPoints = 48,
 	spacing = 0.07,
+	-- Since slice 7b-2 the samples are spaced by position (CutStroke, stream): a point is kept
+	-- when it reaches spacing further from the press point than any sample so far, or detour
+	-- from the last sample (a turn or a way back). Proposal: 3 x spacing, 78 px at 1920x1080.
+	detour = 0.21,
 	-- Cutting assist (slice 3; Lawson's request, Astra's 0.10 starting value). Test proposals,
 	-- not balance decisions, and OFF by default: a shift turns it on only through the Studio
 	-- test hook (RestaurantariaDebug "cutAssist") until Lawson accepts it. The rule is in

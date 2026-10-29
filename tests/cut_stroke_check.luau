@@ -35,6 +35,7 @@ local A = cfg.assist
 -- The proposals this file assumes.
 check("proposal: max points", cfg.maxPoints, 48)
 check("proposal: spacing", cfg.spacing, 0.07)
+check("proposal: detour", cfg.detour, 0.21)
 check("proposal: assist off by default", A.on, false)
 check("proposal: strength", A.strength, 0.10)
 check("proposal: travel gate (u)", A.travel, 0.10)
@@ -559,6 +560,30 @@ do
 		end
 		return pts
 	end
+	-- The stream now (slice 7b-2): samples spaced by position. A point at least spacing from the
+	-- last sample is kept when it reaches spacing further from the press point than any sample
+	-- so far, or lies detour or more from the last sample; the release always; nothing past the
+	-- limit (no moving tail). limit = nil records without a limit.
+	local function recordNow(events: { any }, limit: number?): { any }
+		local pts = { qp(events[1]) }
+		local first = pts[1]
+		local reach = 0
+		for i = 2, #events do
+			if limit and #pts >= limit then
+				break
+			end
+			local p, last = events[i], pts[#pts]
+			local dist = math.sqrt((p.x - last.x) ^ 2 + (p.y - last.y) ^ 2)
+			local fromPress = math.sqrt((p.x - first.x) ^ 2 + (p.y - first.y) ^ 2)
+			local final = i == #events
+			if (final and dist > 1e-4) or (not final and dist >= cfg.spacing and (fromPress >= reach + cfg.spacing or dist >= cfg.detour)) then
+				local k = qp(p)
+				table.insert(pts, k)
+				reach = math.max(reach, math.sqrt((k.x - first.x) ^ 2 + (k.y - first.y) ^ 2))
+			end
+		end
+		return pts
+	end
 	-- Same points by value (so 0 and -0 match: an output is its sample plus a zero correction).
 	local function same(a: { any }, b: { any }): boolean
 		if #a ~= #b then
@@ -601,7 +626,7 @@ do
 		end
 		return true
 	end
-	-- The replica is the stream itself on every path that never reaches the limit.
+	-- The replica (recordNow) is the stream itself on every path that never reaches the limit.
 	local agree = 0
 	for _, d in DOUGHS do
 		for _, c in CASES do
@@ -613,7 +638,7 @@ do
 					inside = inside and math.abs(e.x) <= CutStroke.RANGE and math.abs(e.y) <= CutStroke.RANGE
 				end
 				if inside then
-					check("limit: replica = stream under the limit (" .. d.name .. " / " .. c.name .. ")", same(recordBefore(events, cfg.maxPoints), st.points), true)
+					check("limit: replica = stream under the limit (" .. d.name .. " / " .. c.name .. ")", same(recordNow(events, cfg.maxPoints), st.points), true)
 					agree += 1
 				end
 			end
@@ -648,9 +673,10 @@ do
 			note(string.format("limit, her fixture (before): %d samples; the segment from sample 47 to the tail crosses the round dough and grades as a cut, completeness %.2f, straightness %.2f, though the cutter went around the pizza", #before, cut and cut.completeness or -1, cut and cut.straightness or -1))
 		end
 		local st, shown = drive(d.S, false, around)
-		check(label .. ": after, 48 samples", #st.points, cfg.maxPoints)
-		check(label .. ": after, finished", st.full == true and CutStroke.stopped ~= nil and CutStroke.stopped(st), true)
-		check(label .. ": after, exactly the first 48 samples the cutter made", same(st.points, prefix(unlimited, cfg.maxPoints)), true)
+		-- Since slice 7b-2 the sawing on the spot spends no samples (no progress, no detour), so
+		-- the walk around the pizza fits under the limit.
+		check(label .. ": after, the samples are the cutter's own, by position", same(st.points, recordNow(around, cfg.maxPoints)), true)
+		check(label .. ": after, sawing on the spot spent no budget", #st.points < cfg.maxPoints and st.full == false, true)
 		check(label .. ": after, no segment crosses the dough", crossings(d.S, st.points), 0)
 		check(label .. ": after, no cut", CutStroke.grade(st.points, d.S, false), nil)
 		check(label .. ": after, every shown output stays", outputsStay(shown, st.out), true)
@@ -679,14 +705,17 @@ do
 		local events = saw(n)
 		local label = string.format("limit, %d events", n)
 		local st, shown = drive(Scoring.ROUND, false, events)
-		check(label .. ": samples", #st.points, math.min(n, cfg.maxPoints))
-		check(label .. ": finished only at the limit", st.full == true, n >= cfg.maxPoints)
-		check(label .. ": the samples are the first events, unmoved", same(st.points, recordBefore(prefix(events, cfg.maxPoints), nil)), true)
+		local kept = recordNow(events, nil)
+		check(label .. ": samples", #st.points, math.min(#kept, cfg.maxPoints))
+		check(label .. ": finished only at the limit", st.full == true, #kept >= cfg.maxPoints)
+		check(label .. ": the samples are the kept events, unmoved", same(st.points, prefix(kept, cfg.maxPoints)), true)
 		check(label .. ": every shown output stays", outputsStay(shown, st.out), true)
 		if n > cfg.maxPoints then
 			local before = recordBefore(events, cfg.maxPoints)
 			check(label .. ": before, sample 48 had moved to the release", same({ before[cfg.maxPoints] }, { qp(events[n]) }), true)
-			check(label .. ": after, sample 48 is event 48, not the release", same({ st.points[cfg.maxPoints] }, { qp(events[cfg.maxPoints]) }), true)
+		end
+		if st.full and #kept > cfg.maxPoints then
+			check(label .. ": after, sample 48 is the 48th kept event, not the release", same({ st.points[cfg.maxPoints] }, { kept[cfg.maxPoints] }) and not same({ st.points[cfg.maxPoints] }, { qp(events[n]) }), true)
 			-- A release after the limit adds or moves nothing.
 			local held = table.clone(st.points)
 			CutStroke.record(st, P(0, -0.9), true)
@@ -705,9 +734,10 @@ do
 		local st, shown = drive(Scoring.ROUND, false, events)
 		local before = recordBefore(events, cfg.maxPoints)
 		check("limit, circles: finished at the limit", st.full == true, true)
-		check("limit, circles: the first 48 samples the cutter made", same(st.points, prefix(recordBefore(events, nil), cfg.maxPoints)), true)
+		check("limit, circles: the first 48 samples the cutter made", same(st.points, prefix(recordNow(events, nil), cfg.maxPoints)), true)
 		check("limit, circles: every shown output stays", outputsStay(shown, st.out), true)
-		check("limit, circles: no sample joined across the circle", longest(st.points) < 0.11, true)
+		-- A segment is at most the detour plus one event step (0.03), far short of the circle.
+		check("limit, circles: no sample joined across the circle", longest(st.points) < cfg.detour + 0.031, true)
 		check("limit, circles: before, the tail jumped across it", longest(before) > 0.5, true)
 		note(string.format("limit, circles: longest segment %.3f (before %.3f, the jump from sample 47 to the tail)", longest(st.points), longest(before)))
 	end

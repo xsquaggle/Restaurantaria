@@ -7,7 +7,13 @@
 --    pizza frame, edge 1), each rounded to 1/10000 when recorded: the press point, then a point
 --    each time the pointer has moved at least Config.Cut.spacing from the last one, the points
 --    where the drag leaves and re-enters the accepted range (+-RANGE), and the release point.
---    A recorded sample is never moved, thinned or resampled. At Config.Cut.maxPoints samples
+--    A recorded sample is never moved, thinned or resampled. Since slice 7b-2 the budget is spent
+--    by position along the cut (Astra r19/r20: wobble and dense events used it up before the
+--    cutter crossed the pizza): a point the pointer reaches at least `spacing` from the last
+--    sample is recorded only when it carries the cut forward, at least `spacing` further from the
+--    press point than any sample so far, or when it is Config.Cut.detour or more from the last
+--    sample (a turn or a way back, so no recorded segment cuts a corner by much). Wobble around
+--    the line and going back over the cut record nothing new. At Config.Cut.maxPoints samples
 --    the stream is full: the stroke is finished there and nothing more is recorded until the
 --    next press (the Cut station lifts the cutter so the stop shows). It used to let its last
 --    sample follow the pointer instead, which could draw and grade a chord across dough the
@@ -268,6 +274,7 @@ end
 
 export type Stream = {
 	S: Mat2,
+	reach: number, -- furthest any sample lies from the press point (cut units)
 	filter: Filter,
 	points: { Point }, -- raw samples
 	out: { Point }, -- their outputs (assisted, or the raw samples when off)
@@ -304,6 +311,8 @@ local function add(st: Stream, p: Point)
 	end
 	p = q(p)
 	table.insert(st.points, p)
+	local first = st.points[1]
+	st.reach = math.max(st.reach, math.sqrt((p.x - first.x) ^ 2 + (p.y - first.y) ^ 2))
 	table.insert(st.out, CutStroke.push(st.filter, p))
 	st.full = #st.points >= Config.Cut.maxPoints
 	st.dirty = true
@@ -313,6 +322,7 @@ end
 function CutStroke.stream(S: Mat2, on: boolean, start: Point): Stream
 	local st: Stream = {
 		S = S,
+		reach = 0,
 		filter = CutStroke.filter(S, on),
 		points = {},
 		out = {},
@@ -356,7 +366,19 @@ function CutStroke.record(st: Stream, raw: Point, final: boolean?)
 		st.outside = st.points[#st.points]
 		return
 	end
-	if dist >= Config.Cut.spacing or (final and dist > 1e-4) then
+	if final then
+		if dist > 1e-4 then
+			add(st, raw)
+		end
+		return
+	end
+	if dist < Config.Cut.spacing then
+		return
+	end
+	-- The budget goes by position: forward along the cut, or a real turn (see the header).
+	local first = st.points[1]
+	local fromPress = math.sqrt((raw.x - first.x) ^ 2 + (raw.y - first.y) ^ 2)
+	if fromPress >= st.reach + Config.Cut.spacing or dist >= Config.Cut.detour then
 		add(st, raw)
 	end
 end
