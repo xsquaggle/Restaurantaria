@@ -17,6 +17,9 @@ MotionPlan.T = {
 	pressScale = 0.97,
 	pressIn = 0.07,
 	pressOut = 0.11,
+	-- A button's look changing by itself (switching off when there is nothing left to act on,
+	-- back on, highlighted) cross-fades over the 220 ms default transition, never snaps.
+	stateFade = 0.22,
 	-- End-of-shift panel. Astra's start was 0.96 -> 1.01 -> 1.00 in 220 ms; Lawson asked for
 	-- a fluid, much more rewarding card (2026-10-28), so it lands from further, with a fuller
 	-- overshoot, a short fade and a longer upward settle.

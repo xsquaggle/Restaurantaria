@@ -30,6 +30,7 @@ local T = MotionPlan.T
 check("press scale", T.pressScale, 0.97)
 check("press in 70 ms", T.pressIn, 0.07)
 check("press out 110 ms", T.pressOut, 0.11)
+check("button state fade 220 ms (the default transition, within 250)", T.stateFade, 0.22)
 check("panel 360 ms", T.panelEnter, 0.36)
 check("panel lands from 0.9", T.panelFrom, 0.9)
 check("panel overshoot 1.03", T.panelPeak, 1.03)

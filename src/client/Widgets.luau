@@ -18,6 +18,7 @@ local Scoring = require(Shared.Scoring)
 local CutStroke = require(Shared.CutStroke)
 local MakeLayers = require(script.Parent.MakeLayers)
 local Motion = require(script.Parent.Motion)
+local MotionPlan = require(script.Parent.MotionPlan)
 local Theme = require(script.Parent.Theme)
 local Ui = require(script.Parent.Ui)
 local PizzaArt = require(script.Parent.PizzaArt)
@@ -47,6 +48,7 @@ export type Button = {
 	setIcon: (Button, string?) -> (),
 	setStandby: (Button, boolean) -> (),
 	forgive: (Button) -> (),
+	rest: (Button) -> (),
 	enabled: boolean,
 	highlighted: boolean,
 	standby: boolean,
@@ -90,6 +92,18 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		SliceCenter = meta.slice,
 		Parent = body,
 	})
+	-- The look being left, over the art while a state change cross-fades; hidden otherwise.
+	local fade = Ui.new("ImageLabel", {
+		Name = "ArtFade",
+		BackgroundTransparency = 1,
+		ImageTransparency = 1,
+		Visible = false,
+		Size = UDim2.fromScale(1, 1),
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = meta.slice,
+		ZIndex = 2,
+		Parent = body,
+	})
 	local label = Ui.text({
 		Name = "Label",
 		Text = text,
@@ -123,20 +137,62 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 
 	local self: Button
 	local pressed = false
+	-- The cream family has no highlighted state; it stays idle.
+	local function artName(state: string): string
+		return artPrefix .. (if not primary and state == "highlighted" then "idle" else state)
+	end
+	local function ink(state: string): Color3
+		if primary then
+			return if state == "disabled" then C.labelDisabled elseif state == "standby" then C.labelStandby else C.label
+		end
+		return if state == "disabled" then C.mutedInk else C.ink
+	end
+	local function outlined(state: string): boolean
+		return primary and state ~= "disabled" and state ~= "standby"
+	end
+	local shown: string? = nil
+	local fadeKey = {}
 	local function render()
 		local state = if self.standby and primary then "standby"
 			elseif not self.enabled then "disabled"
 			elseif pressed then "pressed"
 			elseif self.highlighted then "highlighted"
 			else "idle"
-		-- The cream family has no highlighted state; it stays idle.
-		Art.apply(art, artPrefix .. (if not primary and state == "highlighted" then "idle" else state))
-		if primary then
-			label.TextColor3 = if state == "disabled" then C.labelDisabled elseif state == "standby" then C.labelStandby else C.label
-			stroke.Enabled = state ~= "disabled" and state ~= "standby"
-		else
-			label.TextColor3 = if state == "disabled" then C.mutedInk else C.ink
+		local was = shown
+		if state == was then
+			return
 		end
+		shown = state
+		Art.apply(art, artName(state))
+		-- A press and its release answer the finger at once. Any other change (switching off
+		-- when there is nothing left to act on, back on, highlighted, standby) cross-fades from
+		-- the look being left, so the button never snaps to grey.
+		local tactile = state == "pressed" or (was == "pressed" and (state == "idle" or state == "highlighted"))
+		local from = was or state
+		local fromInk, toInk = ink(from), ink(state)
+		local fromLine, toLine = outlined(from), outlined(state)
+		local same = artName(from) == artName(state) and fromInk == toInk and fromLine == toLine
+		if same or tactile or Motion.reduced() then
+			Motion.stop(fadeKey)
+			fade.Visible = false
+			label.TextColor3 = toInk
+			stroke.Enabled = toLine
+			stroke.Transparency = 0
+			return
+		end
+		Art.apply(fade, artName(from))
+		fade.Visible = artName(from) ~= artName(state)
+		stroke.Enabled = fromLine or toLine
+		Motion.run(fadeKey, MotionPlan.T.stateFade, function(p: number)
+			local e = MotionPlan.easeInOut(p)
+			fade.ImageTransparency = e
+			label.TextColor3 = fromInk:Lerp(toInk, e)
+			stroke.Transparency = if fromLine == toLine then 0 elseif toLine then 1 - e else e
+		end, function()
+			fade.Visible = false
+			stroke.Enabled = toLine
+			stroke.Transparency = 0
+		end)
 	end
 	local function layout()
 		local w, h = frame.AbsoluteSize.X, frame.AbsoluteSize.Y
@@ -147,6 +203,7 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		-- fixed share of the height. Text keeps the 16 px floor and grows to 32 px.
 		local insetX, insetY = math.round(h * 0.29), math.round(h * 0.215)
 		art.SliceScale = math.max(h / meta.height, 0.05)
+		fade.SliceScale = art.SliceScale
 		local innerW, innerH = math.max(w - insetX * 2, 0), math.max(h - insetY * 2, 0)
 		sizeLimit.MaxTextSize = math.clamp(math.round(h * 0.29), 16, 32)
 		label.Position = UDim2.fromScale(0.5, 0.5)
@@ -222,6 +279,11 @@ function Widgets.button(text: string, onActivated: () -> (), kind: ("primary" | 
 		-- was no intent, so it does not start the repeat window and the next press counts.
 		forgive = function(_b: Button)
 			lastFired = firedBefore
+		end,
+		-- Ends a running look change on its new look, for a presentation that fades the whole
+		-- button in by itself (the summary card) and so owns its look from the start.
+		rest = function(_b: Button)
+			Motion.stop(fadeKey, true)
 		end,
 	}
 	hit.MouseButton1Down:Connect(function()

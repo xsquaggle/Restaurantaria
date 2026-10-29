@@ -1320,6 +1320,8 @@ function SummaryCard.show(view: View, model: any, cue: any?): Show
 	local reduced = Motion.reduced()
 	-- A save that has already landed when the card first shows lands as the panel does.
 	writeValues(view, model, landingOf(cue, if reveal and not reduced then Motion.T.panelEnter * 0.5 else 0))
+	-- The card's own fade brings the action in, so its standby look is already in place.
+	view.button:rest()
 	local phases = MotionPlan.rewardTimeline(model.coins, model.bonus, model.xpEarned, reveal, fillBar, reduced)
 	show.phases = phases
 	local T = Motion.T
