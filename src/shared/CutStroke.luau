@@ -205,14 +205,11 @@ function CutStroke.assist(raw: { Point }, S: Mat2, on: boolean): ({ Point }, Fil
 end
 
 -- Grades a sent raw list on the dough S. Assist off: Scoring.cutPath of the raw list. Assist on:
--- the raw list is graded first and refused exactly when assist off would refuse it; the
--- assisted path is then kept only when it is accepted, its path credit (Scoring.cutQuality,
--- with the raw stroke's own completeness) is at least the raw path's, its widest wobble is no
--- wider, and it does not miss the centre where the raw path did not. Otherwise the raw cut is
--- kept (assisted = false). So the assist never refuses a stroke, never lowers a stroke's credit,
--- never widens its wobble and never makes a cut miss the centre. A kept assisted cut also
--- carries the raw cut's line and credit, so the pizza's Cut grade can never fall below the raw
--- grade (CutStroke.pizzaGrade).
+-- the raw list is graded first and refused exactly when assist off would refuse it; then the
+-- assisted path is graded, the very path the live groove showed (Lawson, 2026-10-29: the assist
+-- applies alike to the visible cut and the graded path). Only if the assisted path were refused
+-- where the raw one is not does the raw cut stand (assisted = false), so the assist never
+-- refuses a stroke. The assisted path's grade stands even where it is lower than the raw one's.
 function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local rawCut, reason = Scoring.cutPath(raw, S)
 	if not rawCut then
@@ -227,45 +224,18 @@ function CutStroke.grade(raw: any, S: Mat2, on: boolean): (any?, string?)
 	local cut = Scoring.cutPath(assisted, S)
 	if cut then
 		local c = cut :: any
-		-- The assist only straightens: the cut keeps the raw stroke's own span.
-		c.completeness = r.completeness
-		local tolerance = Config.Cut.centreTolerance
-		local centred = Scoring.cutOffset(c, S) <= tolerance or Scoring.cutOffset(r, S) > tolerance
-		if Scoring.cutQuality(c) >= Scoring.cutQuality(r) and c.deviation <= r.deviation and centred then
-			c.raw = r.path
-			c.assisted = true
-			c.rawLine = { x1 = r.x1, y1 = r.y1, x2 = r.x2, y2 = r.y2 }
-			c.rawStraightness = r.straightness
-			c.rawCompleteness = r.completeness
-			return c, nil
-		end
+		c.raw = r.path
+		c.assisted = true
+		return c, nil
 	end
 	r.assisted = false
 	return r, nil
 end
 
--- The pizza's Cut grade from its stored cuts (Scoring.cut), never below the grade the same
--- strokes get without the assist: when any cut kept an assisted path, the cuts are also graded
--- on their raw lines and the higher grade is used.
+-- The pizza's Cut grade from its stored cuts: Scoring.cut on the lines and paths that were
+-- shown, assisted or not.
 function CutStroke.pizzaGrade(slices: number, cuts: { any }, S: Mat2?): Scoring.Grade
-	local grade = Scoring.cut(slices, cuts, S)
-	local plain, any = {}, false
-	for _, c in cuts do
-		if c.rawLine then
-			any = true
-			local l = c.rawLine
-			table.insert(plain, { x1 = l.x1, y1 = l.y1, x2 = l.x2, y2 = l.y2, straightness = c.rawStraightness, completeness = c.rawCompleteness })
-		else
-			table.insert(plain, c)
-		end
-	end
-	if any then
-		local rawGrade = Scoring.cut(slices, plain, S)
-		if rawGrade.score > grade.score then
-			return rawGrade
-		end
-	end
-	return grade
+	return Scoring.cut(slices, cuts, S)
 end
 
 ------------------------------------------------------------------------------------------

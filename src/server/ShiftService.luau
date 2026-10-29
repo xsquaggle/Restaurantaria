@@ -740,7 +740,7 @@ function Actions.serve(shift: Shift, args: any, session: Session): (boolean, str
 	local wait = Scoring.wait(Scoring.patienceFraction(customer.arrivedAt, now()))
 	local make = Scoring.make(recipe, pizza.make, pizza.toppings)
 	local bake = Scoring.bake(order.bake, pizza.bakeSeconds :: number)
-	-- Never below the grade the same strokes get without the assist (CutStroke.pizzaGrade).
+	-- Graded on the stored (shown) paths, assisted or not (CutStroke.pizzaGrade).
 	local cut = CutStroke.pizzaGrade(order.slices, pizza.cuts, Scoring.footprint(pizza.make))
 	-- The join (Config.Grade): the grade, its ceiling, the pay and the XP, all from the parts.
 	local order_ = Scoring.order(wait, make, bake, cut)

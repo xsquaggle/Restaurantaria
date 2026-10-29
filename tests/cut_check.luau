@@ -84,21 +84,27 @@ check("a fifth: reason", why, "cut doesn't cross the pizza")
 -- 5. A shallow chevron (-1.05,0)-(0,0.1)-(1.05,0). By symmetry the fitted line is horizontal
 -- at the mean height of the inside part: y = 0.1 (1 - |x| / 1.05) averaged over |x| <= 0.95
 -- = 0.1 (1 - 0.475 / 1.05) = 0.054762. Widest distance: the apex 0.1 - 0.054762 = 0.045238
--- (the crust ends, y = 0.009524, are as far on the other side). Straightness
--- 1 - (0.045238 - 0.04) / 0.16 = 0.96726. Completeness 1.
+-- (the crust ends, y = 0.009524, are as far on the other side). Since 7b-2 the wobble is measured
+-- on the path averaged over Config.Cut.tremor (0.15) along it: around the apex the offset falls
+-- off linearly at the leg's slope across the line, 0.0952 / sqrt(1 + 0.0952^2) = 0.0948 per unit
+-- of path, so the 0.15 average sits 0.0948 x 0.0375 = 0.00356 below the apex: 0.04168 (the ends,
+-- averaged over the half window inside, the same). Straightness 1 - (0.04168 - 0.04) / 0.16
+-- = 0.9895. The widest raw distance stays 0.045238 (rawDeviation). Completeness 1.
 local ch = Scoring.cutPath({ P(-1.05, 0), P(0, 0.1), P(1.05, 0) }) :: any
 near("chevron 0.1: fitted height", (ch.y1 + ch.y2) / 2, 0.054762, 0.0005)
-near("chevron 0.1: deviation", ch.deviation, 0.045238, 0.0005)
-near("chevron 0.1: straightness", ch.straightness, 0.96726, 0.004)
+near("chevron 0.1: deviation", ch.deviation, 0.04168, 0.0005)
+near("chevron 0.1: raw deviation", ch.rawDeviation, 0.045238, 0.0005)
+near("chevron 0.1: straightness", ch.straightness, 0.9895, 0.004)
 near("chevron 0.1: completeness", ch.completeness, 1, 1e-6)
 
 -- 6. A deep chevron, apex 0.3: mean height 0.3 x 0.547619 = 0.164286; apex distance 0.135714;
--- crust end (x = 0.9496, y = 0.0287) distance 0.1356. Straightness 1 - (0.1357 - 0.04) / 0.16
--- = 0.402. Its fitted line sits 0.164 from the centre, so its chord is 2 x 0.9357, and the path
+-- crust end (x = 0.9496, y = 0.0287) distance 0.1356. Averaged over 0.15 of path: the slope
+-- across the line is 0.2857 / sqrt(1 + 0.2857^2) = 0.2747, so 0.1357 - 0.2747 x 0.0375 = 0.1254;
+-- straightness 1 - (0.1254 - 0.04) / 0.16 = 0.466 (0.402 on the widest raw distance). Its fitted line sits 0.164 from the centre, so its chord is 2 x 0.9357, and the path
 -- spans past both ends: completeness 1.
 local deep = Scoring.cutPath({ P(-1.05, 0), P(0, 0.3), P(1.05, 0) }) :: any
-near("chevron 0.3: deviation", deep.deviation, 0.1357, 0.001)
-near("chevron 0.3: straightness", deep.straightness, 0.402, 0.008)
+near("chevron 0.3: deviation", deep.deviation, 0.1254, 0.001)
+near("chevron 0.3: straightness", deep.straightness, 0.466, 0.008)
 near("chevron 0.3: completeness", deep.completeness, 1, 1e-6)
 
 -- 7. A hand wobble of amplitude 0.03 along a diameter (sine, five waves) stays within the 0.04
@@ -110,13 +116,15 @@ for i = 0, 40 do
 end
 local w = Scoring.cutPath(wob) :: any
 near("wobble 0.03: straightness", w.straightness, 1)
--- Amplitude 0.12: the fitted line stays at y ~ 0, the widest distance ~0.12, straightness
--- 1 - (0.12 - 0.04) / 0.16 = 0.5.
+-- Amplitude 0.12: the fitted line stays at y ~ 0, the widest distance ~0.12. Its wavelength is
+-- 2.1 / 5 = 0.42; a 0.15 average keeps sin(pi 0.15 / 0.42) / (pi 0.15 / 0.42) = 0.803 of it:
+-- 0.0964, straightness 1 - (0.0964 - 0.04) / 0.16 = 0.65 (the 41-point path's corners take a
+-- little more off).
 for i, p in wob do
 	p.y = 0.12 * math.sin((i - 1) / 40 * 10 * math.pi)
 end
 local w2 = Scoring.cutPath(wob) :: any
-near("wobble 0.12: straightness", w2.straightness, 0.5, 0.02)
+near("wobble 0.12: straightness", w2.straightness, 0.64, 0.02)
 -- Wandering off the pizza does not count against straightness: only the part inside the crust
 -- is graded. A straight cut with a hook far outside (at x = 1.4) is still straight.
 local hook = Scoring.cutPath({ P(-1.05, 0), P(1.3, 0), P(1.4, 0.6) }) :: any
@@ -221,12 +229,12 @@ near("grade: one cut three quarters", gp.score, 89, 1)
 check("grade: short note", table.find(gp.notes, "1 cut stopped short of the crust") ~= nil, true)
 -- One three-quarter cut on a 2-slice order: 1 x 0.5556 = 56.
 near("grade: 2 slices, one three-quarter cut", Scoring.cut(2, { q3 }).score, 56, 1)
--- Two deep chevrons (straightness 0.402) at 0 and 90 degrees for 4 slices. Each fitted line
+-- Two deep chevrons (straightness 0.466) at 0 and 90 degrees for 4 slices. Each fitted line
 -- sits 0.164 off centre, past the 0.16 tolerance, so both miss the centre: layout
--- 0.5 + 0.5 - 2 x 0.25 = 0.5; grade 100 x 0.5 x 0.402 = 20.
+-- 0.5 + 0.5 - 2 x 0.25 = 0.5; grade 100 x 0.5 x 0.466 = 23.
 local chev90 = Scoring.cutPath({ P(0, -1.05), P(0.3, 0), P(0, 1.05) }) :: any
 local gc = Scoring.cut(4, { deep, chev90 })
-near("grade: two deep chevrons", gc.score, 20, 1)
+near("grade: two deep chevrons", gc.score, 23, 1)
 check("grade: wobble note", table.find(gc.notes, "2 cuts wobbled off a straight line") ~= nil, true)
 check("grade: centre note", table.find(gc.notes, "2 cuts missed the centre") ~= nil, true)
 -- Lines without path grades (old fixtures) count as straight and full: unchanged score.
@@ -397,7 +405,7 @@ local ok, reason = ShiftService.apply(session, "cut", { pizzaId = 7, path = { P(
 check("server: freehand cut accepted", ok, true)
 check("server: one cut stored", #pizza.cuts, 1)
 check("server: path stored", #pizza.cuts[1].path, 3)
-near("server: straightness stored", pizza.cuts[1].straightness, 0.96726, 0.004)
+near("server: straightness stored", pizza.cuts[1].straightness, 0.9895, 0.004)
 check("server: stored path is a copy", pizza.cuts[1].path[2] ~= nil and pizza.cuts[1].path[2].y, 0.1)
 local function refusedOnServer(name: string, args: any, want: string)
 	local before = #pizza.cuts

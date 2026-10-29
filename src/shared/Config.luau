@@ -223,6 +223,15 @@ Config.Cut = {
 	-- frame's radius, measured in Studio: 372 px at 1920x1080 (0.04 = 15 px, 0.2 = 74 px) and
 	-- 86.5 px on a 667x375 phone (0.04 = 3.5 px, 0.2 = 17 px).
 	straightPerfect = 0.04,
+	-- Hand tremor and input noise (Lawson, 2026-10-29: "a forgiving tolerance"; provisional):
+	-- the wobble is measured on the path averaged over this stretch along it (cut units), so
+	-- shakes quicker than this cancel out and a drift or bend longer than this counts in full.
+	-- 0.15 = 56 px at 1920x1080 and 13 px on a 667x375 phone.
+	tremor = 0.15,
+	-- A Cut note (uneven slices, a wobbly or a short cut) shows only when that problem cost at
+	-- least this many points of the Cut score (Lawson, 2026-10-29; provisional). Notes only:
+	-- the score is the same either way.
+	noteMinPoints = 3,
 	straightZero = 0.2,
 	-- Share of the fitted line's chord across the crust the path covers: full credit from
 	-- completeFull, none at completeZero; below minComplete the cut is refused.

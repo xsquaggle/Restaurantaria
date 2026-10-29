@@ -607,13 +607,43 @@ function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 	if total < cfg.minDragShare * chord then
 		return nil, "cut too short"
 	end
-	local lo, hi, dev = math.huge, -math.huge, 0
+	local lo, hi, widest = math.huge, -math.huge, 0
+	-- Straightness forgives hand tremor and input noise (Lawson, 2026-10-29): the wobble is
+	-- measured on the path averaged over a short stretch along it (Config.Cut.tremor), so small
+	-- quick shakes cancel out while a drift or a bend that lasts longer than the stretch counts
+	-- in full. The widest raw distance is kept for the trace (rawDeviation).
+	local ws = fit.ws
+	local offs, along = {}, {}
+	local run, px, py = 0, nil :: number?, nil :: number?
 	for i = 1, #xs do
 		local qx, qy = xs[i] - mx, ys[i] - my
 		local t = qx * ux + qy * uy
 		lo = math.min(lo, t)
 		hi = math.max(hi, t)
-		dev = math.max(dev, math.abs(qx * uy - qy * ux))
+		if ws[i] > 0 then
+			local d = qx * uy - qy * ux
+			widest = math.max(widest, math.abs(d))
+			if px and py then
+				run += math.sqrt((xs[i] - px) ^ 2 + (ys[i] - py) ^ 2)
+			end
+			px, py = xs[i], ys[i]
+			table.insert(offs, d)
+			table.insert(along, run)
+		end
+	end
+	local dev = 0
+	local half = cfg.tremor / 2
+	local a, b, sum = 1, 0, 0
+	for i = 1, #offs do
+		while b < #offs and along[b + 1] <= along[i] + half do
+			b += 1
+			sum += offs[b]
+		end
+		while along[a] < along[i] - half do
+			sum -= offs[a]
+			a += 1
+		end
+		dev = math.max(dev, math.abs(sum / (b - a + 1)))
 	end
 	local completeness = (math.clamp(hi, tlo, thi) - math.clamp(lo, tlo, thi)) / chord
 	if completeness < cfg.minComplete then
@@ -629,6 +659,7 @@ function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 		straightness = straightness,
 		completeness = completeness,
 		deviation = dev,
+		rawDeviation = widest,
 	} :: any, nil
 end
 
@@ -713,11 +744,16 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 	-- Freehand: the layout score is scaled by the cuts' mean path credit, so crooked or
 	-- partial cuts lower the grade. Each cut's parts are kept for feedback.
 	local quality, crooked, short = 0, 0, 0
+	-- The same mean with every cut straight, and with every cut complete: what the wobble and
+	-- the short cuts cost, so their notes only appear when they cost points (below).
+	local qualityStraight, qualityComplete = 0, 0
 	local perCut = {}
 	for _, line in lines do
 		local q, straight, complete = Scoring.cutQuality(line)
 		quality += q
-		if straight < 0.75 then
+		qualityStraight += complete
+		qualityComplete += straight
+		if straight < 0.9 then
 			crooked += 1
 		end
 		if (line.completeness or 1) < 0.9 then
@@ -730,22 +766,33 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 		})
 	end
 	quality /= #lines
-	local score = 100 * layout * quality
+	qualityStraight /= #lines
+	qualityComplete /= #lines
+	local function scoreOf(l: number, q: number): number
+		local v = 100 * l * q
+		return if #lines ~= needed then math.min(v, 60) else v
+	end
+	local score = scoreOf(layout, quality)
+	-- A note names a problem only when it cost at least noteMinPoints of this Cut score
+	-- (Lawson, 2026-10-29: no criticism of tiny deviations); each problem has one note.
+	local evenLayout = clamp01(countScore * 0.5 + 0.5 - offCentre * 0.25)
+	local unevenCost = scoreOf(evenLayout, quality) - score
+	local wobbleCost = scoreOf(layout, qualityStraight) - score
+	local shortCost = scoreOf(layout, qualityComplete) - score
 	if #lines ~= needed then
-		score = math.min(score, 60)
 		-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
 		table.insert(notes, string.format("Made %d cut%s, the order needed %d", #lines, if #lines == 1 then "" else "s", needed))
 	end
 	if offCentre > 0 then
 		table.insert(notes, string.format("%d cut%s missed the centre", offCentre, if offCentre == 1 then "" else "s"))
 	end
-	if #angles > 1 and meanError > cfg.perfectDegrees + 3 then
+	if #angles > 1 and unevenCost >= cfg.noteMinPoints then
 		table.insert(notes, "Slices were uneven sizes")
 	end
-	if crooked > 0 then
+	if crooked > 0 and wobbleCost >= cfg.noteMinPoints then
 		table.insert(notes, string.format("%d cut%s wobbled off a straight line", crooked, if crooked == 1 then "" else "s"))
 	end
-	if short > 0 then
+	if short > 0 and shortCost >= cfg.noteMinPoints then
 		table.insert(notes, string.format("%d cut%s stopped short of the crust", short, if short == 1 then "" else "s"))
 	end
 	return {

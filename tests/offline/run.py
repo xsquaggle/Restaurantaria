@@ -27,6 +27,7 @@ DEFAULT_CHECKS = [
     "tests/cut_replay_check.luau",
     "tests/cut_stroke_check.luau",
     "tests/cut_budget_check.luau",
+    "tests/cut_feel_check.luau",
     "tests/make_check.luau",
     "tests/roll_drag_check.luau",
     "tests/roll_option_b_check.luau",
