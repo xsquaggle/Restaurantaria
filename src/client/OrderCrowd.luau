@@ -47,8 +47,10 @@ type Figure = {
 	model: Model,
 	root: BasePart,
 	lift: number,
-	idle: AnimationTrack,
-	walk: AnimationTrack,
+	-- Nil when the animations could not load: the figure still stands, walks and leaves,
+	-- in its rest pose (Astra r19, OrderCrowd.make hardening).
+	idle: AnimationTrack?,
+	walk: AnimationTrack?,
 	walking: boolean,
 	pos: Vector3,
 	yaw: number,
@@ -58,6 +60,38 @@ type Figure = {
 	headParts: { BasePart },
 	headTop: number,
 }
+
+-- A look is complete once the parts a figure needs have replicated: its root, its Humanoid
+-- and its head. A look still arriving (a partial model) is left until it is.
+function OrderCrowd.complete(template: Instance?): boolean
+	if not template or not template:IsA("Model") then
+		return false
+	end
+	local root = template:FindFirstChild("HumanoidRootPart")
+	local head = template:FindFirstChild("Head")
+	return root ~= nil and root:IsA("BasePart") and head ~= nil and head:IsA("BasePart") and template:FindFirstChildOfClass("Humanoid") ~= nil
+end
+
+-- The look a waiting customer is built from: their own once it is complete; after `waited`
+-- passes LOOK_WAIT, or once their own has failed to build, any other complete look that has
+-- not failed. Nil: keep waiting.
+function OrderCrowd.pick(looks: Instance?, look: string, waited: number, failed: { [Instance]: boolean }): Model?
+	if not looks then
+		return nil
+	end
+	local own = looks:FindFirstChild(look)
+	if own and not failed[own] and OrderCrowd.complete(own) then
+		return own :: Model
+	end
+	if waited > LOOK_WAIT or (own ~= nil and failed[own]) then
+		for _, other in looks:GetChildren() do
+			if other ~= own and not failed[other] and OrderCrowd.complete(other) then
+				return other :: Model
+			end
+		end
+	end
+	return nil
+end
 
 function OrderCrowd.new(room: any)
 	-- The server's container (QA18-01): never just the first folder of the name, which a saved
@@ -73,31 +107,43 @@ function OrderCrowd.new(room: any)
 	local standZ, laneZ = back + STAND, back + LANE
 
 	local figures: { [number]: Figure } = {}
+	-- Customers whose figure is not built yet. A build that fails keeps them here: the look
+	-- that failed is marked and the next tick tries another (never "missing until the next
+	-- sync").
 	local pending: { [number]: { look: string, since: number, instant: boolean } } = {}
+	local failed: { [Instance]: boolean } = {}
 	local spots: { [number]: number } = {}
 	local clock = 0
 
-	local function make(id: number, template: Model): Figure
-		local model = template:Clone()
+	local function build(id: number, model: Model): Figure
 		local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 		local humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 		root.Anchored = true
 		humanoid.EvaluateStateMachine = false
 		humanoid.BreakJointsOnDeath = false
 		humanoid.RequiresNeck = false
-		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
-		local function track(id: string): AnimationTrack
-			local a = Instance.new("Animation")
-			a.AnimationId = id
-			local t = (animator :: Animator):LoadAnimation(a)
-			t.Looped = true
-			return t
+		-- The animations are a finish, not a requirement: if they fail to load the figure
+		-- stands in its rest pose rather than not appearing at all.
+		local idle: AnimationTrack?, walk: AnimationTrack? = nil, nil
+		local animated, why = pcall(function()
+			local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+			local function track(asset: string): AnimationTrack
+				local a = Instance.new("Animation")
+				a.AnimationId = asset
+				local t = (animator :: Animator):LoadAnimation(a)
+				t.Looped = true
+				return t
+			end
+			local i, w = track(IDLE), track(WALK)
+			i:Play(0, 1, 1)
+			-- Out of step with each other, so a row of customers does not breathe in unison.
+			i.TimePosition = math.random() * math.max(i.Length, 1)
+			w:Play(0, 0.001, PACE / STANCE)
+			idle, walk = i, w
+		end)
+		if not animated then
+			warn("[OrderCrowd] customer " .. id .. " stands without animation: " .. tostring(why))
 		end
-		local idle, walk = track(IDLE), track(WALK)
-		idle:Play(0, 1, 1)
-		-- Out of step with each other, so a row of customers does not breathe in unison.
-		idle.TimePosition = math.random() * math.max(idle.Length, 1)
-		walk:Play(0, 0.001, PACE / STANCE)
 		local head = model:FindFirstChild("Head") :: BasePart
 		local headParts = { head }
 		for _, a in model:GetChildren() do
@@ -124,6 +170,19 @@ function OrderCrowd.new(room: any)
 		}
 		model.Parent = room.folder
 		return figure
+	end
+
+	-- Builds a customer's figure from a clone of `template`; on any failure the clone is
+	-- removed and nil returned, so nothing half-built is left in the room.
+	local function make(id: number, template: Model): Figure?
+		local model = template:Clone()
+		local ok, result = pcall(build, id, model)
+		if ok then
+			return result
+		end
+		model:Destroy()
+		warn(string.format("[OrderCrowd] customer %d's figure failed to build from %s: %s", id, template.Name, tostring(result)))
+		return nil
 	end
 
 	-- Sends a figure to the leftmost free spot, along the lane behind the others.
@@ -192,23 +251,25 @@ function OrderCrowd.new(room: any)
 		local looks = if #ids > 0 then container() else nil
 		for _, id in ids do
 			local p = pending[id]
-			local template = if looks then looks:FindFirstChild(p.look) else nil
-			if looks and not template and clock - p.since > LOOK_WAIT then
-				template = looks:FindFirstChildOfClass("Model")
-			end
+			local template = OrderCrowd.pick(looks, p.look, clock - p.since, failed)
 			if not looks and not warned and clock - p.since > LOOK_WAIT then
 				warned = true
 				warn("[OrderCrowd] the server's CustomerLooks folder has not arrived; customers show once it does")
 			end
 			if template then
-				pending[id] = nil
-				local f = make(id, template :: Model)
-				figures[id] = f
-				seat(f)
-				if p.instant and f.spot then
-					f.pos = f.path[#f.path]
-					f.yaw = 0
-					table.clear(f.path)
+				local f = make(id, template)
+				if f then
+					pending[id] = nil
+					figures[id] = f
+					seat(f)
+					if p.instant and f.spot then
+						f.pos = f.path[#f.path]
+						f.yaw = 0
+						table.clear(f.path)
+					end
+				else
+					-- Still pending: the next tick tries another look.
+					failed[template] = true
 				end
 			end
 		end
@@ -249,8 +310,10 @@ function OrderCrowd.new(room: any)
 			end
 			if moving ~= f.walking then
 				f.walking = moving
-				f.walk:AdjustWeight(if moving then 1 else 0.001, 0.2)
-				f.idle:AdjustWeight(if moving then 0.001 else 1, 0.2)
+				if f.walk and f.idle then
+					f.walk:AdjustWeight(if moving then 1 else 0.001, 0.2)
+					f.idle:AdjustWeight(if moving then 0.001 else 1, 0.2)
+				end
 			end
 			local at = f.pos + Vector3.new(0, f.lift, 0)
 			f.root.CFrame = CFrame.new(at) * CFrame.Angles(0, f.yaw, 0)

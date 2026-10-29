@@ -368,7 +368,7 @@ local session = {
 		tutorial = false,
 	},
 } :: any
-check("serve: accepted", (ShiftService.apply(session, "serve", { pizzaId = 71 })), true)
+check("serve: accepted", (ShiftService.apply(session, "serve", { pizzaId = 71, ticketId = 70 })), true)
 local r = session.shift.customers[1].result
 check("serve: cut perfect", r.cut.score, 100)
 check("serve: bake perfect", r.bake.score, 100)
@@ -614,7 +614,7 @@ local bSession = {
 		tutorial = false,
 	},
 } :: any
-check("serve burnt: accepted", (ShiftService.apply(bSession, "serve", { pizzaId = 91 })), true)
+check("serve burnt: accepted", (ShiftService.apply(bSession, "serve", { pizzaId = 91, ticketId = 90 })), true)
 local br = bSession.shift.customers[1].result
 check("serve burnt: grade 35", br.overall, 35)
 check("serve burnt: hold on Bake's notes", br.bake.notes[1], "Burnt: grade held to 35")

@@ -718,10 +718,18 @@ function ShiftService.closeAll(seconds: number)
 	end, deadline)
 end
 
+-- args.ticketId is the ticket the player's board showed with the pizza (ServeGate, Astra r19
+-- D1): a pizza that is not that ticket's is refused, so a press meant for one order never
+-- serves another.
 function Actions.serve(shift: Shift, args: any, session: Session): (boolean, string?)
 	local pizza, err = getPizza(shift, args.pizzaId, "cutting")
 	if not pizza then
 		return false, err
+	end
+	if not isId(args.ticketId) then
+		return false, "bad ticket id"
+	elseif args.ticketId ~= pizza.ticketId then
+		return false, "pizza is not that ticket's"
 	end
 	local customer = customerById(shift, pizza.ticketId)
 	if not customer or customer.status ~= "ordered" then

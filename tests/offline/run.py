@@ -34,6 +34,8 @@ DEFAULT_CHECKS = [
     "tests/cheese_pour_check.luau",
     "tests/grade_check.luau",
     "tests/scoring_check.luau",
+    "tests/serve_gate_check.luau",
+    "tests/order_crowd_check.luau",
     # Last: it starts CustomerLooks, after which arrivals in any later check would find looks.
     "tests/looks_folder_check.luau",
 ]

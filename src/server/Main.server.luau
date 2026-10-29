@@ -326,7 +326,7 @@ if RunService:IsStudio() then
 								local a = math.rad(k * 180 / n)
 								act("cut", { pizzaId = pizza.id, path = { { x = math.cos(a) * 1.05, y = math.sin(a) * 1.05 }, { x = -math.cos(a) * 1.05, y = -math.sin(a) * 1.05 } } })
 							end
-							act("serve", { pizzaId = pizza.id })
+							act("serve", { pizzaId = pizza.id, ticketId = pizza.ticketId })
 						end
 					end
 				end

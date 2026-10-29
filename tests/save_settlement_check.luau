@@ -481,12 +481,12 @@ local function run()
 	sb.shift.customers = { { id = 901, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
 	sb.shift.pizzas = { [902] = { id = 902, ticketId = 901, stage = "cutting", make = { step = "toppings", flour = {}, placed = false, strokes = {} }, toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
 	sb.shift.nextArrival = sb.shift.customerCount + 2
-	check("two: B serve", (ShiftService.apply(sb, "serve", { pizzaId = 902 })), true)
+	check("two: B serve", (ShiftService.apply(sb, "serve", { pizzaId = 902, ticketId = 901 })), true)
 	check("two: B coins not forced", sb.shift.customers[1].result.tip ~= 77, true)
 	sa.shift.customers = { { id = 903, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
 	sa.shift.pizzas = { [904] = { id = 904, ticketId = 903, stage = "cutting", make = { step = "toppings", flour = {}, placed = false, strokes = {} }, toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
 	sa.shift.nextArrival = sa.shift.customerCount + 2
-	check("two: A serve", (ShiftService.apply(sa, "serve", { pizzaId = 904 })), true)
+	check("two: A serve", (ShiftService.apply(sa, "serve", { pizzaId = 904, ticketId = 903 })), true)
 	check("two: A coins forced", sa.shift.customers[1].result.tip, 77)
 	check("two: A fake save fails as set", settled(sa), "retry")
 	ShiftService.leave(a)
@@ -503,7 +503,7 @@ local function run()
 	sb.shift.customers = { { id = 905, status = "ordered", order = { recipe = "cheese", bake = "regular", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } }
 	sb.shift.pizzas = { [906] = { id = 906, ticketId = 905, stage = "cutting", make = { step = "toppings", flour = {}, placed = false, strokes = {} }, toppings = {}, cuts = {}, bakeSeconds = Config.Oven.targets.regular } }
 	sb.shift.nextArrival = sb.shift.customerCount + 2
-	ShiftService.apply(sb, "serve", { pizzaId = 906 })
+	ShiftService.apply(sb, "serve", { pizzaId = 906, ticketId = 905 })
 	check("two: B real retry", settled(sb), "retry")
 	local receiptB = sb.shift.receipt
 	check("two: B switch refused while real unsettled", string.sub(TestStore.command(b, {}), 1, 7), "refused")

@@ -15,6 +15,7 @@ local Assets = require(Shared.Assets)
 local Parent = script.Parent.Parent
 local Motion = require(Parent.Motion)
 local MotionPlan = require(Parent.MotionPlan)
+local ServeGate = require(Parent.ServeGate)
 local Theme = require(Parent.Theme)
 local Ui = require(Parent.Ui)
 local Widgets = require(Parent.Widgets)
@@ -114,24 +115,20 @@ function Cut.new(ctx: any, container: Frame)
 	undo.frame.ZIndex = 6
 	undo.frame.Parent = frame
 
+	-- Serve serves the pizza the board shows (ServeGate, Astra r19 D1); onServe is set below.
+	local gate = ServeGate.new()
+	local onServe = function() end
 	local serve = Widgets.button("Serve", function()
-		if current and not ctx.pending[current.id] then
-			local id = current.id
-			local ticketId = current.ticketId
-			ctx.pending[id] = true
-			ctx.refresh()
-			ctx.send("serve", { pizzaId = id }, function(ok)
-				ctx.pending[id] = nil
-				if ok then
-					ctx.showResult(ticketId)
-				end
-				ctx.refresh()
-			end)
-		end
+		onServe()
 	end)
 	serve:setIcon("icon_serve_white")
 	serve.frame.Size = UDim2.fromScale(1, 1)
 	serve.frame.Parent = ctx.actionHost("Cut")
+	serve.hit.MouseButton1Down:Connect(function()
+		ServeGate.press(gate, os.clock())
+	end)
+	-- A refresh is queued for the end of Serve's settle time, so it comes back on by itself.
+	local settleQueued = false
 
 	-- The cutter: the generated wheel on its handle, resting on the board right of the
 	-- pizza. While cutting it follows the pointer, its handle trailing the stroke and the
@@ -444,6 +441,36 @@ function Cut.new(ctx: any, container: Frame)
 		end
 	end)
 
+	onServe = function()
+		local now = os.clock()
+		local snap = ctx.snapshot
+		local focus = if snap then ctx.focusPizza(snap, "cutting") else nil
+		local id, ticketId, why = ServeGate.intent(gate, now, gate.shown ~= nil and ctx.pending[gate.shown] == true)
+		-- Selected ticket, focused pizza, the board's pizza and its ticket, then what is sent.
+		trace(string.format("serve press selected=%s focus=%s shown=%s ticket=%s -> %s", tostring(ctx.selectedTicket), tostring(focus and focus.id),
+			tostring(gate.shown), tostring(gate.ticket), if id then string.format("send pizza=%d ticket=%d", id, ticketId :: number) else "none: " .. tostring(why)))
+		if not id then
+			return
+		end
+		local ticket = ticketId :: number
+		ctx.pending[id] = true
+		ctx.refresh()
+		ctx.send("serve", { pizzaId = id, ticketId = ticket }, function(ok, reason)
+			ctx.pending[id] = nil
+			local result = nil
+			local latest = ctx.snapshot
+			if ok and latest then
+				local c = ctx.customer(latest, ticket)
+				result = c and c.status
+			end
+			trace(string.format("serve reply ok=%s %s pizza=%d ticket=%d ticketNow=%s", tostring(ok), tostring(reason), id, ticket, tostring(result)))
+			if ok then
+				ctx.showResult(ticket)
+			end
+			ctx.refresh()
+		end)
+	end
+
 	local station = { frame = frame }
 
 	function station.refresh(snap: any)
@@ -452,12 +479,11 @@ function Cut.new(ctx: any, container: Frame)
 		if stroke and (not current or current.id ~= stroke.pizzaId) then
 			cancelStroke("ticket changed")
 		end
-		view.frame.Visible = current ~= nil
-		serve:setEnabled(current ~= nil and not ctx.pending[current.id])
 		undo:setEnabled(current ~= nil and #current.cuts > 0)
 		serve:setLabel(if current and ctx.pending[current.id] then "Serving..." else "Serve")
-		if current then
-			local customer = ctx.customer(snap, current.ticketId)
+		local customer = if current then ctx.customer(snap, current.ticketId) else nil
+		view.frame.Visible = current ~= nil and customer ~= nil
+		if current and customer then
 			local cuts = #current.cuts
 			-- Cuts made against cuts needed: a freehand path need not make exactly 2 x cuts slices.
 			local text = string.format("%d slices\nCuts %d / %d", customer.order.slices, cuts, customer.order.slices // 2)
@@ -469,8 +495,21 @@ function Cut.new(ctx: any, container: Frame)
 			guideCard.Visible = true
 			view:set(current, Widgets.doneness(current.bakeSeconds or 0), ctx.ovenStatus(customer.order.bake, current.bakeSeconds or 0).burnt)
 			serve:setHighlighted(cuts == customer.order.slices // 2)
+			-- Bound to Serve only now that the board shows it.
+			ServeGate.show(gate, current.id, current.ticketId, os.clock())
 		else
 			guideCard.Visible = false
+			ServeGate.show(gate, nil, nil, os.clock())
+		end
+		local now = os.clock()
+		serve:setEnabled(ServeGate.ready(gate, now, gate.shown ~= nil and ctx.pending[gate.shown] == true))
+		local wait = ServeGate.wait(gate, now)
+		if gate.shown ~= nil and wait > 0 and not settleQueued then
+			settleQueued = true
+			task.delay(wait + 0.02, function()
+				settleQueued = false
+				ctx.refresh()
+			end)
 		end
 	end
 
