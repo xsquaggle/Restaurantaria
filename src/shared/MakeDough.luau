@@ -411,6 +411,11 @@ function MakeDough.validateRoll(make: Make, args: any): (Line?, string?)
 	if #make.strokes >= cfg.maxStrokes then
 		return nil, "too many rolls"
 	end
+	-- Option B: a pass on a ready dough changes nothing, so it is not stored (no stroke spent on
+	-- it, and Undo still takes back the last roll that counted). The pin still rolls.
+	if MakeDough.ready(MakeDough.shape(make)) then
+		return nil, "the dough is ready"
+	end
 	for _, k in { "x1", "y1", "x2", "y2" } do
 		if not finite(args[k], cfg.strokeReach) then
 			return nil, "roll out of range"

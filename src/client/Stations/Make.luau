@@ -455,6 +455,7 @@ function Make.new(ctx: any, container: Frame)
 	local current: any = nil
 	local pinHome: (glide: boolean) -> ()
 	local pinTick: () -> ()
+	local readyPulse: () -> ()
 	local queues: { [number]: { inFlight: any?, waiting: { any } } } = {}
 	local live: any = nil -- the held drag: { kind = "flour" | "roll" | "ball" | "ladle" | "pot" | "cheese", input, mouse, button, ... }
 	local finishing: number? = nil -- the pizza whose Next is on its way
@@ -618,6 +619,9 @@ function Make.new(ctx: any, container: Frame)
 		end
 		local rolled = #m.strokes > 0 or previewing
 		if not m.placed then
+			-- Hardening (Astra r19, not reproduced live): a ticket reset must not leave the ball
+			-- faded from an earlier hand-off.
+			ball.ImageTransparency = 0
 			ball.Visible = false
 			for _, k in keys do
 				k.Visible = false
@@ -1425,6 +1429,23 @@ function Make.new(ctx: any, container: Frame)
 		end
 	end
 
+	-- One modest pulse of Next the moment the dough shows ready (Astra r19), on every shift; it
+	-- never moves on by itself.
+	local pulsed: { [number]: boolean } = {} -- pizzas whose ready pulse has played
+	local nextScale = Motion.scale(nextButton.frame)
+	function readyPulse()
+		if not current or current.make.step ~= "dough" then
+			return
+		end
+		local m = shown(current)
+		local isReady = m.placed and MakeDough.ready((shownShape(m)))
+		if isReady and not pulsed[current.id] and not Motion.reduced() then
+			Motion.pop(nextScale, 1, 1.08, 0.32)
+		end
+		-- Undo below ready lets it pulse again when the dough is ready once more.
+		pulsed[current.id] = isReady
+	end
+
 	function station.tick(now: number)
 		toppings.tick(now)
 		pinTick()
@@ -1432,6 +1453,7 @@ function Make.new(ctx: any, container: Frame)
 		if doughEasing then
 			redraw()
 		end
+		readyPulse()
 		-- A base key drawn before its picture loaded: draw again once it has (drawDough).
 		if waitKey and waitKey.IsLoaded then
 			waitKey = nil
@@ -1551,12 +1573,12 @@ function Make.new(ctx: any, container: Frame)
 			-- it ready, not on the release (Open 12).
 			local S, previewing = shownShape(m)
 			local advice = if ctx.learned["Make.next"] then nil else MakeDough.rollAdvice(m, if previewing then S else nil)
+			-- Astra r19's cue. "Roll along the short side" is gone: rolling alone cannot make the
+			-- dough uneven (make_check section 4), so the pointer never said it.
 			if advice == "ready" then
-				return { target = nextButton.frame, text = "Round and full size: tap Next", from = toNext }
+				return { target = nextButton.frame, text = "Ready \u{2014} next: sauce", from = toNext }
 			elseif advice == "small" then
 				return { target = pad, text = "Keep rolling until the dough reaches the inner guide edge", from = side }
-			elseif advice == "uneven" then
-				return { target = pad, text = "Roll along the short side to even it out", from = side }
 			elseif advice == "big" then
 				return { target = undo.frame, text = "Too big and thin: tap Undo", from = "below" }
 			end

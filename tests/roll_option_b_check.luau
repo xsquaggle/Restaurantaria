@@ -287,6 +287,60 @@ check("after: the pointer never changes on a release", a3.adviceAtRelease, 0)
 check("before (slice 6): the pointer changed on a release", b3.adviceAtRelease > 0, true)
 note(string.format("three held passes: pointer changes at release, before %d, after %d", b3.adviceAtRelease, a3.adviceAtRelease))
 
+------------------------------------------------------------------------------------------
+-- 7. Passes past ready are not stored (Astra r19 / staging note: stored no-op passes would spend
+-- the 24-stroke cap, stop the preview and make Undo take back a pass that changed nothing).
+
+local readyMake = dough({ pass(90), pass(270), pass(90) }, fullFlour)
+local readyShape = MakeDough.shape(readyMake)
+local readyGrade = MakeDough.grade(readyMake)
+check("a pass on a ready dough is not stored", (MakeDough.validateRoll(readyMake, pass(0))), nil)
+check("a pass on a ready dough is not previewed", has and MakeDough.keptPass(readyMake, pass(0)) == nil, true)
+-- A long held back-and-forth (sixteen turns in one hold) on the ready dough, as the station
+-- commits it: nothing stored, same shape, same grade.
+do
+	local pts = { { x = 0, y = 0.9 } }
+	for k = 1, 16 do
+		walk(pts, pts[#pts], { x = 0, y = if k % 2 == 1 then -0.9 else 0.9 }, 0.04)
+	end
+	local drag = MakeDough.rollDrag(pts[1])
+	local sent = 0
+	local function commit(l: any)
+		if l and (l.x2 - l.x1) ^ 2 + (l.y2 - l.y1) ^ 2 >= cfg.minStroke ^ 2 and MakeDough.validateRoll(readyMake, l) then
+			sent += 1
+			table.insert(readyMake.strokes, l)
+		end
+	end
+	local changed = 0
+	for i = 2, #pts do
+		commit(drag.move(pts[i]))
+		if has and not same(MakeDough.preview(readyMake, drag.line()), readyShape) then
+			changed += 1
+		end
+	end
+	commit(drag.close())
+	check("long hold on a ready dough: no pass stored", sent, 0)
+	check("long hold on a ready dough: the shown dough never changes", changed, 0)
+	check("long hold on a ready dough: same shape", same(MakeDough.shape(readyMake), readyShape), true)
+	check("long hold on a ready dough: same grade", MakeDough.grade(readyMake).score, readyGrade.score)
+	-- Undo then takes back the third roll, the last one that counted.
+	local undone = dough({ pass(90), pass(270) }, fullFlour)
+	check("Undo after extra rolling takes back the last roll that counted", #readyMake.strokes, 3)
+	check("after that Undo the dough is small again", MakeDough.rollAdvice(undone), "small")
+end
+-- Capacity: 24 short part passes that leave the dough short of ready. A 25th is refused, and
+-- the held pass shows no growth.
+do
+	local m = dough({})
+	for _ = 1, cfg.maxStrokes do
+		table.insert(m.strokes, { x1 = 0.3, y1 = -0.5, x2 = 0.3, y2 = 0.5 })
+	end
+	local S = MakeDough.shape(m)
+	check("capacity: 24 part passes are not ready", ready(S), false)
+	check("capacity: a 25th pass is refused", (MakeDough.validateRoll(m, pass(0))), nil)
+	check("capacity: the held 25th shows no growth", has and same(MakeDough.preview(m, pass(0)), S), true)
+end
+
 for _, l in report do
 	print("  " .. l)
 end
