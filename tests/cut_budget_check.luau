@@ -197,10 +197,11 @@ local OFFSETS = { 0, 0.08 }
 local REACHES = { 1.2, 1.55 }
 local stats = {}
 local function stat(key: string)
-	stats[key] = stats[key] or { n = 0, refusedA = 0, refusedB = 0, limitA = 0, limitB = 0, compA = 0, compB = 0, strA = 0, strB = 0, both = 0 }
+	stats[key] = stats[key] or { n = 0, refusedA = 0, refusedB = 0, limitA = 0, limitB = 0, compA = 0, compB = 0, strA = 0, strB = 0, both = 0,
+		credA = 0, credB = 0, lower = 0, lower05 = 0, worst = 0, wobA = 0, wobB = 0 }
 	return stats[key]
 end
-local parity, appendOnly, serverSame, total = 0, 0, 0, 0
+local parity, appendOnly, serverSame, total, attempts, newlyRefused = 0, 0, 0, 0, 0, 0
 for _, a in AMPS do
 	for _, w in WAVES do
 		for _, e in STEPS do
@@ -217,6 +218,7 @@ for _, a in AMPS do
 						table.insert(events, P(ux * t + nx * side, uy * t + ny * side))
 						t += e
 					end
+					attempts += 1
 					if inRange(events) then
 						total += 1
 						local before = recordBefore(events)
@@ -229,6 +231,9 @@ for _, a in AMPS do
 						end
 						local cutA = CutStroke.grade(before, Scoring.ROUND, false)
 						local cutB = CutStroke.grade(st.points, Scoring.ROUND, false)
+						if cutA and not cutB then
+							newlyRefused += 1
+						end
 						if total % 9 == 0 then
 							local ok, stored = serverKeeps(st.points)
 							if (ok == (cutB ~= nil)) and (not ok or stored) then
@@ -250,6 +255,21 @@ for _, a in AMPS do
 								s.compB += cutB.completeness
 								s.strA += cutA.straightness
 								s.strB += cutB.straightness
+								-- Path credit (straightness x completeness credit) and the
+								-- "wobbled off a straight line" note (straightness under 0.75).
+								local qA, stA = Scoring.cutQuality(cutA)
+								local qB, stB = Scoring.cutQuality(cutB)
+								s.credA += qA
+								s.credB += qB
+								if qB < qA - 1e-9 then
+									s.lower += 1
+								end
+								if qB < qA - 0.05 then
+									s.lower05 += 1
+								end
+								s.worst = math.min(s.worst, qB - qA)
+								s.wobA += if stA < 0.75 then 1 else 0
+								s.wobB += if stB < 0.75 then 1 else 0
 							end
 						end
 					end
@@ -262,7 +282,8 @@ end
 check("sweep: stream = replica on every stroke", parity, total)
 check("sweep: appends only, shown outputs stay, on every stroke", appendOnly, total)
 check("sweep: the server agrees with the client grade and stores the samples", serverSame, total)
-note(string.format("sweep: %d synthetic strokes (6 wobble sizes x 3 wavelengths x 4 event spacings x 2 offsets x 2 lengths x 12 angles; strokes that leave the accepted range are left out), assist off, round dough", total))
+note(string.format("sweep: %d synthetic strokes (6 wobble sizes x 3 wavelengths x 4 event spacings x 2 offsets x 2 lengths x 12 angles%s), assist off, round dough", total,
+	if attempts > total then string.format("; %d that leave the accepted range left out", attempts - total) else ""))
 note("| Wobble (cut units) | Strokes | Refused 7b-1 -> now | Stopped at the limit 7b-1 -> now | Mean completeness* | Mean straightness* |")
 note("|---|---|---|---|---|---|")
 for _, key in { "wobble 0.00", "wobble 0.02", "wobble 0.04", "wobble 0.06", "wobble 0.09", "wobble 0.12", "all" } do
@@ -274,8 +295,19 @@ for _, key in { "wobble 0.00", "wobble 0.02", "wobble 0.04", "wobble 0.06", "wob
 	end
 end
 note("* over strokes accepted under both rules")
+note("Path credit per cut (straightness x completeness credit; the Cut grade scales its layout score by the mean of these), over strokes accepted under both rules:")
+note("| Wobble (cut units) | Both accepted | Mean credit 7b-1 -> now | Lower now | Lower by more than 0.05 | Largest drop | Wobbled note 7b-1 -> now |")
+note("|---|---|---|---|---|---|---|")
+for _, key in { "wobble 0.00", "wobble 0.02", "wobble 0.04", "wobble 0.06", "wobble 0.09", "wobble 0.12", "all" } do
+	local s = stats[key]
+	if s then
+		local b = math.max(s.both, 1)
+		note(string.format("| %s | %d | %.3f -> %.3f | %d (%.1f%%) | %d | %.3f | %d -> %d |", key, s.both, s.credA / b, s.credB / b, s.lower, 100 * s.lower / b,
+			s.lower05, s.worst, s.wobA, s.wobB))
+	end
+end
 local all = stats.all
-check("sweep: no stroke refused now that the 7b-1 rule accepted", all ~= nil and all.refusedB <= all.refusedA, true)
+check("sweep: no stroke refused now that the 7b-1 rule accepted", newlyRefused, 0)
 check("sweep: fewer strokes stop at the limit", all ~= nil and all.limitB < all.limitA, true)
 
 for _, l in report do
