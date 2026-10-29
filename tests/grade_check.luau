@@ -501,6 +501,11 @@ check("server topping: drawn on the dough", math.abs(PrepGeometry.toPizza(MakeDo
 -- burnt food holds the grade, continuously. Boundary table: for light 18, regular 24 and well 30,
 -- just before, at and after every boundary, Make 99 / Cut 100 and Make 100 / Cut 100, Wait 100.
 local oven = Config.Oven
+-- The hold is off by default (slice 7b-1); this section checks the opt-in curve, so it turns
+-- it on and puts the default back at the end of the section.
+local capDefault = oven.foodCapOn
+check("default: the food-state hold is off", capDefault, false)
+oven.foodCapOn = true
 check("proposal: burnt at 36", oven.burntAt, 36)
 check("proposal: hold 35", oven.foodCap, 35)
 check("proposal: raw until 8", oven.rawUntil, 8)
@@ -521,10 +526,11 @@ local function bakeByHand(target: number, t: number): number
 	return if over <= 0 then 100 else whole(100 * math.clamp(1 - over / 10, 0, 1))
 end
 local function serveAt(bakeId: string, t: number, makeScore: number, capOn: boolean): (any, any)
+	local was = oven.foodCapOn
 	oven.foodCapOn = capOn
 	local b = Scoring.bake(bakeId, t)
 	local o = Scoring.order(grade(100), grade(makeScore), b, grade(100))
-	oven.foodCapOn = true
+	oven.foodCapOn = was
 	return b, o
 end
 local times = { 0, 7.9, 8, 8.1, 9.9, 10, 11.9, 12, 12.1, 15.9, 16, 16.1, 19.9, 20, 20.1, 21.9, 22, 22.1, 25.9, 26, 26.1, 27.9, 28, 28.1, 31.9, 32, 32.1, 33, 34, 35, 35.9, 36, 36.1, 38, 40, 48 }
@@ -619,6 +625,57 @@ local br = bSession.shift.customers[1].result
 check("serve burnt: grade 35", br.overall, 35)
 check("serve burnt: hold on Bake's notes", br.bake.notes[1], "Burnt: grade held to 35")
 check("serve burnt: Make's notes untouched", br.make.notes[1] ~= "Burnt: grade held to 35", true)
+oven.foodCapOn = capDefault
+
+-- 10b. The default (slice 7b-1, hold off; Astra r16 probe list): just before, at and after 8,
+-- 12, 32 and 36 s, and 34 s, for light, regular and well. Bake is the distance from the asked
+-- doneness until 36 s and 0 strictly after it; nothing holds the grade; the grade is the
+-- weighted join (Make 100, Cut 100, Wait 100 here).
+note("")
+note("| Bake | Time s | State | Food | Bake score | Grade | Coins | XP |")
+note("|---|---|---|---|---|---|---|---|")
+for _, bakeId in { "light", "regular", "well" } do
+	local target = oven.targets[bakeId]
+	for _, t in { 7.9, 8, 8.1, 11.9, 12, 12.1, 31.9, 32, 32.1, 34, 35.9, 36, 36.1 } do
+		local b = Scoring.bake(bakeId, t)
+		local o = Scoring.order(grade(100), grade(100), b, grade(100))
+		local burnt = t > 36
+		local bh = if burnt then 0 else bakeByHand(target, t)
+		local gh = whole(50 + 0.3 * bh + 20)
+		local name = string.format("default %s %.1fs", bakeId, t)
+		check(name .. ": burnt only past 36 s", Scoring.bakeState(target, t) == "burnt", burnt)
+		check(name .. ": Bake", b.score, bh)
+		check(name .. ": no hold", o.held, nil)
+		check(name .. ": cap none", b.detail.cap, 100)
+		check(name .. ": grade", o.grade, gh)
+		check(name .. ": coins", o.coins, whole(12 * gh / 100))
+		check(name .. ": XP", o.xp, whole(10 * gh / 100))
+		check(name .. ": notes", b.notes[1], if burnt then "Burnt" elseif math.abs(t - target) <= 2 then nil else string.format("Baked %.0fs %s %s", math.abs(t - target), if t < target then "short of" else "past", bakeId))
+		note(string.format("| %s | %.1f | %s | %s | %d | %d | %d | %d |", bakeId, t, Scoring.bakeState(target, t), b.detail.food, b.score, o.grade, o.coins, o.xp))
+	end
+end
+-- The served burnt pizza under the default: Bake 0, the grade the weighted join, no hold.
+local burntDefault = { id = 93, ticketId = 92, stage = "cutting", make = makeOf(cleanDough(), sauces.clean, cheeses.clean), toppings = {}, cuts = cutsPerfect, bakeSeconds = 40 }
+local dSession = {
+	shift = {
+		customers = { { id = 92, status = "ordered", order = { recipe = "cheese", bake = "well", slices = 8 }, arrivedAt = workspace:GetServerTimeNow() } },
+		pizzas = { [93] = burntDefault },
+		ovens = { false, false },
+		ingredients = {},
+		nextArrival = 1,
+		customerCount = 5,
+		tips = 0,
+		xp = 0,
+		tutorial = false,
+	},
+} :: any
+check("default serve burnt: accepted", (ShiftService.apply(dSession, "serve", { pizzaId = 93, ticketId = 92 })), true)
+local dr = dSession.shift.customers[1].result
+check("default serve burnt: Bake 0", dr.bake.score, 0)
+check("default serve burnt: not held", dr.held, nil)
+check("default serve burnt: note", dr.bake.notes[1], "Burnt")
+check("default serve burnt: grade = weighted", dr.overall, dr.weighted)
+note(string.format("default serve, well asked, 40 s: Make %d, Bake %d, Cut %d -> grade %d (not held)", dr.make.score, dr.bake.score, dr.cut.score, dr.overall))
 
 -- 11. Slice 1: Service is a 0.85-1.00 pay modifier before integer rounding. The final coin cut
 -- can exceed 15 % on small payouts. Low-payout cases (Wait 100 against Wait 40, Service's floor):

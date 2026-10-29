@@ -151,7 +151,7 @@ local function cleanMake(act: (string, any) -> (), pizza: any)
 end
 
 local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true, correctSummary = true }
-local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true }
+local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true, foodCap = true }
 
 if RunService:IsStudio() then
 	local debug = Instance.new("BindableFunction")
@@ -204,6 +204,12 @@ if RunService:IsStudio() then
 			-- server session. Shifts started after it use it; restartShift starts one now.
 			Config.Dev.mixedOrders = value == true
 			return "ok"
+		elseif command == "foodCap" then
+			-- value = true/false: the food-state hold on the grade (Config.Oven.foodCapOn, off by
+			-- default), for this server session, to compare it in play tests. Orders served
+			-- after it use it.
+			Config.Oven.foodCapOn = value == true
+			return "ok foodCapOn=" .. tostring(Config.Oven.foodCapOn)
 		elseif command == "cutAssist" then
 			-- value = true/false: the cutting assist (Config.Cut.assist) for this player's current
 			-- shift, for A/B play tests on a test store. Cuts already made keep how they were graded.

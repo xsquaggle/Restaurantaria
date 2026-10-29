@@ -44,8 +44,10 @@ Config.Oven = {
 	-- window's end (well 30 + 2), so no pizza baked inside its window is ever held. The Bake score
 	-- itself is only the distance from the asked doneness (it no longer drops to 0 past burntAt).
 	-- Every value is a proposal, NOT approved (the 35 cap and the 36 s burn time are Lawson's).
-	-- foodCapOn = false is today's rule (Bake 0 past burntAt, no hold), kept for comparison.
-	foodCapOn = true,
+	-- OFF by default (decided, Astra r16 option (a); built in slice 7b-1): the rule is Bake 0
+	-- past burntAt (burnt strictly after 36 s) and no hold. The hold is an opt-in test config:
+	-- set foodCapOn = true (or the Studio debug command foodCap true) to compare it.
+	foodCapOn = false,
 	foodCap = 35,
 	rawUntil = 8,
 	cookedFrom = 12,
