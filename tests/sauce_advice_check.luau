@@ -59,12 +59,18 @@ local tri = {}
 for i, deg in { 90, 210, 330 } do
 	tri[i] = P(0.4 * math.cos(math.rad(deg)), 0.4 * math.sin(math.rad(deg)))
 end
+local six = {}
+for k = 0, 5 do
+	six[k + 1] = P(0.45 * math.cos(math.rad(60 * k)), 0.45 * math.sin(math.rad(60 * k)))
+end
 local wide = circle(1.1)
 
 local records = {
 	{ "even adequate", sauceOf(tri, { circle(0.3), circle(0.5), circle(0.7) }), nil },
 	{ "rim spill", sauceOf(tri, { circle(0.3), circle(0.5), circle(0.7), circle(0.88) }), "any" },
 	{ "board spill", sauceOf(tri, { circle(0.3), circle(0.6), circle(0.9), slice(wide, 1, 21), slice(wide, 21, 41) }), "spill" },
+	-- sauce_cheese_check's heavy record: sauce on the crust, none off the dough.
+	{ "crust, no spill", sauceOf(six, { circle(0.2), circle(0.4), circle(0.6), circle(0.75) }), "crust" },
 	{ "one pour, not spread", sauceOf({ P(0.2, 0) }, {}), nil },
 }
 table.insert(report, "record          Next   advice                                          sauce  clean  crust   off    clean part costs")
@@ -80,6 +86,10 @@ for _, rec in records do
 		check(name .. ": Next available", MakeSauce.canFinish(sauce), true)
 		if want == nil then
 			check(name .. ": no advice", advice, nil)
+		elseif want == "crust" then
+			check(name .. ": crust advice", advice, "A little sauce on the crust. You can continue.")
+			check(name .. ": crust note in the grade", table.find(g.notes, "Sauce on the crust") ~= nil, true)
+			check(name .. ": nothing off the dough", g.detail.off, 0)
 		elseif want == "spill" then
 			check(name .. ": spill advice", advice, "Some sauce spilled. You can continue or undo.")
 			check(name .. ": spill note in the grade", table.find(g.notes, "Sauce spilled off the dough") ~= nil, true)

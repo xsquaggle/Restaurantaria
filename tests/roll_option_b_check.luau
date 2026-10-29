@@ -5,7 +5,8 @@
 -- ready (Open 12). Deterministic passes and pointer paths through the shared logic the server
 -- and the Make station use (MakeDough.shape, MakeDough.preview, MakeDough.rollDrag,
 -- MakeDough.rollAdvice). The "before" rows replay the slice 6 logic and are checked as showing
--- the faults. Synthetic paths, not a hand: a real-mouse try is still owed.
+-- the faults. Synthetic paths, plus Lawson's seven recorded passes from slice 6 (section 1); a
+-- real-mouse try of this build is still owed.
 
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
@@ -71,24 +72,46 @@ do
 end
 
 ------------------------------------------------------------------------------------------
--- 1. Lawson's real-mouse try (2026-10-28 23:28 UTC): seven alternating passes up and down gave
--- dough 67, "too big and thin". The same seven, alternating direction along one line.
+-- 1. Lawson's real-mouse try (2026-10-28 23:28 UTC): seven passes up and down gave dough 67,
+-- "too big and thin" (slice 6 evidence, real-mouse-try.txt). First a synthetic stand-in, seven
+-- full passes alternating along one vertical line; then his own seven passes as the server
+-- stored them (pizza-local).
 
 local seven = {}
 for i = 1, 7 do
 	seven[i] = pass(if i % 2 == 1 then 90 else 270)
 end
 local g7 = MakeDough.grade(dough(seven, fullFlour))
-check("Lawson's seven passes: size full marks", g7.detail.size, 1)
-check("Lawson's seven passes: roundness full marks", g7.detail.round, 1)
-check("Lawson's seven passes: roll part 100", g7.detail.roll, 100)
-check("Lawson's seven passes, floured: Dough 100", g7.score, 100)
-check("Lawson's seven passes: no 'too big' note", table.find(g7.notes, "Dough too big and thin"), nil)
+check("seven synthetic passes: size full marks", g7.detail.size, 1)
+check("seven synthetic passes: roundness full marks", g7.detail.round, 1)
+check("seven synthetic passes: roll part 100", g7.detail.roll, 100)
+check("seven synthetic passes, floured: Dough 100", g7.score, 100)
+check("seven synthetic passes: no 'too big' note", table.find(g7.notes, "Dough too big and thin"), nil)
 note(string.format("seven alternating passes: Dough %d, mean radius %.4f, %.4f x %.4f", g7.score, g7.detail.meanRadius, g7.detail.major, g7.detail.minor))
 -- Ready after the third: the fourth to seventh leave the dough exactly as the third left it.
 local three = { seven[1], seven[2], seven[3] }
 check("ready after three passes", ready(MakeDough.shape(dough(three))), true)
 check("passes four to seven change nothing", same(MakeDough.shape(dough(three)), MakeDough.shape(dough(seven))), true)
+
+local function line(x1: number, y1: number, x2: number, y2: number): any
+	return { x1 = x1, y1 = y1, x2 = x2, y2 = y2 }
+end
+local his = {
+	line(0.036, 0.606, 0.036, -0.955),
+	line(0.090, -0.955, 0.090, 1.176),
+	line(-0.123, 1.176, 0.538, -0.985),
+	line(0.280, -1.063, -0.273, 1.089),
+	line(-0.109, 1.131, 0.339, -1.260),
+	line(0.135, -1.299, -0.359, 1.527),
+	line(-0.245, 1.548, 0.109, -0.574),
+}
+local gHis = MakeDough.grade(dough(his, fullFlour))
+local hisThree = { his[1], his[2], his[3] }
+check("Lawson's own seven passes: ready after his third", ready(MakeDough.shape(dough(hisThree))), true)
+check("Lawson's own seven passes: four to seven change nothing", same(MakeDough.shape(dough(hisThree)), MakeDough.shape(dough(his))), true)
+check("Lawson's own seven passes, floured: Dough 100", gHis.score, 100)
+check("Lawson's own seven passes: no 'too big' note", table.find(gHis.notes, "Dough too big and thin"), nil)
+note(string.format("Lawson's own seven passes (graded 67 on slice 6): Dough %d, mean radius %.4f, %.4f x %.4f", gHis.score, gHis.detail.meanRadius, gHis.detail.major, gHis.detail.minor))
 
 ------------------------------------------------------------------------------------------
 -- 2. No sequence of passes does harm once ready, and none overshoots full size. 400 seeded
