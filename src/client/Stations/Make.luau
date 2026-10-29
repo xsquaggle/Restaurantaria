@@ -20,8 +20,9 @@
 --
 -- Sauce: a press on the dough is a pour unless it moves Config.Sauce.tapPixels first, then it is
 -- a spread (plan rev 6, D8); a drag from the pot pours where it is released. The live spread is
--- the server's own spread function applied to the path so far. Cheese: hold and drag to
--- sprinkle (PrepFood.sampler); pinches are drawn at once and sent in batches of up to
+-- the server's own spread function applied to the path so far. Cheese: tap the bowl to pick up
+-- the shaker (that pours nothing), then press and hold over the board to pour (MakeCheese.pour:
+-- by travel and, held still, by time); pinches are drawn at once and sent in batches of up to
 -- Config.Cheese.batchSize, one batch every Config.Cheese.batchGap s while held, the rest on
 -- release.
 -- Actions for one pizza go out one at a time, so a reply can never land on a later one.
@@ -91,6 +92,10 @@ local PIN_REST_TURN = -12
 -- shows only once the server would keep it, minStroke long, so it takes up its growth here
 -- instead of jumping). Shrinking (Undo) and a new pizza snap. Proposal.
 local DOUGH_EASE = 0.06
+-- The cheese shaker: drawn size (share of F), and its shake while pouring (degrees, per second).
+local SHAKER_SIZE = 0.3
+local SHAKE_DEGREES = 7
+local SHAKE_RATE = 30
 local SNAP = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local STEP_NAMES = { flour = "Flour", dough = "Dough", roll = "Roll", sauce = "Sauce", cheese = "Cheese", toppings = "Toppings" }
@@ -301,6 +306,19 @@ function Make.new(ctx: any, container: Frame)
 		Parent = hand,
 	})
 	Art.apply(ladle, "tool_ladle_loaded")
+	-- The cheese shaker in the hand, its base just above the pointer so the cheese lands in view.
+	-- DECLARED PLACEHOLDER: the cheese bowl's art until Astra's shaker (512 px master) arrives.
+	local shaker = Ui.new("ImageLabel", {
+		Name = "Shaker",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.fromOffset(F * SHAKER_SIZE, F * SHAKER_SIZE),
+		ZIndex = 21,
+		Visible = false,
+		Parent = hand,
+	})
+	Art.apply(shaker, "tool_cheese_bowl")
+	local shakerScale = Motion.scale(shaker)
 	-- The player's sauce and cheese, between the dough and the hand.
 	local food = MakeLayers.new(dough, 5)
 
@@ -906,6 +924,28 @@ function Make.new(ctx: any, container: Frame)
 		return G.toDough(MakeDough.shape(shown(current)), { x = p.X, y = p.Y })
 	end
 
+	-- The shaker: chosen by a tap (or a drag) on the cheese bowl and kept in the hand until it is
+	-- tapped back, the step or ticket changes or the station is left. Choosing and carrying it
+	-- pour nothing (MakeCheese.pour starts only on a fresh press on the board).
+	local shakerOn = false
+	local function showShaker(position: Vector3?)
+		shaker.Visible = position ~= nil
+		if position then
+			local o = dough.AbsolutePosition
+			shaker.Position = UDim2.fromOffset(position.X - o.X, position.Y - o.Y - 4)
+		end
+	end
+	local function putShakerBack()
+		shakerOn = false
+		shaker.Visible = false
+		shaker.Rotation = 0
+		Motion.stop(shakerScale)
+		shakerScale.Scale = 1
+	end
+	local function overBoard(position: Vector3): boolean
+		return toLocal(position).Magnitude <= MakeDough.BOARD_EDGE
+	end
+
 	local ladleArt = ""
 	local function showLadle(position: Vector3?, loaded: boolean)
 		ladle.Visible = position ~= nil
@@ -1020,15 +1060,12 @@ function Make.new(ctx: any, container: Frame)
 			end
 		end
 	end
-	local function cheeseAt(position: Vector3)
-		local st = live
-		if not st or st.kind ~= "cheese" or not current then
-			return
-		end
-		for _, p in st.sampler.feed(toDoughLocal(position)) do
+	-- Queues a held pour's pinches: past the server's reach nothing lands, and the pinches after
+	-- such a gap are a new stroke (the server checks the spacing within one). Returns how many.
+	local function emitCheese(st: any, pinches: { any }): number
+		local n = 0
+		for _, p in pinches do
 			if p.x * p.x + p.y * p.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH then
-				-- Out of reach: nothing lands, and the pinches after the gap are a new stroke
-				-- (the server checks the spacing within one).
 				st.gap = true
 			elseif cheeseRoom(st) > 0 then
 				if st.gap and st.any then
@@ -1039,8 +1076,18 @@ function Make.new(ctx: any, container: Frame)
 				st.gap = false
 				st.any = true
 				table.insert(st.pending, p)
+				n += 1
 			end
 		end
+		return n
+	end
+	local function cheeseAt(position: Vector3)
+		local st = live
+		if not st or st.kind ~= "cheese" or not current then
+			return
+		end
+		showShaker(position)
+		emitCheese(st, st.pour.move(toDoughLocal(position), overBoard(position), os.clock()))
 		flushCheese(st, false)
 		redraw()
 	end
@@ -1103,7 +1150,9 @@ function Make.new(ctx: any, container: Frame)
 				end
 			end
 		elseif st.kind == "cheese" then
-			-- Every pinch already drawn goes out; a ticket switch (commit false) drops them.
+			-- Every pinch already drawn goes out; a ticket switch (commit false) drops them. The
+			-- pour stops at once; the shaker stays in the hand.
+			shaker.Rotation = 0
 			if commit then
 				flushCheese(st, true)
 			end
@@ -1171,9 +1220,12 @@ function Make.new(ctx: any, container: Frame)
 
 	function beginCheese(input: InputObject)
 		live = hold("cheese", input)
-		live.sampler = PrepFood.sampler()
+		live.pour = MakeCheese.pour()
 		live.pending, live.first, live.any, live.gap, live.lastFlush = {}, true, false, false, -math.huge
-		cheeseAt(input.Position)
+		showShaker(input.Position)
+		emitCheese(live, live.pour.press(toDoughLocal(input.Position), overBoard(input.Position), os.clock()))
+		flushCheese(live, false)
+		redraw()
 	end
 
 	pad.InputBegan:Connect(function(input: InputObject)
@@ -1205,7 +1257,8 @@ function Make.new(ctx: any, container: Frame)
 			live.q0 = clampReach(toDoughLocal(input.Position))
 			live.path, live.length, live.moved = { live.q0 }, 0, false
 			showLadle(input.Position, true)
-		elseif shown(current).step == "cheese" then
+		elseif shown(current).step == "cheese" and shakerOn then
+			-- A fresh press with the shaker in the hand pours while it is held.
 			beginCheese(input)
 		end
 	end)
@@ -1224,8 +1277,19 @@ function Make.new(ctx: any, container: Frame)
 			dropStale(input)
 		end
 		if isPress(input) and not live and current and shown(current).step == "cheese" then
-			-- Cheese lands once the hand is over the dough.
-			beginCheese(input)
+			if shakerOn then
+				-- A second tap puts the shaker back.
+				putShakerBack()
+			else
+				-- Picked up: it follows the pointer and pours nothing until a fresh press on the
+				-- board.
+				live = hold("carry", input)
+				shakerOn = true
+				showShaker(input.Position)
+				if not Motion.reduced() then
+					Motion.pop(shakerScale, 0.9, 1.08, 0.22)
+				end
+			end
 		end
 	end)
 	crock.InputBegan:Connect(function(input: InputObject)
@@ -1261,6 +1325,11 @@ function Make.new(ctx: any, container: Frame)
 	end
 	ctx.connect(UserInputService.InputChanged, function(input: InputObject)
 		local st = live
+		if not st and shakerOn and input.UserInputType == Enum.UserInputType.MouseMovement then
+			-- The chosen shaker hovers with the mouse (a finger leaves it where it was let go).
+			showShaker(input.Position)
+			return
+		end
 		if not st or not ownsInput(input) then
 			return
 		end
@@ -1275,6 +1344,9 @@ function Make.new(ctx: any, container: Frame)
 			return
 		elseif st.kind == "cheese" then
 			cheeseAt(input.Position)
+			return
+		elseif st.kind == "carry" then
+			showShaker(input.Position)
 			return
 		end
 		if st.kind == "flour" then
@@ -1305,6 +1377,13 @@ function Make.new(ctx: any, container: Frame)
 			return
 		end
 		endLive(true, input)
+	end)
+	-- The window losing focus stops a pour at once (the release may never arrive).
+	ctx.connect(UserInputService.WindowFocusReleased, function()
+		local st = live
+		if st and st.kind == "cheese" then
+			endLive(true)
+		end
 	end)
 
 	-- Undo, inside the current step: the dough step takes back the last roll, then the ball, then
@@ -1380,8 +1459,10 @@ function Make.new(ctx: any, container: Frame)
 		toppings.refresh(snap)
 		local focus = ctx.focusPizza(snap, "topping")
 		if current and (not focus or focus.id ~= current.id) then
-			-- Another ticket: a held drag stays with the pizza it started on, so drop it.
+			-- Another ticket: a held drag stays with the pizza it started on, so drop it, and the
+			-- shaker goes back.
 			endLive(false)
+			putShakerBack()
 		end
 		current = focus
 		-- The board shows the dough, sauce and cheese steps; the toppings step is the Topping
@@ -1405,6 +1486,11 @@ function Make.new(ctx: any, container: Frame)
 		if onBoard and key ~= stepsKey then
 			stepsKey = key
 			renderSteps(list, stepName)
+		end
+		if shakerOn and not (onBoard and m and m.step == "cheese") then
+			-- The cheese step is over (or not on screen): the shaker goes back.
+			endLive(true)
+			putShakerBack()
 		end
 		if onBoard and m then
 			-- Each step's own tools in the two tool cells.
@@ -1461,7 +1547,18 @@ function Make.new(ctx: any, container: Frame)
 		end
 		local st = live
 		if st and st.kind == "cheese" then
-			flushCheese(st, false)
+			if not st.mouse and (st.input.UserInputState == Enum.UserInputState.Cancel or st.input.UserInputState == Enum.UserInputState.End) then
+				-- A cancelled touch stops the pour at once.
+				endLive(true)
+			else
+				-- Held still, the shaker keeps pouring (one pinch per Config.Cheese.flowTime).
+				local added = emitCheese(st, st.pour.tick(os.clock()))
+				flushCheese(st, false)
+				shaker.Rotation = if st.pour.stopped or Motion.reduced() then 0 else SHAKE_DEGREES * math.sin(os.clock() * SHAKE_RATE)
+				if added > 0 then
+					redraw()
+				end
+			end
 		end
 	end
 
@@ -1469,6 +1566,7 @@ function Make.new(ctx: any, container: Frame)
 		if not active then
 			endLive(false)
 			pinHome(false)
+			putShakerBack()
 		end
 	end
 
@@ -1490,7 +1588,7 @@ function Make.new(ctx: any, container: Frame)
 			return if advice then { text = advice } else nil
 		elseif m.step == "cheese" then
 			if MakeCheese.count(m.cheese) == 0 then
-				return { text = "Drag over the sauce to sprinkle cheese" }
+				return { text = if shakerOn then "Press and hold over the pizza to shake on cheese" else "Tap the cheese to pick up the shaker" }
 			end
 			return nil
 		end
@@ -1547,9 +1645,12 @@ function Make.new(ctx: any, container: Frame)
 			elseif m.step == "cheese" and not ctx.learned["Make.cheeseNext"] then
 				local _, inside, spread = PrepFood.cheeseScore(MakeCheese.pinches(m.cheese))
 				if inside < Config.Cheese.fewBelow then
-					return { target = pad, text = "Hold and drag over the sauce to sprinkle cheese", from = side }
+					if not shakerOn then
+						return { target = bowl, text = "Tap the cheese to pick up the shaker", from = if compact then "right" else "below" }
+					end
+					return { target = pad, text = "Press and hold over the pizza to shake on cheese", from = side }
 				elseif spread < Config.Cheese.bunchedBelow then
-					return { target = pad, text = "Sprinkle the bare parts too", from = side }
+					return { target = pad, text = "Shake over the bare parts too", from = side }
 				end
 				return { target = nextButton.frame, text = "Cheese all over: tap Next", from = toNext }
 			end

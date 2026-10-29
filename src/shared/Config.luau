@@ -151,6 +151,9 @@ Config.Cheese = {
 	-- while a sprinkle is held (the rest go out on release).
 	batchSize = 8,
 	batchGap = 0.1,
+	-- A held pour (MakeCheese.pour) drops a pinch every PrepFood.PINCH_STEP of travel and, held
+	-- still, one every flowTime s (slice 7a, a proposal: about 24 pinches in 3.6 s of holding).
+	flowTime = 0.15,
 	-- Notes: fewer than fewBelow or more than manyAbove pinches on the edible area; spread under
 	-- bunchedBelow.
 	fewBelow = 20,

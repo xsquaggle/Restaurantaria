@@ -94,6 +94,65 @@ function MakeCheese.add(cheese: Cheese, points: { Vec }, newStroke: boolean)
 	end
 end
 
+-- One held pour of the shaker (Lawson 2026-10-28: the cheese poured over the table as soon as
+-- the drag left the bowl; Astra r19 R19-03). Choosing the shaker pours nothing; the client calls
+-- press() only for a fresh press made with the shaker already chosen. The flow then follows the
+-- pointer's travel (PrepFood.sampler, one pinch every PINCH_STEP) and, held still, time (one
+-- pinch every Config.Cheese.flowTime, so a deliberate still hold builds a pile), and only while
+-- the pointer is over the board: a press off it pours nothing, and leaving it ends the pour, so
+-- coming back needs a fresh press. tick() adds at most one pinch however long a frame stalled
+-- (no catch-up burst). Every call returns the pinches it placed (dough-local); consecutive
+-- pinches are at most PINCH_STEP apart, as the server checks.
+export type Pour = {
+	stopped: boolean,
+	press: (q: Vec, onBoard: boolean, now: number) -> { Vec },
+	move: (q: Vec, onBoard: boolean, now: number) -> { Vec },
+	tick: (now: number) -> { Vec },
+}
+
+function MakeCheese.pour(): Pour
+	local sampler = PrepFood.sampler()
+	local last: Vec? = nil
+	local lastPinch = 0
+	local pour = {} :: Pour
+	pour.stopped = false
+	function pour.press(q: Vec, onBoard: boolean, now: number): { Vec }
+		if pour.stopped or last then
+			return {}
+		end
+		if not onBoard then
+			pour.stopped = true
+			return {}
+		end
+		last, lastPinch = { x = q.x, y = q.y }, now
+		return sampler.feed(q)
+	end
+	function pour.move(q: Vec, onBoard: boolean, now: number): { Vec }
+		if pour.stopped or not last then
+			return {}
+		end
+		if not onBoard then
+			pour.stopped = true
+			return {}
+		end
+		local placed = sampler.feed(q)
+		last = { x = q.x, y = q.y }
+		if #placed > 0 then
+			lastPinch = now
+		end
+		return placed
+	end
+	function pour.tick(now: number): { Vec }
+		local at = last
+		if pour.stopped or not at or now - lastPinch < Config.Cheese.flowTime then
+			return {}
+		end
+		lastPinch = now
+		return { { x = at.x, y = at.y } }
+	end
+	return pour
+end
+
 -- The step's minimum: at least one pinch.
 function MakeCheese.canFinish(cheese: Cheese): boolean
 	return MakeCheese.count(cheese) > 0
