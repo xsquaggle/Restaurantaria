@@ -410,6 +410,26 @@ function MakeSauce.canFinish(sauce: Sauce): boolean
 	return pours > 0 and spreadMet
 end
 
+-- Sauce off the edible area is advice, never a stop (Lawson 2026-10-28: "sauce on the board,
+-- tap Undo" and "sauce on the crust" were way too strict). Once the step's minimum is met, one
+-- plain line (Astra r19's copy) says what happened and that the player can go on; Next stays
+-- available, and the grade's clean part (Config.Sauce cleanWeight, offWeight) is the only cost.
+MakeSauce.ADVICE_SPILL = "Some sauce spilled. You can continue or undo."
+MakeSauce.ADVICE_CRUST = "A little sauce on the crust. You can continue."
+
+function MakeSauce.advice(sauce: Sauce): string?
+	if not MakeSauce.canFinish(sauce) then
+		return nil
+	end
+	local _, crust, off = MakeSauce.measure((MakeSauce.replay(sauce)))
+	if off > Config.Sauce.spillAbove then
+		return MakeSauce.ADVICE_SPILL
+	elseif crust > Config.Sauce.crustAbove then
+		return MakeSauce.ADVICE_CRUST
+	end
+	return nil
+end
+
 ------------------------------------------------------------------------------------------
 -- Grade
 

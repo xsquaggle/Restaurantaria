@@ -1485,7 +1485,9 @@ function Make.new(ctx: any, container: Frame)
 			elseif not MakeSauce.canFinish(m.sauce) then
 				return { text = "Drag across the sauce to spread it" }
 			end
-			return nil
+			-- Every shift: one plain line about spill or crust sauce, Next still available.
+			local advice = MakeSauce.advice(m.sauce)
+			return if advice then { text = advice } else nil
 		elseif m.step == "cheese" then
 			if MakeCheese.count(m.cheese) == 0 then
 				return { text = "Drag over the sauce to sprinkle cheese" }
@@ -1525,19 +1527,21 @@ function Make.new(ctx: any, container: Frame)
 			local m = shown(current)
 			if m.step == "sauce" and not ctx.learned["Make.sauceNext"] then
 				local field, pours, spreadMet = MakeSauce.replay(m.sauce)
-				local coverage, crust, off = MakeSauce.measure(field)
+				local coverage = MakeSauce.measure(field)
 				if pours == 0 then
 					return { target = pad, text = "Tap the dough to pour a ladle of sauce", from = side }
 				elseif pours < Config.Sauce.targetPours then
 					return { target = pad, text = string.format("Pour %d ladles in all, spread apart", Config.Sauce.targetPours), from = side }
 				elseif not spreadMet then
 					return { target = pad, text = "Drag across the sauce to spread it", from = side }
-				elseif off > Config.Sauce.spillAbove then
-					return { target = undo.frame, text = "Sauce on the board: tap Undo", from = "below" }
-				elseif crust > Config.Sauce.crustAbove then
-					return { target = undo.frame, text = "Sauce on the crust: tap Undo", from = "below" }
 				elseif coverage < Config.Sauce.bareBelow then
 					return { target = pad, text = "Spread it out to the crust, covering the bare spots", from = side }
+				end
+				-- Spill and crust sauce are advice, never a stop (Lawson 2026-10-28): no glove, no
+				-- pointer at Undo, Next stays available; the grade's clean part already costs them.
+				local advice = MakeSauce.advice(m.sauce)
+				if advice then
+					return { text = advice }
 				end
 				return { target = nextButton.frame, text = "Sauce spread evenly: tap Next", from = toNext }
 			elseif m.step == "cheese" and not ctx.learned["Make.cheeseNext"] then
@@ -1579,8 +1583,6 @@ function Make.new(ctx: any, container: Frame)
 				return { target = nextButton.frame, text = "Ready \u{2014} next: sauce", from = toNext }
 			elseif advice == "small" then
 				return { target = pad, text = "Keep rolling until the dough reaches the inner guide edge", from = side }
-			elseif advice == "big" then
-				return { target = undo.frame, text = "Too big and thin: tap Undo", from = "below" }
 			end
 		end
 		return nil
