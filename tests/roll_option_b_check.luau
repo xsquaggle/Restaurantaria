@@ -328,15 +328,22 @@ do
 	check("Undo after extra rolling takes back the last roll that counted", #readyMake.strokes, 3)
 	check("after that Undo the dough is small again", MakeDough.rollAdvice(undone), "small")
 end
--- Capacity: 24 short part passes that leave the dough short of ready. A 25th is refused, and
--- the held pass shows no growth.
+-- Capacity: 24 passes that only graze the dough's edge (each stored through validateRoll) leave
+-- it short of ready. A 25th is refused, and the held 25th shows no growth.
 do
 	local m = dough({})
-	for _ = 1, cfg.maxStrokes do
-		table.insert(m.strokes, { x1 = 0.3, y1 = -0.5, x2 = 0.3, y2 = 0.5 })
+	for k = 1, cfg.maxStrokes do
+		local side = if k % 2 == 1 then 1 else -1
+		local x = side * (G.radiusAlong(MakeDough.shape(m), { x = 1, y = 0 }) - 0.0003)
+		local l = MakeDough.validateRoll(m, { x1 = x, y1 = -0.4, x2 = x, y2 = 0.4 })
+		if l then
+			table.insert(m.strokes, l)
+		end
 	end
+	check("capacity: 24 grazing passes stored", #m.strokes, cfg.maxStrokes)
 	local S = MakeDough.shape(m)
-	check("capacity: 24 part passes are not ready", ready(S), false)
+	check("capacity: 24 grazing passes are not ready", ready(S), false)
+	note(string.format("capacity fixture: 24 grazing passes, mean radius %.4f", meanOf(S)))
 	check("capacity: a 25th pass is refused", (MakeDough.validateRoll(m, pass(0))), nil)
 	check("capacity: the held 25th shows no growth", has and same(MakeDough.preview(m, pass(0)), S), true)
 end
