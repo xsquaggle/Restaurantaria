@@ -91,7 +91,7 @@ check("proposal: full disc", SauceCover.FULL, 1.6)
 check("proposal: full disc closes a patch (>= sqrt 2)", SauceCover.FULL >= math.sqrt(2), true)
 check("proposal: edge tolerance (2 HD px)", SauceCover.EDGE_TOL * 661 / 2 * MakeSauce.CELL <= 2, true)
 check("proposal: spill sectors / min / full", string.format("%d/%g/%g", SauceCover.SECTORS, SauceCover.SPILL_MIN, SauceCover.SPILL_FULL), "12/0.01/0.15")
-check("default renderer", Config.FoodArt.sauce, "material")
+check("default renderer (the discs are the A/B since slice 8a)", Config.FoodArt.sauce, "surface")
 check("default cheese family", Config.FoodArt.cheese, "v2")
 
 -- 1. The material cells: every field cell within the dough's edge (counted independently: grid

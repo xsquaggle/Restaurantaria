@@ -304,7 +304,10 @@ Config.Rewards = {
 -- cooked cheese family: "v2" Astra's r14 denser exports on the shared alpha, "v1" the r13 ones.
 -- MakeLayers.new can override both for a comparison view.
 Config.FoodArt = {
-	sauce = "material",
+	-- How the sauce is drawn (MakeLayers): "surface" (slice 8a, Astra r21: one continuous thick
+	-- material over the sauced area, thin sauce as specks beside it), "material" (slice 2: a
+	-- material disc per field cell, kept for the A/B) or "stamps" (r13 soft stamps, A/B only).
+	sauce = "surface",
 	cheese = "v2",
 	-- How the cheese is drawn (slice 8a; MakeLayers): "base" (Lawson 2026-11-01 22:08: the loose
 	-- shreds melt in the oven into a finished cheese base shaped from the shared map; the base is

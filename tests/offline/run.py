@@ -34,6 +34,7 @@ DEFAULT_CHECKS = [
     "tests/roll_option_b_check.luau",
     "tests/sauce_cheese_check.luau",
     "tests/sauce_cover_check.luau",
+    "tests/sauce_surface_check.luau",
     "tests/sauce_advice_check.luau",
     "tests/cheese_pour_check.luau",
     "tests/cheese_map_check.luau",

@@ -10,14 +10,19 @@
 -- map (sauce_material_raw_v2), sampled at the disc's own dough-local place over the one canonical
 -- -1..1 square, so neighbouring discs read as one continuous opaque material: covered patches
 -- close up, their edges reach out as far as the edge cells' credit, and thin sauce shows as
--- sparse specks, never as a wash (SauceCover.disc). The discs sit in one CanvasGroup; the cooked map (sauce_material_cooked_v2) is the same discs in a second
--- group over it, its GroupTransparency the cooking share, so the colour moves from raw to cooked
+-- sparse specks, never as a wash (SauceCover.disc). The discs sit in one CanvasGroup; the
+-- cooked map (sauce_material_cooked_v2) is the same discs in a second group over it, its GroupTransparency the cooking share, so the colour moves from raw to cooked
 -- under one unchanged mask (opaque wherever the sauce is). Cooking follows the food's own state
 -- (SauceCover.cooked), not the ticket. Sauce spilled past the dough's edge shows only as the board
 -- smear (sauce_board_spill_v2) at the recorded spill. A pour still mostly in place shows the
 -- dollop (P7), which cooks and scorches with the sauce.
--- Config.FoodArt.sauce = "stamps" (or the renderer option) keeps the r13 soft stamps for the
--- same-input A/B: one stamp on every second grid point, its opacity from the thickness there.
+-- Slice 8a (Astra r21), Config.FoodArt.sauce = "surface", the default: the covered sauce is one
+-- continuous surface of the same material (SauceCover.surface, drawn by FoodSurface: straight
+-- outline pieces where the credit crosses SOLID, clipped by the dough), raw and cooked surfaces
+-- with the cooked one fading in over the raw one, scorch as their colour, each square tinted by
+-- its deep-red share; only the specks of thin sauce it does not reach stay discs. "material"
+-- (the discs above) and "stamps" (the r13 soft stamps: one stamp on every second grid point, its
+-- opacity from the thickness there) are kept for the same-input A/B.
 -- Cheese: one pinch sprite per pinch, on the kit's shared canvas (footprint radius 0.17 dough-
 -- local = 0.95 of the canvas), each with a fixed turn; the cooked family is Astra's r14 v2
 -- exports on one shared alpha (or the r13 ones), the lower state in one group and the upper one
@@ -108,6 +113,7 @@ local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
 -- The cheese surfaces' drawing grid (see strideFor): strides dividing CheeseMap.G, and the
 -- least on-screen size of a drawn square.
 local STRIDES = { 1, 2, 3, 4, 6 }
+local SAUCE_STRIDES = { 1, 2, 3, 4, 6, 8 } -- dividing MakeSauce.GRID
 local MIN_TILE_PX = 4.5
 -- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
 -- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
@@ -156,7 +162,7 @@ end
 local ROLLS = { "food_dough_roll_01", "food_dough_roll_02", "food_dough_roll_03", "food_dough_roll_04", "food_dough_roll_05", "food_dough_roll_06" }
 
 export type Options = {
-	-- "material" or "stamps" (default Config.FoodArt.sauce).
+	-- "surface", "material" or "stamps" (default Config.FoodArt.sauce).
 	sauce: string?,
 	-- "v2" or "v1" (default Config.FoodArt.cheese).
 	cheese: string?,
@@ -178,6 +184,17 @@ export type CheeseInfo = {
 	tiles: number,
 }
 
+-- What the sauce last drew, for the proofs: the surface's tiles, its drawn area (dough-local) and
+-- its drawing grid's stride (nil in the other modes), and the discs drawn (with the surface, the
+-- specks beside it).
+export type SauceInfo = {
+	mode: string,
+	tiles: number,
+	drawn: number?,
+	specks: number,
+	stride: number?,
+}
+
 export type Layers = {
 	frame: Frame,
 	place: (Layers, number, number, number, any, number?) -> (),
@@ -186,6 +203,7 @@ export type Layers = {
 	sauce: (Layers, { number }?, { any }?) -> (),
 	cheese: (Layers, { any }?) -> (),
 	cheeseInfo: (Layers) -> CheeseInfo,
+	sauceInfo: (Layers) -> SauceInfo,
 }
 
 local function key(S: any, F: number): string
@@ -239,7 +257,9 @@ end
 
 function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): Layers
 	local opts: Options = options or {}
-	local stampsMode = (opts.sauce or Config.FoodArt.sauce) == "stamps"
+	local sauceMode = opts.sauce or Config.FoodArt.sauce
+	local stampsMode = sauceMode == "stamps"
+	local surfaceMode = sauceMode == "surface"
 	local CHEESES = cheeseStates(opts.cheese or Config.FoodArt.cheese)
 	local frame = Ui.new("Frame", { Name = "Food", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = zIndex, Parent = parent })
 	local doughLayer = Ui.new("Frame", { Name = "Dough", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = zIndex, Visible = false, Parent = frame })
@@ -275,6 +295,17 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	local strictSurface = FoodSurface.new(cheeseLayer, -2, "Strict", { color = CHEESE_RAW })
 	local baseSurface = FoodSurface.new(cheeseLayer, -2, "Base", { color = CHEESE_COLORS[1].color })
 	local pileSurface = FoodSurface.new(cheeseLayer, -1, "Piles", { color = CHEESE_COLORS[1].color })
+	-- Slice 8a sauce surfaces ("surface" mode): the raw material, and the cooked one fading in
+	-- over it in the oven; under the specks' groups (ZIndex 1 and 2 in the sauce layer).
+	local sauceSurfaces = if surfaceMode
+		then {
+			raw = FoodSurface.new(sauceLayer, -2, "SurfaceRaw", { image = "sauce_material_raw_v2", imagePx = MATERIAL_PX, span = SauceCover.SPAN }),
+			cooked = FoodSurface.new(sauceLayer, -1, "SurfaceCooked", { image = "sauce_material_cooked_v2", imagePx = MATERIAL_PX, span = SauceCover.SPAN }),
+		}
+		else nil
+	local sauceTiles: { SurfaceTiles.Tile } = {}
+	local sauceStride: number? = nil
+	local speckCount = 0
 	-- The map of the pinches last drawn, its look and tiles (nil until a view needs them).
 	local mapKey = ""
 	local cheeseLook: CheeseMap.Look? = nil
@@ -294,6 +325,20 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	-- (px in the frame).
 	local J: any = G.localStretch(S, F, flat)
 	local tileRot, tileA, tileB = 0, 1, 1
+	-- A surface's drawing grid: every `stride`-th node of its field's, the finest whose squares
+	-- (`step` dough-local apart) are at least MIN_TILE_PX on screen. A small pizza (the phone's
+	-- oven, about 2.4 px per cheese map square) drawn square by square shows a ragged outline,
+	-- each 2 px tile resolving its edge in a pixel or two; every second node gives about 5 px
+	-- tiles and a smooth chain of straight pieces (nothing a phone could show is lost).
+	local function strideFor(step: number, strides: { number }): number
+		local square = math.min(tileA, tileB) * step
+		for _, k in strides do
+			if square * k >= MIN_TILE_PX then
+				return k
+			end
+		end
+		return strides[#strides]
+	end
 	local sauceOrigin, cheeseOrigin = Vector2.zero, Vector2.zero
 	-- (Stamps) one per drawn grid point, with the fine cells it averages.
 	-- near: the cells within the stamp's reach, nearest first, with their distances (for the edge).
@@ -464,6 +509,10 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		for _, surf in { strictSurface, baseSurface, pileSurface } do
 			surf:place(Vector2.zero, screen, tileRot, tileA, tileB)
 		end
+		if sauceSurfaces then
+			sauceSurfaces.raw:place(Vector2.zero, screen, tileRot, tileA, tileB)
+			sauceSurfaces.cooked:place(Vector2.zero, screen, tileRot, tileA, tileB)
+		end
 		surfacesKey = ""
 		build()
 	end
@@ -557,6 +606,12 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		local hot = Color3.new(1, 1, 1):Lerp(SCORCH, SauceCover.scorched(seconds))
 		sauceRaw.GroupColor3 = hot
 		sauceCooked.GroupColor3 = hot
+		if sauceSurfaces then
+			-- The cooked surface fades in over the raw one (same tiles); the raw one is hidden
+			-- once covered. Scorch is the look colour of both.
+			sauceSurfaces.raw:look(hot, if k >= 1 and cookedOn then 1 else 0)
+			sauceSurfaces.cooked:look(hot, if cookedOn then 1 - k else 1)
+		end
 		local cook = Color3.new(1, 1, 1):Lerp(COOK_TINT, k)
 		local tint = Color3.new(cook.R * hot.R, cook.G * hot.G, cook.B * hot.B)
 		if tint ~= foodTint then
@@ -618,11 +673,42 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 	end
 
-	-- (Material) the discs of the field and the smear of its spill.
+	-- (Surface) the continuous surface of the field (SauceCover.surface), raw and, once the
+	-- pizza has been in the oven, cooked; each square tinted by its deep-red share.
+	local function deepTint(k: any): Color3
+		return Color3.new(1, 1, 1):Lerp(DEEP, k or 0)
+	end
+	local function drawSurface(field: { number }?)
+		local surfaces = sauceSurfaces :: any
+		if not field then
+			sauceTiles = {}
+			sauceStride = nil
+			surfaces.raw:clear()
+			surfaces.cooked:clear()
+			return
+		end
+		local stride = strideFor(MakeSauce.CELL, SAUCE_STRIDES)
+		sauceStride = stride
+		sauceTiles = SauceCover.surface(field, stride)
+		surfaces.raw:draw(sauceTiles, deepTint)
+		if cookedOn then
+			surfaces.cooked:draw(sauceTiles, deepTint)
+		else
+			surfaces.cooked:clear()
+		end
+	end
+
+	-- (Material) the discs of the field and the smear of its spill. With the surface, only the
+	-- specks of thin sauce it does not reach are discs.
 	local function drawMaterial(field: { number }?)
 		local seen: { [number]: boolean } = {}
+		if surfaceMode then
+			drawSurface(field)
+		end
+		speckCount = 0
 		if field then
-			for _, disc in SauceCover.discs(field) do
+			for _, disc in (if surfaceMode then SauceCover.specks(field) else SauceCover.discs(field)) do
+				speckCount += 1
 				seen[disc.cell] = true
 				local tile = tiles[disc.cell]
 				if not tile then
@@ -764,20 +850,6 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 	end
 
-	-- The surfaces' drawing grid: every `stride`-th node of the map's, the finest whose squares
-	-- are at least MIN_TILE_PX on screen. A small pizza (the phone's oven, about 2.4 px per map
-	-- square) drawn square by square shows a ragged outline, each 2 px tile resolving its edge
-	-- in a pixel or two; every second node gives about 5 px tiles and a smooth chain of straight
-	-- pieces (the fields are smooth: nothing a phone could show is lost).
-	local function strideFor(): number
-		local square = math.min(tileA, tileB) * CheeseMap.GRID_STEP
-		for _, k in STRIDES do
-			if square * k >= MIN_TILE_PX then
-				return k
-			end
-		end
-		return STRIDES[#STRIDES]
-	end
 	local cheeseFields: { { number } }? = nil
 	local tilesStride = 0
 	local function buildTiles(stride: number)
@@ -801,7 +873,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
 		end
 		local k = table.concat(parts, "|")
-		local stride = strideFor()
+		local stride = strideFor(CheeseMap.GRID_STEP, STRIDES)
 		if k == mapKey and cheeseLook then
 			if stride ~= tilesStride then
 				buildTiles(stride)
@@ -870,6 +942,16 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 		cheeseKey = k
 		drawShreds(if showShreds then list else {}, i, if cheeseView == "base" then math.clamp((melt - MELT_BASE) / (1 - MELT_BASE), 0, 1) else 0)
+	end
+
+	function layers.sauceInfo(_self: Layers): SauceInfo
+		return {
+			mode = sauceMode,
+			tiles = if sauceSurfaces then sauceSurfaces.raw:count() else 0,
+			drawn = if sauceSurfaces then SurfaceTiles.area(sauceTiles) else nil,
+			specks = speckCount,
+			stride = sauceStride,
+		}
 	end
 
 	function layers.cheeseInfo(_self: Layers): CheeseInfo

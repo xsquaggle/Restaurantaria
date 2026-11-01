@@ -27,6 +27,7 @@
 
 local Config = require(script.Parent.Config)
 local MakeSauce = require(script.Parent.MakeSauce)
+local SurfaceTiles = require(script.Parent.SurfaceTiles)
 
 local SauceCover = {}
 
@@ -130,6 +131,18 @@ local function reachLimit(field: { number }, i: number, x: number, y: number): n
 end
 SauceCover.reachLimit = reachLimit
 
+-- A material cell's deep-red share (0..1, in 0.05 steps): its 5x5 block's mean thickness, from
+-- DEEP_FROM even layers, full DEEP_SPAN later.
+function SauceCover.deep(field: { number }, i: number): number
+	local mean = 0
+	for _, j in blocks[i] do
+		mean += field[j]
+	end
+	mean /= #blocks[i]
+	local deep = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
+	return math.floor(deep * 20 + 0.5) / 20
+end
+
 local function round(scale: number): number
 	return math.max(SauceCover.STEP, math.floor(scale / SauceCover.STEP + 0.5) * SauceCover.STEP)
 end
@@ -150,13 +163,7 @@ function SauceCover.disc(field: { number }, i: number): Disc?
 			covered += 1
 		end
 	end
-	local mean = 0
-	for _, j in blocks[i] do
-		mean += field[j]
-	end
-	mean /= #blocks[i]
-	local deep = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
-	deep = math.floor(deep * 20 + 0.5) / 20
+	local deep = SauceCover.deep(field, i)
 	local x, y = xs[i], ys[i]
 	local kind, w, h
 	if c >= SauceCover.SOLID and covered == 4 then
@@ -223,6 +230,70 @@ end
 function SauceCover.uv(disc: Disc): (number, number, number, number)
 	local span = 2 * SauceCover.SPAN
 	return (disc.x - disc.w / 2 + SauceCover.SPAN) / span, (disc.y - disc.h / 2 + SauceCover.SPAN) / span, disc.w / span, disc.h / span
+end
+
+------------------------------------------------------------------------------------------
+-- The continuous surface (slice 8a, Astra r21: one thick opaque material over the sauced area,
+-- not a disc per cell, whose rims scalloped and whose seams showed between patches)
+
+-- The surface is where a material cell's credit is at least SOLID, taken as linear between cell
+-- centres (the grid's nodes), so its outline sits where the edge discs' outer points sat (half
+-- a cell past a full cell toward a bare one: the scored edge) and runs as a chain of straight
+-- pieces; it is clipped by the dough's edge. Node value, dough-local: min((credit - SOLID) *
+-- CELL, DOUGH - r), level 0. Thinner sauce away from it stays specks (SauceCover.specks). Every
+-- `stride`-th node (1, 2, 3, 4, 6 or 8: dividing MakeSauce.GRID) for a pizza small on screen.
+-- Each square is keyed by its deep-red share (the mean of its corners', in 0.05 steps), so the
+-- client tints it and a full run only joins squares of one tint.
+function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.Tile }
+	local k = stride or 1
+	local N = MakeSauce.GRID
+	assert(N % k == 0, "stride must divide MakeSauce.GRID")
+	local deepAt: { [number]: number } = {}
+	local function value(gx: number, gy: number): number
+		local i = MakeSauce.cellAt(gx * k, gy * k)
+		if not i then
+			return -CELL
+		end
+		local r = rs[i]
+		local c = if r <= SauceCover.DOUGH + 1e-9 then SauceCover.credit(field[i]) else 0
+		return math.min((c - SauceCover.SOLID) * CELL, SauceCover.DOUGH - r)
+	end
+	local function deepOf(gx: number, gy: number): number?
+		local i = MakeSauce.cellAt(gx * k, gy * k)
+		if not i or not blocks[i] then
+			return nil
+		end
+		local d = deepAt[i]
+		if d == nil then
+			d = SauceCover.deep(field, i)
+			deepAt[i] = d
+		end
+		return d
+	end
+	local function key(gx: number, gy: number): number
+		local sum, n = 0, 0
+		for _, c in { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } } do
+			local d = deepOf(gx + c[1], gy + c[2])
+			if d then
+				sum += d
+				n += 1
+			end
+		end
+		return if n > 0 then math.floor(sum / n * 20 + 0.5) / 20 else 0
+	end
+	return SurfaceTiles.build(N // k, CELL * k, value, 0, key)
+end
+
+-- The specks drawn beside the surface: the discs of thin sauce (under SOLID credit) with no
+-- covered neighbour, which the surface does not reach.
+function SauceCover.specks(field: { number }): { Disc }
+	local out = {}
+	for _, disc in SauceCover.discs(field) do
+		if disc.kind == "speck" and disc.credit < SauceCover.SOLID then
+			table.insert(out, disc)
+		end
+	end
+	return out
 end
 
 ------------------------------------------------------------------------------------------
