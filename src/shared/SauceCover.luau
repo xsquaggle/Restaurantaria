@@ -236,32 +236,96 @@ end
 -- The continuous surface (slice 8a, Astra r21: one thick opaque material over the sauced area,
 -- not a disc per cell, whose rims scalloped and whose seams showed between patches)
 
--- The surface is where a material cell's credit is at least SOLID, taken as linear between cell
--- centres (the grid's nodes), so its outline sits where the edge discs' outer points sat (half
--- a cell past a full cell toward a bare one: the scored edge) and runs as a chain of straight
--- pieces; it is clipped by the dough's edge. Node value, dough-local: min((credit - SOLID) *
--- CELL, DOUGH - r), level 0. Thinner sauce away from it stays specks (SauceCover.specks). Every
--- `stride`-th node (1, 2, 3, 4, 6 or 8: dividing MakeSauce.GRID) for a pizza small on screen.
--- Each square is keyed by its deep-red share (the mean of its corners', in 0.05 steps), so the
--- client tints it and a full run only joins squares of one tint.
+-- The surface is where the sauce's credit, smoothed, is at least SOLID, clipped by the dough's
+-- edge. The credits (material cells only: sauce off the dough is the smear's) are smoothed by a
+-- small Gaussian (SMOOTH cells) and read at FINE nodes per cell, so the outline is a chain of
+-- short straight pieces that follows the sauce's own shape: on the raw cell grid every crossing
+-- of a sharp edge fell half way between two cells, and a round patch drew as an octagon. A
+-- straight edge stays where it was (the smoothed step crosses SOLID at the same place, half a
+-- cell past the last full cell: the scored edge); corners round off by about SMOOTH. Node
+-- value, dough-local: min((smoothed - SOLID) * CELL * SLOPE, DOUGH - r), level 0 (SLOPE turns
+-- the smoothed credit into about a distance near the outline). Thinner sauce away from it stays
+-- specks (SauceCover.specks). Every `stride`-th node for a pizza small on screen (strides
+-- dividing FINE * MakeSauce.GRID). Each square is keyed by the deep-red share of the cell
+-- nearest its centre, so the client tints it and a full run only joins squares of one tint.
+-- Measured offline (tests/sauce_surface_check.luau): a round layer's outline turns through 8
+-- of 72 directions on the raw grid (an octagon) and about 50 smoothed, its radius within 5%;
+-- drawn area within 3.5% of credited (8.5% over for sauce thinned along the rim, which the
+-- opaque surface draws whole). Proposals (looks only).
+SauceCover.SMOOTH = 0.75
+SauceCover.FINE = 2
+SauceCover.SLOPE = 1.5
+local KERNEL_REACH = 2.7 * SauceCover.SMOOTH -- cells: the smoothing's reach (weights past it are under 3%)
+-- The smoothing's weights for a node at a whole cell (0) or half way (1) along each axis.
+local kernels: { [number]: { { number } } } = {}
+local span = math.ceil(KERNEL_REACH)
+for ox = 0, 1 do
+	for oy = 0, 1 do
+		local list = {}
+		for dx = -span, span + ox do
+			for dy = -span, span + oy do
+				local ex, ey = dx - ox / 2, dy - oy / 2
+				local d2 = ex * ex + ey * ey
+				if d2 <= KERNEL_REACH * KERNEL_REACH then
+					table.insert(list, { dx, dy, math.exp(-d2 / (2 * SauceCover.SMOOTH * SauceCover.SMOOTH)) })
+				end
+			end
+		end
+		kernels[ox * 2 + oy] = list
+	end
+end
+assert(SauceCover.FINE == 2, "the smoothing's kernels are for two nodes per cell")
+
+-- The material credits of a field, by cell (0 off the dough).
+local function creditsOf(field: { number }): { number }
+	local out = table.create(#rs, 0)
+	for _, i in cells do
+		out[i] = SauceCover.credit(field[i])
+	end
+	return out
+end
+
+-- The smoothed credit at fine node (fx, fy) (FINE nodes per cell).
+local function smoothed(credits: { number }, fx: number, fy: number): number
+	local gx, gy = fx // 2, fy // 2
+	local sum, weight = 0, 0
+	for _, k in kernels[(fx - 2 * gx) * 2 + (fy - 2 * gy)] do
+		local w = k[3]
+		local j = MakeSauce.cellAt(gx + k[1], gy + k[2])
+		if j then
+			sum += w * credits[j]
+		end
+		weight += w
+	end
+	return sum / weight
+end
+
+-- The surface's node value at fine node (fx, fy).
+local function surfaceValue(credits: { number }, fx: number, fy: number): number
+	local h = CELL / SauceCover.FINE
+	local x, y = fx * h, fy * h
+	local r = math.sqrt(x * x + y * y)
+	if r > SauceCover.DOUGH + CELL then
+		return -CELL
+	end
+	return math.min((smoothed(credits, fx, fy) - SauceCover.SOLID) * CELL * SauceCover.SLOPE, SauceCover.DOUGH - r)
+end
+
 function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.Tile }
 	local k = stride or 1
-	local N = MakeSauce.GRID
-	assert(N % k == 0, "stride must divide MakeSauce.GRID")
+	local G = MakeSauce.GRID * SauceCover.FINE
+	assert(G % k == 0, "stride must divide the surface's grid")
+	local credits = creditsOf(field)
 	local deepAt: { [number]: number } = {}
+	local h = CELL / SauceCover.FINE
 	local function value(gx: number, gy: number): number
-		local i = MakeSauce.cellAt(gx * k, gy * k)
-		if not i then
-			return -CELL
-		end
-		local r = rs[i]
-		local c = if r <= SauceCover.DOUGH + 1e-9 then SauceCover.credit(field[i]) else 0
-		return math.min((c - SauceCover.SOLID) * CELL, SauceCover.DOUGH - r)
+		return surfaceValue(credits, gx * k, gy * k)
 	end
-	local function deepOf(gx: number, gy: number): number?
-		local i = MakeSauce.cellAt(gx * k, gy * k)
+	local function key(gx: number, gy: number): number
+		local cx, cy = (gx + 0.5) * k * h, (gy + 0.5) * k * h
+		local i = MakeSauce.cellAt(math.floor(cx / CELL + 0.5), math.floor(cy / CELL + 0.5))
 		if not i or not blocks[i] then
-			return nil
+			return 0
 		end
 		local d = deepAt[i]
 		if d == nil then
@@ -270,27 +334,21 @@ function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.
 		end
 		return d
 	end
-	local function key(gx: number, gy: number): number
-		local sum, n = 0, 0
-		for _, c in { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } } do
-			local d = deepOf(gx + c[1], gy + c[2])
-			if d then
-				sum += d
-				n += 1
-			end
-		end
-		return if n > 0 then math.floor(sum / n * 20 + 0.5) / 20 else 0
-	end
-	return SurfaceTiles.build(N // k, CELL * k, value, 0, key)
+	return SurfaceTiles.build(G // k, h * k, value, 0, key)
 end
 
--- The specks drawn beside the surface: the discs of thin sauce (under SOLID credit) with no
--- covered neighbour, which the surface does not reach.
+-- The specks drawn beside the surface: the discs of cells with no covered neighbour (thin
+-- sauce, or a lone full cell) whose centre the surface does not reach.
 function SauceCover.specks(field: { number }): { Disc }
+	local credits = creditsOf(field)
 	local out = {}
 	for _, disc in SauceCover.discs(field) do
-		if disc.kind == "speck" and disc.credit < SauceCover.SOLID then
-			table.insert(out, disc)
+		if disc.kind == "speck" then
+			local gx = math.floor(xs[disc.cell] / CELL + 0.5)
+			local gy = math.floor(ys[disc.cell] / CELL + 0.5)
+			if surfaceValue(credits, gx * SauceCover.FINE, gy * SauceCover.FINE) < 0 then
+				table.insert(out, disc)
+			end
 		end
 	end
 	return out

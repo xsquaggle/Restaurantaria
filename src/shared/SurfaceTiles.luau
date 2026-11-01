@@ -45,24 +45,36 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 		local t = (level - va) / (vb - va)
 		return ax + (bx - ax) * t, ay + (by - ay) * t
 	end
-	-- A cut tile for square (gx, gy) from the outline piece P-Q, with a corner (ix, iy) known
-	-- to be inside.
-	local function cut(gx: number, gy: number, px: number, py: number, qx: number, qy: number, ix: number, iy: number, k: any)
+	-- A cut tile for square (gx, gy) from the outline piece P-Q, given its outside corners. The
+	-- normal is turned by the outside corner farthest from the line: a corner at the level (or
+	-- within rounding of it) lies on the outline and gives no side, and a smoothed staircase puts
+	-- corners exactly at the level along its diagonal.
+	local function cut(gx: number, gy: number, px: number, py: number, qx: number, qy: number, outside: { { number } }, k: any)
 		local cx, cy = (gx + 0.5) * h, (gy + 0.5) * h
 		local tx, ty = qx - px, qy - py
 		local len = math.sqrt(tx * tx + ty * ty)
-		local nx, ny
-		if len < 1e-9 then
-			-- The outline touches a corner only: the inside is the whole square but that corner.
-			nx, ny = cx - ix, cy - iy
-			local l = math.sqrt(nx * nx + ny * ny)
-			nx, ny = -nx / l, -ny / l
-		else
-			nx, ny = -ty / len, tx / len
-			-- Point it away from the inside corner.
-			if nx * (ix - px) + ny * (iy - py) > 0 then
-				nx, ny = -nx, -ny
+		if len < 1e-9 * h then
+			-- Both crossings at one corner, which is at the level. An outside corner there: the
+			-- inside is the whole square but that point. An inside one: that point alone.
+			for _, o in outside do
+				if math.abs(o[1] - px) + math.abs(o[2] - py) < 1e-9 * h then
+					table.insert(tiles, { kind = "full", x0 = gx * h, y0 = gy * h, x1 = (gx + 1) * h, y1 = (gy + 1) * h, key = k })
+					return
+				end
 			end
+			return
+		end
+		local nx, ny = -ty / len, tx / len
+		-- Point it out, towards the outside corner farthest from the line.
+		local best = 0
+		for _, o in outside do
+			local s = nx * (o[1] - px) + ny * (o[2] - py)
+			if math.abs(s) > math.abs(best) then
+				best = s
+			end
+		end
+		if best < 0 then
+			nx, ny = -nx, -ny
 		end
 		local d = nx * (px - cx) + ny * (py - cy)
 		table.insert(tiles, { kind = "cut", x0 = gx * h, y0 = gy * h, x1 = (gx + 1) * h, y1 = (gy + 1) * h, nx = nx, ny = ny, d = d, key = k })
@@ -112,9 +124,14 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 							table.insert(points, { px, py, i, j })
 						end
 					end
+					local outside = {}
+					for i = 1, 4 do
+						if not inside[i] then
+							table.insert(outside, { cx[i], cy[i] })
+						end
+					end
 					if #points == 2 then
-						local ii = if inside[points[1][3]] then points[1][3] else points[1][4]
-						cut(gx, gy, points[1][1], points[1][2], points[2][1], points[2][2], cx[ii], cy[ii], k)
+						cut(gx, gy, points[1][1], points[1][2], points[2][1], points[2][2], outside, k)
 					elseif #points == 4 then
 						-- Saddle with its middle outside: each inside corner gets its own piece,
 						-- between the crossings on its two edges.
@@ -130,7 +147,9 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 									end
 								end
 								if p1 and p2 then
-									cut(gx, gy, p1[1], p1[2], p2[1], p2[2], cx[i], cy[i], k)
+									-- Its two neighbours are outside (a saddle alternates).
+									local o1, o2 = i % 4 + 1, (i + 2) % 4 + 1
+									cut(gx, gy, p1[1], p1[2], p2[1], p2[2], { { cx[o1], cy[o1] }, { cx[o2], cy[o2] } }, k)
 								end
 							end
 						end

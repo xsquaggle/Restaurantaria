@@ -17,8 +17,9 @@
 -- smear (sauce_board_spill_v2) at the recorded spill. A pour still mostly in place shows the
 -- dollop (P7), which cooks and scorches with the sauce.
 -- Slice 8a (Astra r21), Config.FoodArt.sauce = "surface", the default: the covered sauce is one
--- continuous surface of the same material (SauceCover.surface, drawn by FoodSurface: straight
--- outline pieces where the credit crosses SOLID, clipped by the dough), raw and cooked surfaces
+-- continuous surface of the same material (SauceCover.surface, drawn by FoodSurface: short
+-- straight outline pieces where the smoothed credit crosses SOLID, clipped by the dough, on two
+-- nodes per sauce cell, or every `stride`-th node for a small pizza), raw and cooked surfaces
 -- with the cooked one fading in over the raw one, scorch as their colour, each square tinted by
 -- its deep-red share; only the specks of thin sauce it does not reach stay discs. "material"
 -- (the discs above) and "stamps" (the r13 soft stamps: one stamp on every second grid point, its
@@ -113,7 +114,7 @@ local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
 -- The cheese surfaces' drawing grid (see strideFor): strides dividing CheeseMap.G, and the
 -- least on-screen size of a drawn square.
 local STRIDES = { 1, 2, 3, 4, 6 }
-local SAUCE_STRIDES = { 1, 2, 3, 4, 6, 8 } -- dividing MakeSauce.GRID
+local SAUCE_STRIDES = { 1, 2, 3, 4, 6, 8, 12 } -- dividing the sauce surface's grid (MakeSauce.GRID * SauceCover.FINE)
 local MIN_TILE_PX = 4.5
 -- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
 -- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
@@ -687,7 +688,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			surfaces.cooked:clear()
 			return
 		end
-		local stride = strideFor(MakeSauce.CELL, SAUCE_STRIDES)
+		local stride = strideFor(MakeSauce.CELL / SauceCover.FINE, SAUCE_STRIDES)
 		sauceStride = stride
 		sauceTiles = SauceCover.surface(field, stride)
 		surfaces.raw:draw(sauceTiles, deepTint)

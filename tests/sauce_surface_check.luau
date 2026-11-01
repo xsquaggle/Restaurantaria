@@ -2,9 +2,9 @@
 -- the sauced area, not a disc per cell): presentation only. For every record of the slice 2
 -- comparison set the grade and the field are unchanged after the surface is built; the surface
 -- never reaches past the dough's edge; it draws about the area the grade credits (surface plus
--- the specks of thin sauce beside it); a bare hole stays bare; thin sauce stays specks, never a
--- wash; the specks sit off the surface; a small pizza's coarser grid keeps the shape; a thick
--- layer is keyed deep red. Arithmetic only: how it looks is checked in Studio and by Lawson.
+-- the specks of thin sauce beside it); a bare hole stays bare; a round layer draws round (no
+-- octagon); thin sauce stays specks, never a wash; the specks sit off the surface; a small
+-- pizza's coarser grid keeps the shape; a thick layer is keyed deep red. Arithmetic only: how it looks is checked in Studio and by Lawson.
 
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
@@ -236,7 +236,78 @@ do
 	check("thin layer: shown as specks", #SauceCover.specks(field) > 0, true)
 end
 
--- 4. An empty field draws nothing.
+-- 4. A round layer draws round: an even layer out to 0.61 (the cells out to 0.6, past rounding).
+-- On the raw cell grid every crossing
+-- of a sharp edge fell half way between two cells and the patch drew as an octagon (Studio,
+-- 2026-11-01); smoothed on the finer grid its outline's radius stays within a few percent.
+do
+	local field = MakeSauce.empty()
+	for i = 1, MakeSauce.COUNT do
+		if MakeSauce.rs[i] <= 0.61 then
+			field[i] = MakeSauce.EVEN
+		end
+	end
+	for _, stride in { 1, 2 } do
+		local tiles = SauceCover.surface(field, stride)
+		local lo, hi, sum, n = math.huge, 0, 0, 0
+		for a = 0, 359, 5 do
+			local c, sn = math.cos(math.rad(a)), math.sin(math.rad(a))
+			local r0, r1 = 0.3, 0.9
+			for _ = 1, 30 do
+				local m = (r0 + r1) / 2
+				if covers(tiles, m * c, m * sn) then
+					r0 = m
+				else
+					r1 = m
+				end
+			end
+			lo, hi, sum, n = math.min(lo, r0), math.max(hi, r0), sum + r0, n + 1
+		end
+		local mean = sum / n
+		-- The outline's directions, in 5 degree bins: an octagon has 8, a round outline many.
+		local bins, dirs = {}, 0
+		for _, t in tiles do
+			if t.kind == "cut" then
+				local b = math.floor(math.deg(math.atan2(t.ny :: number, t.nx :: number)) / 5 + 0.5) % 72
+				if not bins[b] then
+					bins[b] = true
+					dirs += 1
+				end
+			end
+		end
+		check(string.format("round layer (stride %d): outline turns through at least 36 of 72 directions", stride), dirs >= 36, true)
+		check(string.format("round layer (stride %d): outline radius within 6%% of its mean", stride), (hi - lo) / mean <= 0.06, true)
+		check(string.format("round layer (stride %d): outline at the scored edge (0.6 to 0.65)", stride), mean >= 0.6 and mean <= 0.65, true)
+		table.insert(report, string.format("round layer to 0.6, stride %d: outline radius %.3f to %.3f (mean %.3f, spread %.1f%%), %d of 72 directions", stride, lo, hi, mean, (hi - lo) / mean * 100, dirs))
+	end
+end
+
+-- 5. SurfaceTiles: an inside corner exactly at the level lies on the outline and gives no side.
+-- One such corner alone draws nothing; on a staircase's diagonal (two corners at the level, one
+-- above, one below) the square's inside half is the one with the corner above.
+do
+	local function at(values: { [string]: number })
+		return function(gx: number, gy: number): number
+			return values[gx .. "," .. gy] or -1
+		end
+	end
+	local lone = SurfaceTiles.build(1, 1, at({ ["0,0"] = 0 }), 0)
+	check("tiles: a lone corner at the level draws nothing", SurfaceTiles.area(lone), 0)
+	-- Square (0,0)-(1,1): (0,0) and (1,1) at the level, (0,1) above, (1,0) below.
+	local stair = SurfaceTiles.build(1, 1, at({ ["0,0"] = 0, ["1,1"] = 0, ["0,1"] = 1, ["1,0"] = -1 }), 0)
+	local half, onAbove, onBelow = 0, false, false
+	for _, t in stair do
+		if t.x0 == 0 and t.y0 == 0 then
+			half += SurfaceTiles.area({ t })
+		end
+	end
+	onAbove = covers(stair, 0.2, 0.8)
+	onBelow = covers(stair, 0.8, 0.2)
+	check("tiles: a diagonal at the level draws half the square", math.abs(half - 0.5) < 1e-9, true)
+	check("tiles: that half is the side above the level", onAbove and not onBelow, true)
+end
+
+-- 6. An empty field draws nothing.
 check("empty: no surface", #SauceCover.surface(MakeSauce.empty()), 0)
 check("empty: no specks", #SauceCover.specks(MakeSauce.empty()), 0)
 
