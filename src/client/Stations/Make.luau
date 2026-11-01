@@ -1681,7 +1681,7 @@ function Make.new(ctx: any, container: Frame)
 				end
 				return { target = nextButton.frame, text = "Sauce spread evenly: tap Next", from = toNext }
 			elseif m.step == "cheese" and not ctx.learned["Make.cheeseNext"] then
-				local _, inside, spread = PrepFood.cheeseScore(MakeCheese.pinches(m.cheese))
+				local _, inside, spread = MakeCheese.score(MakeCheese.pinches(m.cheese))
 				if inside < Config.Cheese.fewBelow then
 					if not shakerOn then
 						return { target = bowl, text = "Tap the cheese to pick up the shaker", from = if compact then "right" else "below" }

@@ -161,6 +161,12 @@ Config.Cheese = {
 	fewBelow = 20,
 	manyAbove = 28,
 	bunchedBelow = 0.7,
+	-- Since slice 8a the Cheese score reads the real coverage of the edible area (CheeseMap,
+	-- Lawson 2026-10-29). Coverage credit is min(1, coverage / coverageFull), used by the score's
+	-- coverage part and the severe-coverage ceiling; the coverage shown is always the real one.
+	-- 1 = the plan's weights unchanged (full credit only at full coverage). Lawson is choosing
+	-- between 1, 0.8 and 0.7 (2026-11-01); until he does, 1.
+	coverageFull = 1,
 }
 
 Config.Topping = {

@@ -79,9 +79,35 @@ local function pourAlong(path: { any }, still: number?): { any }
 end
 
 -- Stores pinches as the station sends them: batches of batchSize through the server's check.
-local function store(strokes: { { any } }): (any, number)
+-- As the Make station sends a pour (emitCheese): pinches past the dough's edge
+-- (PrepFood.PINCH_REACH, the edge since slice 8a) land nothing and use no supply, and the
+-- pinches after such a gap go out as a new stroke.
+local function split(stroke: { any }): { { any } }
+	local out, cur = {}, {}
+	for _, p in stroke do
+		if p.x * p.x + p.y * p.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH then
+			if #cur > 0 then
+				table.insert(out, cur)
+				cur = {}
+			end
+		else
+			table.insert(cur, p)
+		end
+	end
+	if #cur > 0 then
+		table.insert(out, cur)
+	end
+	return out
+end
+local function store(pours: { { any } }): (any, number)
 	local cheese = { strokes = {} }
 	local refused = 0
+	local strokes = {}
+	for _, pour in pours do
+		for _, part in split(pour) do
+			table.insert(strokes, part)
+		end
+	end
 	for _, stroke in strokes do
 		local first = true
 		local i = 1
@@ -116,7 +142,7 @@ do
 	local sampler = PrepFood.sampler()
 	for _, q in carryPath do
 		for _, p in sampler.feed(q) do
-			if p.x * p.x + p.y * p.y <= PrepFood.PINCH_REACH ^ 2 then
+			if p.x * p.x + p.y * p.y <= 1.5 ^ 2 then -- the slice 6 reach (PINCH_REACH was 1.5)
 				table.insert(before, p)
 			end
 		end
@@ -201,8 +227,8 @@ check("random pours: no batch refused by the server", refusedTotal, 0)
 note(string.format("200 random held pours: %d pinches stored, %d batches refused", pinchTotal, refusedTotal))
 
 ------------------------------------------------------------------------------------------
--- 5. Astra's shaker-rule proofs (10-28 17:05): even, a large miss, a heavy pile. Recorded with
--- the current grade and an independent footprint coverage: the share of a fine grid over the
+-- 5. Astra's shaker-rule proofs (10-28 17:05): even, a large miss, a heavy pile (the same three
+-- deposits slice 8a's picture proofs use). Recorded with the grade and an independent footprint coverage: the share of a fine grid over the
 -- edible area (radius 0.84) within PINCH_RADIUS of a pinch.
 
 local function coverage(pinches: { any }): number
@@ -244,7 +270,7 @@ local proofs = {
 	{ "large miss (left half)", pourAlong(half) },
 	{ "heavy pile (3 s still)", pourAlong(pile, 3.0) },
 }
-note("proof                      pinches  inside  spread  footprint coverage  Cheese grade  notes")
+note("proof                      pinches  inside  map coverage  independent coverage  Cheese grade  notes")
 local grades = {}
 for _, proof in proofs do
 	local cheese, refused = store({ proof[2] })
@@ -252,7 +278,10 @@ for _, proof in proofs do
 	local g = MakeCheese.grade(cheese)
 	local cov = coverage(MakeCheese.pinches(cheese))
 	grades[proof[1]] = { g = g, cov = cov }
-	note(string.format("%-26s %7d  %6d  %6.3f  %18.3f  %12d  %s", proof[1], g.detail.pinches, g.detail.inside, g.detail.spread, cov, g.score, table.concat(g.notes, " / ")))
+	note(string.format("%-26s %7d  %6d  %12.3f  %20.3f  %12d  %s", proof[1], g.detail.pinches, g.detail.inside, g.detail.coverage, cov, g.score, table.concat(g.notes, " / ")))
+	-- Since slice 8a the grade's coverage is the map's (CheeseMap, 0.04 grid); it agrees with this
+	-- independent 0.03 grid within 0.02.
+	check(proof[1] .. ": the grade's coverage is the real coverage", math.abs(g.detail.coverage - cov) < 0.02, true)
 end
 if has then
 	check("proofs: the miss covers less than the even pour", grades["large miss (left half)"].cov < grades["even"].cov, true)

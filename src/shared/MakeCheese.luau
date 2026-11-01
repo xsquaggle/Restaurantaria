@@ -12,6 +12,7 @@
 local Config = require(script.Parent.Config)
 local PrepFood = require(script.Parent.PrepFood)
 local MakeSauce = require(script.Parent.MakeSauce)
+local CheeseMap = require(script.Parent.CheeseMap)
 
 local MakeCheese = {}
 
@@ -161,16 +162,45 @@ function MakeCheese.canFinish(cheese: Cheese): boolean
 	return MakeCheese.count(cheese) > 0
 end
 
--- The Cheese score (PrepFood.cheeseScore: count on the edible area against 24, footprint spread
--- over the 24 sauce cells, a penalty for pinches on the crust band) with the plan's notes and the
--- severe-coverage ceiling on the spread (the same ramp as the sauce's).
+-- The Cheese score since slice 8a (Lawson 2026-10-29 13:45: graded on how much of the pizza the
+-- cheese really covers, from the one map the picture reads). The plan's weights are unchanged:
+-- 0.6 x count on the edible area against 24, 0.4 x coverage, minus 0.5 x crust pinches / 24. The
+-- coverage is CheeseMap's real share of the edible area under the pinch footprints, in place of
+-- the old per-cell "spread" (full credit for a cell a quarter covered). No new weights.
+-- Returns score, pinches inside the edible area, coverage, crust pinches, and the map.
+-- Coverage credit (Config.Cheese.coverageFull; 1 = the plan's weights, credit = coverage).
+function MakeCheese.credit(coverage: number): number
+	return math.min(1, coverage / Config.Cheese.coverageFull)
+end
+
+function MakeCheese.score(pinches: { Vec }): (number, number, number, number, CheeseMap.Map)
+	local inside, crust = 0, 0
+	for _, p in pinches do
+		local r = math.sqrt(p.x * p.x + p.y * p.y)
+		if r <= CheeseMap.EDIBLE then
+			inside += 1
+		elseif r <= CRUST then
+			crust += 1
+		end
+	end
+	local map = CheeseMap.build(pinches)
+	local coverage = CheeseMap.measure(map).coverage
+	local count = math.clamp(1 - math.abs(inside - PrepFood.TARGET_PINCHES) / PrepFood.TARGET_PINCHES, 0, 1)
+	local score = math.floor(100 * math.clamp(0.6 * count + 0.4 * MakeCheese.credit(coverage) - 0.5 * crust / PrepFood.TARGET_PINCHES, 0, 1) + 0.5)
+	return score, inside, coverage, crust, map
+end
+
+-- The Cheese grade: MakeCheese.score with the plan's notes and the severe-coverage ceiling on
+-- the coverage credit (the same ramp as the sauce's). detail.spread is kept as the same coverage
+-- (the name earlier checks and the debug line read).
 function MakeCheese.grade(cheese: Cheese): Grade
 	local cfg = Config.Cheese
 	local pinches = MakeCheese.pinches(cheese)
-	local score, inside, spread, crust = PrepFood.cheeseScore(pinches)
+	local score, inside, coverage, crust, map = MakeCheese.score(pinches)
+	local m = CheeseMap.measure(map)
 	local off = 0
 	for _, p in pinches do
-		if p.x * p.x + p.y * p.y > CRUST * CRUST then
+		if p.x * p.x + p.y * p.y > CRUST * CRUST + 1e-9 then
 			off += 1
 		end
 	end
@@ -182,19 +212,33 @@ function MakeCheese.grade(cheese: Cheese): Grade
 	elseif inside > cfg.manyAbove then
 		table.insert(notes, "Too much cheese")
 	end
-	if #pinches > 0 and spread < cfg.bunchedBelow then
+	if #pinches > 0 and coverage < cfg.bunchedBelow then
 		table.insert(notes, "Cheese patchy, with bare parts")
 	end
 	if crust > 0 then
 		table.insert(notes, "Cheese on the crust")
 	end
 	if off > 0 then
+		-- Only a pizza stored before slice 8a can hold one (pinches past the edge are refused).
 		table.insert(notes, "Cheese fell off the dough")
 	end
 	return {
 		score = score,
 		notes = notes,
-		detail = { pinches = #pinches, inside = inside, spread = spread, crust = crust, off = off, ceiling = MakeSauce.ceiling(spread) },
+		detail = {
+			pinches = #pinches,
+			inside = inside,
+			coverage = coverage,
+			spread = coverage,
+			amount = m.amount,
+			piled = m.piled,
+			evenness = m.evenness,
+			largestMiss = m.largestMiss,
+			crust = crust,
+			off = off,
+			credit = MakeCheese.credit(coverage),
+			ceiling = MakeSauce.ceiling(MakeCheese.credit(coverage)),
+		},
 	}
 end
 

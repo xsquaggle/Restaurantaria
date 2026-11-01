@@ -14,6 +14,7 @@ local Config = require(Shared.Config)
 local MakeCheese = require(Shared.MakeCheese)
 local MakeDough = require(Shared.MakeDough)
 local MakeSauce = require(Shared.MakeSauce)
+local CheeseMap = require(Shared.CheeseMap)
 local PrepFood = require(Shared.PrepFood)
 local Recipes = require(Shared.Recipes)
 local Scoring = require(Shared.Scoring)
@@ -324,9 +325,15 @@ end
 
 -- 9. Cheese grades. Clean: one pinch on each of the 24 sauce-cell centroids. Sparse: the 8 inner
 -- centroids (count 1 - 16 / 24 = 1/3; "Not enough cheese"). Clustered: 24 pinches on a 6 x 4 grid
--- in one quarter (x 0.15..0.6, y 0.15..0.51, all inside 0.84): the count is full but the spread
--- is short ("Cheese patchy, with bare parts"), and the ceiling follows the spread on the sauce's
--- ramp. Scores are PrepFood.cheeseScore's, read.
+-- in one quarter (x 0.15..0.6, y 0.15..0.51, all inside 0.84): the count is full but the
+-- coverage is short ("Cheese patchy, with bare parts"). Since slice 8a the score and the ceiling
+-- read the REAL coverage of the edible area (CheeseMap, Lawson 2026-10-29), not the old spread.
+-- Coverage worked outside the game (an independent grid and a 400,000-point Monte Carlo over the
+-- 0.84 disc, footprint 0.17): clean 0.6992 (Monte Carlo 0.6952), sparse 0.2739, clustered
+-- 0.2221. With the plan's weights (coverageFull 1): clean 0.6 + 0.4 x 0.6992 = 0.8797 -> 88,
+-- ceiling 35 + 65 x 0.8984 = 93; sparse 0.2 + 0.1096 -> 31, ceiling 38; clustered 0.6 + 0.0888 ->
+-- 69, ceiling 35. Before slice 8a (spread): 100 / 33 / 70. The clean layout's real coverage sits
+-- just under bunchedBelow 0.7, so it is now named patchy (reported to Lawson, not retuned here).
 local function oneEach(list: { any }): any
 	local strokes = {}
 	for i, p in list do
@@ -347,13 +354,19 @@ local cheeseGrades = {}
 for name, c in { clean = cleanCheese, sparse = sparseCheese, clustered = clusteredCheese } do
 	local g = MakeCheese.grade(c)
 	cheeseGrades[name] = g
-	check("cheese " .. name .. ": score is PrepFood's", g.score, (PrepFood.cheeseScore(MakeCheese.pinches(c))))
-	check("cheese " .. name .. ": ceiling on the spread", g.detail.ceiling, MakeSauce.ceiling(g.detail.spread))
+	check("cheese " .. name .. ": score is MakeCheese.score's", g.score, (MakeCheese.score(MakeCheese.pinches(c))))
+	check("cheese " .. name .. ": ceiling on the coverage credit", g.detail.ceiling, MakeSauce.ceiling(g.detail.credit))
 	note(string.format("cheese %-9s score %3d inside %d spread %.4f ceiling %d notes %s", name, g.score, g.detail.inside, g.detail.spread, g.detail.ceiling, table.concat(g.notes, "|")))
 end
 check("cheese clean: 24 inside", cheeseGrades.clean.detail.inside, 24)
-check("cheese clean: no notes", #cheeseGrades.clean.notes, 0)
-check("cheese clean: no ceiling", cheeseGrades.clean.detail.ceiling, 100)
+check("cheese clean: real coverage 0.6992", math.abs(cheeseGrades.clean.detail.coverage - 0.6992) < 0.0005, true)
+check("cheese sparse: real coverage 0.2739", math.abs(cheeseGrades.sparse.detail.coverage - 0.2739) < 0.0005, true)
+check("cheese clustered: real coverage 0.2221", math.abs(cheeseGrades.clustered.detail.coverage - 0.2221) < 0.0005, true)
+check("cheese clean: score 88", cheeseGrades.clean.score, 88)
+check("cheese sparse: score 31", cheeseGrades.sparse.score, 31)
+check("cheese clustered: score 69", cheeseGrades.clustered.score, 69)
+check("cheese clean: only the patchy note", table.concat(cheeseGrades.clean.notes, "|"), "Cheese patchy, with bare parts")
+check("cheese clean: ceiling 93", cheeseGrades.clean.detail.ceiling, 93)
 check("cheese sparse: 8 inside", cheeseGrades.sparse.detail.inside, 8)
 check("cheese sparse: noted", has(cheeseGrades.sparse.notes, "Not enough cheese"), true)
 check("cheese sparse: patchy too (only the inner ring covered)", has(cheeseGrades.sparse.notes, "Cheese patchy, with bare parts"), true)
@@ -367,6 +380,27 @@ check("cheese none: notes", table.concat(noCheese.notes, "|"), "No cheese")
 check("cheese none: ceiling", noCheese.detail.ceiling, 35)
 local crusty = MakeCheese.grade(oneEach({ P(0.9, 0), P(1.2, 0) }))
 check("cheese on the crust and off: notes", has(crusty.notes, "Cheese on the crust") and has(crusty.notes, "Cheese fell off the dough"), true)
+-- Since slice 8a a pinch past the dough's edge is refused (no deposit, no supply used); the
+-- note above stays only for a pizza stored before.
+check("cheese past the dough's edge: refused", (MakeCheese.validate({ strokes = {} }, { points = { P(0.96, 0) } })), nil)
+check("cheese at the dough's edge: accepted", (MakeCheese.validate({ strokes = {} }, { points = { P(0.95, 0) } })) ~= nil, true)
+-- The map adds nothing past the edge: a pinch on the edge counts only the nodes on the dough.
+check("cheese map: nothing counted past the dough", (function()
+	local m = CheeseMap.build({ P(0.95, 0) })
+	for i, c in m.count do
+		if c > 0 and CheeseMap.radius[i] > CheeseMap.DOUGH + 1e-9 then
+			return false
+		end
+	end
+	return true
+end)(), true)
+
+-- Section 10 checks the Make join and its holds, not the cheese rule: pin the coverage credit
+-- full at 0.69 so the clean cheese counts as full (C = 100), as before slice 8a. Restored after.
+local coverageFullBefore = Config.Cheese.coverageFull
+Config.Cheese.coverageFull = 0.69
+cheeseGrades.clean = MakeCheese.grade(cleanCheese)
+cheeseGrades.clustered = MakeCheese.grade(clusteredCheese)
 
 -- 10. The Make part of the order grade: the mean of Dough, Sauce, Cheese (and Toppings when the
 -- ticket has any), held by the lower coverage ceiling. Dough here is the clean test-hook dough
@@ -630,7 +664,10 @@ for _, n in weakest do
 	table.insert(wantNotes, n)
 end
 check("notes: heavy sauce + clustered cheese gives only the weaker step's notes", table.concat(gHeavyBunch.notes, "|"), table.concat(wantNotes, "|"))
-check("notes: clean make has none", #gClean.notes, 0)
+-- Since slice 8a the clean layout's real coverage (0.699) is just under bunchedBelow 0.7: its
+-- only note is the cheese one (the note reads the real coverage, not the credit).
+check("notes: clean make has only the patchy cheese note", table.concat(gClean.notes, "|"), "Cheese patchy, with bare parts")
+Config.Cheese.coverageFull = coverageFullBefore
 note(string.format("notes: heavy sauce %d + clustered cheese %d -> %s", 68, cheeseGrades.clustered.score, table.concat(gHeavyBunch.notes, " / ")))
 
 for k, v in gradeDefaults do

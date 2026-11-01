@@ -58,6 +58,13 @@ local function setGrade(over: { [string]: any })
 end
 local SLICE2 = { join = "average", ceilingsOn = "make", completeness = false }
 local COVER_ONLY = { completeness = false }
+-- Since slice 8a the Cheese score reads the real coverage (CheeseMap; sauce_cheese_check and
+-- cheese_map_check hold that rule). This file checks the join, the ceilings and the pay, so it
+-- pins the coverage credit to full at 0.69: its clean fixture (one pinch on each of the 24 cell
+-- centroids, real coverage 0.699) keeps Cheese 100 and the hand-worked values below. Restored at
+-- the end.
+local coverageFullBefore = Config.Cheese.coverageFull
+Config.Cheese.coverageFull = 0.69
 
 -- 2. The staged cases (the same records as sauce_cheese_check and the captures).
 local function circle(r: number): { any }
@@ -205,7 +212,8 @@ local function byHand(c: Case, setting: string): Hand
 	local s = MakeSauce.grade(c.make.sauce)
 	local ch = MakeCheese.grade(c.make.cheese)
 	local mean = whole((d.score + s.score + ch.score) / 3)
-	local low = math.min(ramp(s.detail.coverage), ramp(ch.detail.spread))
+	-- The cheese ceiling reads the coverage credit (slice 8a; = the real coverage at coverageFull 1).
+	local low = math.min(ramp(s.detail.coverage), ramp(ch.detail.credit))
 	if setting == "full" then
 		local pours = 0
 		for _, a in c.make.sauce.actions do
@@ -293,11 +301,14 @@ check("clean: coins", row("clean").full.o.coins, 12)
 check("sparse: coverage ceiling 59", row("sparse sauce").cover.o.grade, 59)
 check("sparse: completeness ceiling 46", row("sparse sauce").full.o.grade, 46)
 check("sparse: held by the sauce amount", row("sparse sauce").full.o.held.name, "sauceAmount")
--- Sparse cheese: 8 pinches. Spread 0.333 -> 46; 8 of 24 -> 46 as well (tie: coverage first).
+-- Sparse cheese: 8 pinches. Real coverage 0.2739 (slice 8a; credit 0.2739 / 0.69 = 0.397 ->
+-- 35 + 65 x 0.294 = 54); 8 of 24 -> 35 + 65 x 0.1667 = 45.8 -> 46, so the amount holds it.
+-- (Before slice 8a: spread 0.333 -> 46, a tie that named the coverage.)
 check("sparse cheese: grade 46", row("sparse cheese").full.o.grade, 46)
-check("sparse cheese: tie names the coverage ceiling", row("sparse cheese").full.o.held.name, "cheeseCover")
--- Clustered cheese: spread 0.25 -> 35; 24 pinches -> no amount ceiling.
-check("clustered: grade 35", row("clustered cheese").full.o.grade, 35)
+check("sparse cheese: held by the cheese amount", row("sparse cheese").full.o.held.name, "cheeseAmount")
+-- Clustered cheese: real coverage 0.2221 (credit 0.322) -> 35 + 65 x 0.144 = 44.4 -> 44; 24
+-- pinches -> no amount ceiling. (Before slice 8a: spread 0.25 -> 35.)
+check("clustered: grade 44", row("clustered cheese").full.o.grade, 44)
 -- One pass: area 0.60 x 0.56 / 0.9025 = 0.3723 -> 35 + 65 x 0.2446 = 50.90 -> 51 (plan row 47).
 check("one pass: dough completeness ceiling 51", row("one-pass dough").full.o.grade, 51)
 check("one pass: no ceiling with completeness off", row("one-pass dough").cover.o.held, nil)
@@ -698,6 +709,7 @@ check("service: grade 13 -> 2 / 1 coins", string.format("%d/%d", Scoring.order(g
 for k, v in defaults do
 	Config.Grade[k] = v
 end
+Config.Cheese.coverageFull = coverageFullBefore
 for _, l in report do
 	print("  " .. l)
 end

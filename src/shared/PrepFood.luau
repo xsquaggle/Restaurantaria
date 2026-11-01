@@ -24,7 +24,10 @@ PrepFood.PINCH_STEP = 0.25 -- one pinch per 0.25 of travel (proposal)
 PrepFood.PINCH_RADIUS = 0.17 -- footprint disc (plan rev 6)
 PrepFood.TARGET_PINCHES = 24
 PrepFood.MAX_PINCHES = 48
-PrepFood.PINCH_REACH = 1.5 -- dough-local radius past which a pinch is refused (proposal)
+-- Dough-local radius past which a pinch is refused. Since slice 8a the dough's own outer edge
+-- (Lawson: cheese stops at the pizza edge; Astra r21: an emission past the actual dough lands no
+-- deposit and uses no supply). Before: 1.5, so pinches could land on the board.
+PrepFood.PINCH_REACH = CRUST
 
 export type Vec = { x: number, y: number }
 
@@ -227,8 +230,8 @@ end
 -- them (Astra r13 item 3): the whole candidate is checked first and the caller commits only on
 -- success, so a refused batch leaves points, counts and sequencing exactly as they were. The
 -- server's cheese handler must call this before it touches state. Checks: a non-empty list of
--- finite points within PINCH_REACH (spill past the outline lands on the board and scores as
--- crust or nothing), the pizza's pinch cap, and the spacing rule across the
+-- finite points within PINCH_REACH (the dough's edge since slice 8a: the client drops pinches
+-- past it and starts a new stroke after the gap), the pizza's pinch cap, and the spacing rule across the
 -- join with the held stroke's last pinch. The chord rule is necessary for reversals, not proof
 -- of travelled distance; ownership, step, sequence and rate are the handler's own checks.
 function PrepFood.validateCheeseBatch(strokes: { { Vec } }, points: { Vec }, newStroke: boolean): (boolean, string?)
@@ -249,7 +252,7 @@ function PrepFood.validateCheeseBatch(strokes: { { Vec } }, points: { Vec }, new
 		if pt.x ~= pt.x or pt.y ~= pt.y or math.abs(pt.x) == math.huge or math.abs(pt.y) == math.huge then
 			return false, "finite"
 		end
-		if pt.x * pt.x + pt.y * pt.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH then
+		if pt.x * pt.x + pt.y * pt.y > PrepFood.PINCH_REACH * PrepFood.PINCH_REACH + 1e-9 then
 			return false, "bounds"
 		end
 	end
@@ -302,8 +305,11 @@ function PrepFood.footprint(pinches: { Vec }): { number }
 	return area
 end
 
--- Cheese score (plan 3.3): count of pinch centres inside the sauce area, spread from footprint
--- credit (min(1, area / a quarter pinch) averaged over the 24 cells), crust pinches penalised.
+-- The plan rev 6 cheese score (3.3): count of pinch centres inside the sauce area, spread from
+-- footprint credit (min(1, area / a quarter pinch) averaged over the 24 cells), crust pinches
+-- penalised. SUPERSEDED in slice 8a by MakeCheese.score (the same weights, with the real
+-- coverage from CheeseMap in place of this spread, which gave full credit at 27-69 % real
+-- coverage); kept for the before/after comparison and its checks.
 function PrepFood.cheeseScore(pinches: { Vec }): (number, number, number, number)
 	local inside, crust = 0, 0
 	for _, p in pinches do
