@@ -399,11 +399,13 @@ if RunService:IsStudio() then
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
 		elseif command == "proofCheese" then
-			-- value = { proof = "even" | "miss" | "pile", oven = boolean? }: the first open
-			-- ticket's pizza still on the Make station gets a clean dough and sauce if it needs
-			-- them, then one of slice 8a's proof cheeses (CheeseProofs: 24 pinches, each its own
-			-- tap) and no toppings, through the real actions; with oven, it goes in the oven.
-			-- Returns the Cheese grade the server recorded.
+			-- value = { proof = "even" | "miss" | "pile", count = n?, keep = boolean?,
+			-- oven = boolean? }: the first open ticket's pizza still on the Make station gets a
+			-- clean dough and sauce if it needs them, then one of slice 8a's proof cheeses
+			-- (CheeseProofs: 24 pinches, each its own tap; count takes the first n, going round
+			-- the proof again past 24) and no toppings, through the real actions. keep leaves it
+			-- on the cheese step (the gauge's states); otherwise the cheese is finished, and with
+			-- oven it goes in the oven. Returns the Cheese grade the server would record.
 			local shift = session.shift
 			local log = {}
 			local function act(action: string, args: any)
@@ -413,9 +415,14 @@ if RunService:IsStudio() then
 				end
 			end
 			local name = type(value) == "table" and value.proof or "even"
-			local okName, pinches = pcall(CheeseProofs.pinches, name)
+			local okName, proof = pcall(CheeseProofs.pinches, name)
 			if not okName then
 				return "no such proof"
+			end
+			local count = if type(value) == "table" and type(value.count) == "number" then math.clamp(math.floor(value.count), 0, PrepFood.MAX_PINCHES) else #proof
+			local pinches = {}
+			for i = 1, count do
+				table.insert(pinches, proof[(i - 1) % #proof + 1])
 			end
 			shift.startedAt -= 1000
 			ShiftService.tick(session)
@@ -446,8 +453,11 @@ if RunService:IsStudio() then
 			for _, p in pinches do
 				act("addCheese", { pizzaId = pizza.id, newStroke = true, points = { p } })
 			end
-			act("finishCheese", { pizzaId = pizza.id, from = "cheese" })
-			if type(value) == "table" and value.oven then
+			local keep = type(value) == "table" and value.keep == true
+			if not keep then
+				act("finishCheese", { pizzaId = pizza.id, from = "cheese" })
+			end
+			if not keep and type(value) == "table" and value.oven then
 				act("sendToOven", { pizzaId = pizza.id })
 			end
 			push(player)
