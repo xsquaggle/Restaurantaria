@@ -251,7 +251,7 @@ local function index(f: { number }): (number, number) -> number
 	end
 end
 local worst = 0
-for _, tiles in { SurfaceTiles.build(G, H, index(rimMap.edge), 0), SurfaceTiles.build(G, H, index(rimLook.base), 0) } do
+for _, tiles in { SurfaceTiles.build(G, H, index(rimMap.edge), 0), SurfaceTiles.build(G, H, index(rimLook.base), 0), CheeseMap.tiles(rimMap.edge, 2), CheeseMap.tiles(rimLook.base, 2), CheeseMap.tiles(rimLook.base, 3) } do
 	for _, t in tiles do
 		for sx = 0, 4 do
 			for sy = 0, 4 do
@@ -272,7 +272,7 @@ end
 -- Between nodes the outline is straight, so it can cut a corner of the round edge by at most
 -- the sagitta of one grid square's chord (about h^2 / (8 r) plus the square's diagonal step).
 check("edge: no drawn cheese more than 0.005 past the dough's edge", worst <= 0.005, true)
-note(string.format("Edge deposit (24 pinches on the dough's edge): drawn cheese reaches %.4f past the edge at most (strict and base)", math.max(0, worst)))
+note(string.format("Edge deposit (24 pinches on the dough's edge): drawn cheese reaches %.4f past the edge at most (strict and base, on the full grid and every 2nd and 3rd node)", math.max(0, worst)))
 
 ------------------------------------------------------------------------------------------
 -- 5. The strict surface is the scored coverage; the picture never changes the score.
@@ -303,6 +303,19 @@ for _, name in CheeseProofs.names do
 	local drawn = SurfaceTiles.area(strict)
 	local truth = union(pr.pinches)
 	check(name .. ": the strict surface draws the footprints' area within 4%", math.abs(drawn - truth) / truth <= 0.04, true)
+	near(name .. ": CheeseMap.tiles draws what SurfaceTiles does", SurfaceTiles.area(CheeseMap.tiles(pr.map.edge)), drawn, 1e-9)
+	-- A small pizza's coarser drawing grid (every second node) keeps the shapes: the strict
+	-- outline within 6% of the footprints, the base and pile within 3% of their fine drawing.
+	local coarse = SurfaceTiles.area(CheeseMap.tiles(pr.map.edge, 2))
+	check(name .. ": every second node, the strict surface draws the footprints within 6%", math.abs(coarse - truth) / truth <= 0.06, true)
+	local fineBase = SurfaceTiles.area(CheeseMap.tiles(pr.look.base))
+	local coarseBase = SurfaceTiles.area(CheeseMap.tiles(pr.look.base, 2))
+	check(name .. ": every second node, the base draws within 3% of its fine drawing", math.abs(coarseBase - fineBase) / fineBase <= 0.03, true)
+	if name == "pile" then
+		local finePile = SurfaceTiles.area(CheeseMap.tiles(pr.look.piles))
+		local coarsePile = SurfaceTiles.area(CheeseMap.tiles(pr.look.piles, 2))
+		check("pile: every second node, the pile draws within 10% of its fine drawing", math.abs(coarsePile - finePile) / finePile <= 0.1, true)
+	end
 	-- The score reads the map, never the look.
 	local before = MakeCheese.grade(pr.cheese).score
 	CheeseMap.look(pr.map)

@@ -135,6 +135,13 @@ local function sheet(seconds: number?, size: number?): string
 			caption.Font = Enum.Font.Gotham
 			caption.TextSize = text
 			caption.TextColor3 = Color3.new(1, 1, 1)
+			if phone then
+				-- A phone's column is too narrow for the full caption at 12 px: shrink to fit.
+				caption.TextScaled = true
+				local limit = Instance.new("UITextSizeConstraint")
+				limit.MaxTextSize = text
+				limit.Parent = caption
+			end
 			caption.Text = string.format("%s: %.0f%% covered%s, Cheese %d", CheeseProofs.labels[name], coverage * 100, if info.variant and v.view == "base" then ", " .. info.variant .. " base" else "", math.floor(score + 0.5))
 			caption.Parent = back
 			table.insert(lines, string.format("%s / %s: variant=%s coverage=%.3f strictShare=%s baseShare=%s strictDrawn=%s baseDrawn=%s tiles=%d cheese=%d", v.view, name, tostring(info.variant), coverage, if info.strictShare then string.format("%.3f", info.strictShare) else "-", if info.baseShare then string.format("%.3f", info.baseShare) else "-", if info.strictDrawn then string.format("%.4f", info.strictDrawn) else "-", if info.baseDrawn then string.format("%.4f", info.baseDrawn) else "-", info.tiles, math.floor(score + 0.5)))

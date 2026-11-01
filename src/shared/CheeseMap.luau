@@ -23,6 +23,7 @@
 -- Every threshold below marked "proposal" is a proposal, not an approved value.
 
 local PrepFood = require(script.Parent.PrepFood)
+local SurfaceTiles = require(script.Parent.SurfaceTiles)
 
 local CheeseMap = {}
 
@@ -452,6 +453,17 @@ function CheeseMap.look(map: Map): Look
 		baseShare = baseN / doughN,
 		strictShare = strictN / doughN,
 	}
+end
+
+-- A node field's surface (level 0) as tiles, drawn on every `stride`-th node (1, 2, 3, 4 or 6:
+-- strides dividing G). The client draws a small pizza on a coarser grid so its tiles are not
+-- a pixel or two each (MakeLayers); the fields are smooth, so the outline keeps its shape.
+function CheeseMap.tiles(field: { number }, stride: number?): { SurfaceTiles.Tile }
+	local k = stride or 1
+	assert(G % k == 0, "stride must divide CheeseMap.G")
+	return SurfaceTiles.build(G // k, CheeseMap.GRID_STEP * k, function(gx: number, gy: number): number
+		return field[idx(gx * k, gy * k)]
+	end, 0)
 end
 
 return CheeseMap

@@ -105,6 +105,10 @@ local CHEESE_COLORS = {
 	{ color = Color3.fromRGB(163, 78, 26), at = Config.Oven.burntAt },
 }
 local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
+-- The cheese surfaces' drawing grid (see strideFor): strides dividing CheeseMap.G, and the
+-- least on-screen size of a drawn square.
+local STRIDES = { 1, 2, 3, 4, 6 }
+local MIN_TILE_PX = 4.5
 -- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
 -- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
 -- SHRED_MIN radius.
@@ -266,8 +270,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	cheeseUpper.Visible = false
 	local cheeseView = opts.cheeseView or Config.FoodArt.cheeseView
 	-- Slice 8a surfaces (FoodSurface): the strict outline, the baked base and its piles.
-	local strictSurface = FoodSurface.new(cheeseLayer, zIndex + 2, "Strict", { color = CHEESE_RAW })
-	-- The base and its piles lie under the shreds' groups (ZIndex 1 and 2 in the cheese layer).
+	-- The strict outline and the base lie under the piles, and all three under the shreds'
+	-- groups (ZIndex 1 and 2 in the cheese layer).
+	local strictSurface = FoodSurface.new(cheeseLayer, -2, "Strict", { color = CHEESE_RAW })
 	local baseSurface = FoodSurface.new(cheeseLayer, -2, "Base", { color = CHEESE_COLORS[1].color })
 	local pileSurface = FoodSurface.new(cheeseLayer, -1, "Piles", { color = CHEESE_COLORS[1].color })
 	-- The map of the pinches last drawn, its look and tiles (nil until a view needs them).
@@ -759,31 +764,56 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 	end
 
-	-- The map, its look and the three surfaces' tiles, rebuilt only when the pinches change.
+	-- The surfaces' drawing grid: every `stride`-th node of the map's, the finest whose squares
+	-- are at least MIN_TILE_PX on screen. A small pizza (the phone's oven, about 2.4 px per map
+	-- square) drawn square by square shows a ragged outline, each 2 px tile resolving its edge
+	-- in a pixel or two; every second node gives about 5 px tiles and a smooth chain of straight
+	-- pieces (the fields are smooth: nothing a phone could show is lost).
+	local function strideFor(): number
+		local square = math.min(tileA, tileB) * CheeseMap.GRID_STEP
+		for _, k in STRIDES do
+			if square * k >= MIN_TILE_PX then
+				return k
+			end
+		end
+		return STRIDES[#STRIDES]
+	end
+	local cheeseFields: { { number } }? = nil
+	local tilesStride = 0
+	local function buildTiles(stride: number)
+		local fields = cheeseFields
+		if not fields then
+			return
+		end
+		tilesStride = stride
+		strictTiles = CheeseMap.tiles(fields[1], stride)
+		baseTiles = CheeseMap.tiles(fields[2], stride)
+		pileTiles = CheeseMap.tiles(fields[3], stride)
+		strictPileTiles = CheeseMap.tiles(fields[4], stride)
+		surfacesKey = ""
+	end
+
+	-- The map, its look and the surfaces' tiles, rebuilt only when the pinches (or the drawing
+	-- grid) change.
 	local function mapFor(list: { any }?)
 		local parts = {}
 		for _, p in list or {} do
 			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
 		end
 		local k = table.concat(parts, "|")
+		local stride = strideFor()
 		if k == mapKey and cheeseLook then
+			if stride ~= tilesStride then
+				buildTiles(stride)
+			end
 			return
 		end
 		mapKey = k
 		local map = CheeseMap.build(list or {})
 		local look = CheeseMap.look(map)
 		cheeseLook = look
-		local G, H = CheeseMap.G, CheeseMap.GRID_STEP
-		local function field(f: { number }): (number, number) -> number
-			return function(gx: number, gy: number): number
-				return f[CheeseMap.index(gx, gy)]
-			end
-		end
-		strictTiles = SurfaceTiles.build(G, H, field(map.edge), 0)
-		baseTiles = SurfaceTiles.build(G, H, field(look.base), 0)
-		pileTiles = SurfaceTiles.build(G, H, field(look.piles), 0)
-		strictPileTiles = SurfaceTiles.build(G, H, field(look.strictPiles), 0)
-		surfacesKey = ""
+		cheeseFields = { map.edge, look.base, look.piles, look.strictPiles }
+		buildTiles(stride)
 	end
 
 	function layers.cheese(_self: Layers, list: { any }?)
