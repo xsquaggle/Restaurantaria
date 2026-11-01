@@ -610,8 +610,9 @@ function Scoring.cutPath(points: any, S: PrepGeometry.Mat2?): (Cut?, string?)
 	local lo, hi, widest = math.huge, -math.huge, 0
 	-- Straightness forgives hand tremor and input noise (Lawson, 2026-10-29): the wobble is
 	-- measured on the path averaged over a short stretch along it (Config.Cut.tremor), so small
-	-- quick shakes cancel out while a drift or a bend that lasts longer than the stretch counts
-	-- in full. The widest raw distance is kept for the trace (rawDeviation).
+	-- quick shakes cancel out while a drift or a bend much longer than the stretch keeps most of
+	-- its size (a short sharp kink's tip is averaged down too). The widest raw distance is kept
+	-- for the trace (rawDeviation).
 	local ws = fit.ws
 	local offs, along = {}, {}
 	local run, px, py = 0, nil :: number?, nil :: number?
@@ -744,17 +745,75 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 	-- (Lawson, 2026-10-29: predictable, no stacked penalties) the centre penalty grows from
 	-- nothing at centreTolerance to the full CENTRE_STEP over centreRamp, instead of the full
 	-- step at once; and a bent cut's line sits off centre because of the bend, so a cut that
-	-- both bends and misses the centre is charged only the larger of the two.
+	-- both bends and misses the centre is charged one of the two, never both: the one that costs
+	-- more points of this Cut score. Since slice 8a the two are compared in those final points
+	-- (the score each choice gives), not as a layout share against a path-credit share, so the
+	-- grade has no jump where the choice switches (Astra r21, S21-01).
 	local n = #lines
+	local function layoutOf(count: number, even: number, miss: number): number
+		return clamp01(count * 0.5 + even * 0.5 - miss)
+	end
+	-- Freehand: the layout score is scaled by the cuts' mean path credit, so crooked or
+	-- partial cuts lower the grade. Each cut's parts are kept for feedback.
+	local function scoreOf(l: number, q: number, capped: boolean): number
+		local v = 100 * l * q
+		return if capped then math.min(v, 60) else v
+	end
+	local wrongCount = n ~= needed
+	local raw = {}
+	local both = {}
+	for i, line in lines do
+		local q, straight, complete = Scoring.cutQuality(line)
+		local miss = CENTRE_STEP * clamp01((offsets[i] - cfg.centreTolerance) / cfg.centreRamp)
+		raw[i] = { q = q, straight = straight, complete = complete, miss = miss, chargeCentre = miss > 0 }
+		if miss > 0 and q < complete then
+			raw[i].chargeCentre = false
+			table.insert(both, i)
+		end
+	end
+	-- Which of the bent-and-off-centre cuts are charged for the centre (the rest for the bend):
+	-- every combination is scored and the lowest score is kept, i.e. the larger cost in points.
+	-- The lowest of continuous scores is continuous, and each never rises as a cut moves
+	-- further off centre or gets more crooked, so neither does the grade. maxLines is 4, so at
+	-- most 16 combinations.
+	local function totals(mask: number): (number, number)
+		local qSum, missSum = 0, 0
+		for i = 1, n do
+			local r = raw[i]
+			local centreCharged = r.chargeCentre
+			local k = table.find(both, i)
+			if k then
+				centreCharged = bit32.btest(mask, bit32.lshift(1, k - 1))
+			end
+			if centreCharged then
+				missSum += r.miss
+				qSum += if k then r.complete else r.q
+			else
+				qSum += r.q
+			end
+		end
+		return qSum / n, missSum
+	end
+	local bestMask, bestScore = 0, math.huge
+	for mask = 0, bit32.lshift(1, #both) - 1 do
+		local q, missSum = totals(mask)
+		local v = scoreOf(layoutOf(countScore, evenScore, missSum), q, wrongCount)
+		if v < bestScore - 1e-9 then
+			bestMask, bestScore = mask, v
+		end
+	end
+	for k, i in both do
+		raw[i].chargeCentre = bit32.btest(bestMask, bit32.lshift(1, k - 1))
+	end
+
 	local quality, qualityStraight, qualityComplete, centre = 0, 0, 0, 0
 	local crooked, short, offCentre = 0, 0, 0
 	local perCut = {}
 	for i, line in lines do
-		local q, straight, complete = Scoring.cutQuality(line)
-		local miss = CENTRE_STEP * clamp01((offsets[i] - cfg.centreTolerance) / cfg.centreRamp)
-		local bendLoss = (complete - q) / n -- what the bend takes off the mean path credit
-		if miss > 0 and bendLoss > 0 then
-			if miss >= bendLoss then
+		local r = raw[i]
+		local q, straight, complete, miss = r.q, r.straight, r.complete, r.miss
+		if table.find(both, i) then
+			if r.chargeCentre then
 				q, straight = complete, 1
 			else
 				miss = 0
@@ -782,17 +841,7 @@ function Scoring.cut(slices: number, lines: { Cut }, S: PrepGeometry.Mat2?): Gra
 	quality /= n
 	qualityStraight /= n
 	qualityComplete /= n
-	local function layoutOf(count: number, even: number, miss: number): number
-		return clamp01(count * 0.5 + even * 0.5 - miss)
-	end
 	local layout = layoutOf(countScore, evenScore, centre)
-	-- Freehand: the layout score is scaled by the cuts' mean path credit, so crooked or
-	-- partial cuts lower the grade. Each cut's parts are kept for feedback.
-	local function scoreOf(l: number, q: number, capped: boolean): number
-		local v = 100 * l * q
-		return if capped then math.min(v, 60) else v
-	end
-	local wrongCount = n ~= needed
 	local score = scoreOf(layout, quality, wrongCount)
 	-- A note names a problem only when it cost at least noteMinPoints of this Cut score
 	-- (Lawson, 2026-10-29: no criticism of tiny deviations); each problem has one note.

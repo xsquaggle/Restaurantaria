@@ -229,12 +229,14 @@ Config.Cut = {
 	straightPerfect = 0.04,
 	-- Hand tremor and input noise (Lawson, 2026-10-29: "a forgiving tolerance"; provisional):
 	-- the wobble is measured on the path averaged over this stretch along it (cut units), so
-	-- shakes quicker than this cancel out and a drift or bend longer than this counts in full.
+	-- shakes quicker than this cancel out, and a drift or bend much longer than this keeps
+	-- most of its size. The averaging also rounds off the tip of a short sharp kink, so such a
+	-- kink can still score as straight (Astra r21; under review, provisional).
 	-- 0.15 = 56 px at 1920x1080 and 13 px on a 667x375 phone.
 	tremor = 0.15,
-	-- A Cut note (uneven slices, a wobbly or a short cut) shows only when that problem cost at
-	-- least this many points of the Cut score (Lawson, 2026-10-29; provisional). Notes only:
-	-- the score is the same either way.
+	-- Every Cut note (wrong number of cuts, missed centre, uneven slices, a wobbly or a short
+	-- cut) shows only when that problem cost at least this many points of the Cut score
+	-- (Lawson, 2026-10-29; provisional). Notes only: the score is the same either way.
 	noteMinPoints = 3,
 	-- A cut counts as wobbly for its note below this straightness (with the cost rule above).
 	wobbleNoteBelow = 0.9,
