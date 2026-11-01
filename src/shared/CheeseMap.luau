@@ -301,9 +301,10 @@ do
 	end
 end
 
--- Morphological closing of a 0/1 node field by the DISC: dilate, then erode. Nodes past the
--- dough count as covered while eroding, so cheese that reaches the dough's edge keeps reaching
--- it (the base is clipped to the dough afterwards).
+-- Morphological closing of a 0/1 node field by the DISC: dilate, then erode. A node past the
+-- dough counts as covered while eroding only where cheese on the dough comes within CLOSE of
+-- it, so cheese that reaches the dough's edge keeps reaching it, and cheese that stops short of
+-- the edge keeps its own outline there (the base is clipped to the dough afterwards).
 local function close(field: { number }): { number }
 	local grown = table.create(NODES, 0)
 	for gx = -G, G do
@@ -319,6 +320,27 @@ local function close(field: { number }): { number }
 			end
 		end
 	end
+	-- Whether cheese on the dough lies within CLOSE of node (x, y) (memoised per node).
+	local near: { [number]: boolean } = {}
+	local function nearCheese(x: number, y: number): boolean
+		local i = idx(x, y)
+		local v = near[i]
+		if v == nil then
+			v = false
+			for _, d in DISC do
+				local a, b = x + d[1], y + d[2]
+				if a >= -G and a <= G and b >= -G and b <= G then
+					local j = idx(a, b)
+					if onDough[j] and field[j] >= 1 then
+						v = true
+						break
+					end
+				end
+			end
+			near[i] = v
+		end
+		return v
+	end
 	local out = table.create(NODES, 0)
 	for gx = -G, G do
 		for gy = -G, G do
@@ -330,6 +352,9 @@ local function close(field: { number }): { number }
 					if x >= -G and x <= G and y >= -G and y <= G then
 						local j = idx(x, y)
 						if onDough[j] and grown[j] < 1 then
+							keep = 0
+							break
+						elseif not onDough[j] and not nearCheese(x, y) then
 							keep = 0
 							break
 						end

@@ -177,6 +177,32 @@ for _, name in { "even", "miss" } do
 	check(name .. ": no pile drawn", any, 0)
 end
 
+-- The base only closes gaps: every node it adds lies within CLOSE of real cheese (it never
+-- spreads cheese where none was put, e.g. out to the crust).
+for _, name in CheeseProofs.names do
+	local pr = proofs[name]
+	local k = math.ceil(CheeseMap.CLOSE / H)
+	local worstGap = 0
+	for gx = -G, G do
+		for gy = -G, G do
+			local i = CheeseMap.index(gx, gy)
+			if pr.look.base[i] >= 0 and pr.map.count[i] < 1 then
+				local best = math.huge
+				for dx = -k - 1, k + 1 do
+					for dy = -k - 1, k + 1 do
+						local x, y = gx + dx, gy + dy
+						if x >= -G and x <= G and y >= -G and y <= G and pr.map.count[CheeseMap.index(x, y)] >= 1 then
+							best = math.min(best, math.sqrt(dx * dx + dy * dy) * H)
+						end
+					end
+				end
+				worstGap = math.max(worstGap, best)
+			end
+		end
+	end
+	check(name .. ": the base adds nothing further than the closing radius from real cheese", worstGap <= CheeseMap.CLOSE + 1e-9, true)
+end
+
 ------------------------------------------------------------------------------------------
 -- 4. Nothing past the dough's edge, in the map and in every drawn surface.
 
