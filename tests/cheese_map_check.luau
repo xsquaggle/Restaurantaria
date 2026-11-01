@@ -324,7 +324,7 @@ check("proposal: good coverage", CheeseMap.GOOD_COVERAGE, 0.8)
 check("proposal: heavy pile share", CheeseMap.HEAVY_SHARE, 0.25)
 check("proposal: heavy amount", CheeseMap.HEAVY_AMOUNT, 1.6)
 check("proposal: pile depth", CheeseMap.PILE, 4)
-note(string.format("Melt (proposal): the loose shreds fade out and the finished base fades in from %d s to %d s in the oven (the end of raw to cooked); colour follows the bake after that", Config.Oven.rawUntil, Config.Oven.cookedFrom))
+note(string.format("Melt (proposal): from %d s to %d s in the oven (the end of raw to cooked) the finished base fades in under the still-solid shreds over the first 40%%, then the shreds fade out over it; colour follows the bake after that", Config.Oven.rawUntil, Config.Oven.cookedFrom))
 
 for _, l in report do
 	print("  " .. l)

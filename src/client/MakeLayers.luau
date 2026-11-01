@@ -111,7 +111,11 @@ local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
 local SHRED_OVERHANG = 0.02
 local SHRED_MIN = 0.07
 -- The melt (proposal, Lawson to judge): from the end of the raw state (rawUntil) to cooked
--- (cookedFrom) the shreds fade out as the base fades in.
+-- (cookedFrom). First the finished base fades in UNDER the still-solid shreds (the gaps between
+-- them fill with cheese), then the shreds fade out over the now-solid base, so the sauce never
+-- shows through a half-clear cheese (a cross-fade washed the cheese pink halfway through).
+-- MELT_BASE: the share of the melt the base takes to appear.
+local MELT_BASE = 0.4
 local function meltShare(seconds: number?): number
 	if not seconds then
 		return 0
@@ -263,8 +267,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	local cheeseView = opts.cheeseView or Config.FoodArt.cheeseView
 	-- Slice 8a surfaces (FoodSurface): the strict outline, the baked base and its piles.
 	local strictSurface = FoodSurface.new(cheeseLayer, zIndex + 2, "Strict", { color = CHEESE_RAW })
-	local baseSurface = FoodSurface.new(cheeseLayer, zIndex + 2, "Base", { color = CHEESE_COLORS[1].color })
-	local pileSurface = FoodSurface.new(cheeseLayer, zIndex + 3, "Piles", { color = CHEESE_COLORS[1].color })
+	-- The base and its piles lie under the shreds' groups (ZIndex 1 and 2 in the cheese layer).
+	local baseSurface = FoodSurface.new(cheeseLayer, -2, "Base", { color = CHEESE_COLORS[1].color })
+	local pileSurface = FoodSurface.new(cheeseLayer, -1, "Piles", { color = CHEESE_COLORS[1].color })
 	-- The map of the pinches last drawn, its look and tiles (nil until a view needs them).
 	local mapKey = ""
 	local cheeseLook: CheeseMap.Look? = nil
@@ -713,9 +718,10 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 
 	-- The cheese pinches (dough-local), in placement order, in the cooking state of the bake
 	-- (raw when not baked). Slice 8a (Config.FoodArt.cheeseView):
-	--  * "base": the loose shreds (Astra's raw pinch art) until the melt, then fading out while
-	--    the finished base fades in (meltShare); the base and its piles are shaped from the
-	--    shared map (CheeseMap.look) and coloured by the bake. Flat-colour PLACEHOLDER base.
+	--  * "base": the loose shreds (Astra's raw pinch art) until the melt; then the finished base
+	--    fades in under them and they fade out over it (meltShare, MELT_BASE); the base and its
+	--    piles are shaped from the shared map (CheeseMap.look) and coloured by the bake.
+	--    Flat-colour PLACEHOLDER base.
 	--  * "strict": the map's own outline (the scored coverage) and its piles, raw colour, then
 	--    the bake's.
 	--  * "shreds": the pinch sprites through every state (before slice 8a), the lower state in
@@ -816,8 +822,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			pileSurface:look(Color3.new(c.R * PILE_SHADE.R, c.G * PILE_SHADE.G, c.B * PILE_SHADE.B), 0)
 		elseif cheeseView == "base" and melt > 0 then
 			local c = cheeseColor(math.floor((baked :: number) * 50 + 0.5) / 50)
-			baseSurface:look(c, 1 - melt)
-			pileSurface:look(Color3.new(c.R * PILE_SHADE.R, c.G * PILE_SHADE.G, c.B * PILE_SHADE.B), 1 - melt)
+			local shown = math.clamp(melt / MELT_BASE, 0, 1)
+			baseSurface:look(c, 1 - shown)
+			pileSurface:look(Color3.new(c.R * PILE_SHADE.R, c.G * PILE_SHADE.G, c.B * PILE_SHADE.B), 1 - shown)
 		end
 		-- The shreds.
 		cheeseUpper.Visible = cheeseView == "shreds" and baked ~= nil and t > 0
@@ -832,7 +839,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			return
 		end
 		cheeseKey = k
-		drawShreds(if showShreds then list else {}, i, if cheeseView == "base" then melt else 0)
+		drawShreds(if showShreds then list else {}, i, if cheeseView == "base" then math.clamp((melt - MELT_BASE) / (1 - MELT_BASE), 0, 1) else 0)
 	end
 
 	function layers.cheeseInfo(_self: Layers): CheeseInfo
