@@ -174,11 +174,16 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 				lx1, ly1 = t.x1 + (X1 - p1.X) / sa, t.y1 + (Y1 - p1.Y) / sb
 				local px, py = (X0 + X1) / 2, (Y0 + Y1) / 2
 				shiftX, shiftY = (px - s.X) / sa, (py - s.Y) / sb
-				el.Position = UDim2.fromOffset(px, py)
+				-- Placed by its top-left corner: a GUI offset is a whole number, so an odd-sized
+				-- tile placed by its centre (a half pixel) was rounded half a pixel off and
+				-- opened a hairline seam beside its neighbour (seen on the phone's oven).
+				el.AnchorPoint = Vector2.zero
+				el.Position = UDim2.fromOffset(X0, Y0)
 			else
 				W = sa * (t.x1 - t.x0) + 2 * PAD
 				H = sb * (t.y1 - t.y0) + 2 * PAD
 				lx0, ly0, lx1, ly1 = t.x0 - PAD / sa, t.y0 - PAD / sb, t.x1 + PAD / sa, t.y1 + PAD / sb
+				el.AnchorPoint = Vector2.new(0.5, 0.5)
 				el.Position = UDim2.fromOffset(s.X, s.Y)
 			end
 			el.Size = UDim2.fromOffset(W, H)
