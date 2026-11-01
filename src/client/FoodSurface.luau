@@ -12,6 +12,14 @@
 -- min(W / |cos t|, H / |sin t|) for a W x H element and gradient Rotation t, in the element's own
 -- (turned) frame, with t growing along (cos t, sin t), y down.
 --
+-- Render budget (measured in Studio 2026-11-01): the engine keeps one texture per distinct
+-- gradient sequence, and past about a thousand distinct sequences on screen the newest
+-- gradients stop drawing (their tiles show as plain squares, a staircase edge). 2,560 gradients
+-- sharing one sequence drew correctly. So every cut tile uses one of a few shared sequences (an
+-- edge at the middle, softened over a quantised width) and its edge is moved with the
+-- gradient's Offset, which shifts the gradient by (Offset.X * W, Offset.Y * H) px in the
+-- element's own frame (measured the same day).
+--
 -- Looks: `color` gives flat-colour tiles (a declared placeholder until authored material
 -- arrives); `image` gives material tiles sampling a map that covers the dough-local square
 -- -span..span (ImageRect), so neighbouring tiles show one continuous material. Tints and
@@ -31,6 +39,24 @@ local FoodSurface = {}
 -- exactly and never overlap (an overlap shows as a darker line while a surface fades).
 local PAD = 0.5
 local SOFT = 1.0 -- px over which a cut edge goes from opaque to clear (anti-aliasing)
+local SOFT_STEP = 1 / 256 -- the soft width's quantum along the gradient: few shared sequences
+
+-- The shared edge sequences, by quantised soft width (see "Render budget" above).
+local edges: { [number]: NumberSequence } = {}
+local function edge(steps: number): NumberSequence
+	local seq = edges[steps]
+	if not seq then
+		local half = steps * SOFT_STEP / 2
+		seq = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.5 - half, 0),
+			NumberSequenceKeypoint.new(0.5 + half, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		edges[steps] = seq
+	end
+	return seq
+end
 
 export type Options = {
 	color: Color3?,
@@ -140,6 +166,8 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 					-- Covers no whole pixel: its neighbours meet across it.
 					tints[n] = Color3.new(1, 1, 1)
 					el.Visible = false
+					local g0 = el:FindFirstChildOfClass("UIGradient") :: UIGradient
+					g0.Enabled = false
 					continue
 				end
 				lx0, ly0 = t.x0 + (X0 - p0.X) / sa, t.y0 + (Y0 - p0.Y) / sb
@@ -175,26 +203,23 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 				local th = math.atan2(my, mx)
 				local c, sn = math.abs(math.cos(th)), math.abs(math.sin(th))
 				local L = math.min(if c > 1e-6 then W / c else math.huge, if sn > 1e-6 then H / sn else math.huge)
+				local steps = math.clamp(math.floor(SOFT / L / SOFT_STEP + 0.5), 1, 64)
+				local half = steps * SOFT_STEP / 2
 				local t0 = 0.5 + dist / L
-				local soft = SOFT / L
-				local lo, hi = t0 - soft / 2, t0 + soft / 2
-				if hi <= 0 then
+				if t0 + half <= 0 then
 					el.Visible = false
 					g.Enabled = false
 					continue
 				end
-				g.Rotation = math.deg(th)
-				if lo >= 1 then
+				if t0 - half >= 1 then
 					g.Enabled = false
 				else
-					lo = math.clamp(lo, 0.0005, 0.998)
-					hi = math.clamp(hi, lo + 0.0005, 0.9995)
-					g.Transparency = NumberSequence.new({
-						NumberSequenceKeypoint.new(0, 0),
-						NumberSequenceKeypoint.new(lo, 0),
-						NumberSequenceKeypoint.new(hi, 1),
-						NumberSequenceKeypoint.new(1, 1),
-					})
+					-- One shared sequence with its edge at the middle, moved to the cut by the
+					-- Offset: the shift (dist cos th / W, dist sin th / H) of the element's size
+					-- moves the gradient's middle dist px along its direction.
+					g.Rotation = math.deg(th)
+					g.Transparency = edge(steps)
+					g.Offset = Vector2.new(dist * math.cos(th) / W, dist * math.sin(th) / H)
 					g.Enabled = true
 				end
 			else
@@ -203,11 +228,10 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 			paint(el, tc)
 			el.Visible = true
 		end
-		for i = n + 1, shown do
-			pool[i].Visible = false
-		end
 		for i = n + 1, #pool do
 			pool[i].Visible = false
+			local g = pool[i]:FindFirstChildOfClass("UIGradient") :: UIGradient
+			g.Enabled = false
 		end
 		shown = n
 	end
