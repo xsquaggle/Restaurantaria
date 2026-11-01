@@ -271,6 +271,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	local strictTiles: { SurfaceTiles.Tile } = {}
 	local baseTiles: { SurfaceTiles.Tile } = {}
 	local pileTiles: { SurfaceTiles.Tile } = {}
+	local strictPileTiles: { SurfaceTiles.Tile } = {}
 	local surfacesKey = ""
 
 	local geometry = ""
@@ -715,7 +716,8 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	--  * "base": the loose shreds (Astra's raw pinch art) until the melt, then fading out while
 	--    the finished base fades in (meltShare); the base and its piles are shaped from the
 	--    shared map (CheeseMap.look) and coloured by the bake. Flat-colour PLACEHOLDER base.
-	--  * "strict": the map's own outline (the scored coverage), raw colour, then the bake's.
+	--  * "strict": the map's own outline (the scored coverage) and its piles, raw colour, then
+	--    the bake's.
 	--  * "shreds": the pinch sprites through every state (before slice 8a), the lower state in
 	--    one group and the upper one fading in as a second group over it.
 	-- Shreds near the dough's edge are drawn smaller so they stop at it (SHRED_OVERHANG).
@@ -774,6 +776,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		strictTiles = SurfaceTiles.build(G, H, field(map.edge), 0)
 		baseTiles = SurfaceTiles.build(G, H, field(look.base), 0)
 		pileTiles = SurfaceTiles.build(G, H, field(look.piles), 0)
+		strictPileTiles = SurfaceTiles.build(G, H, field(look.strictPiles), 0)
 		surfacesKey = ""
 	end
 
@@ -795,7 +798,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			if cheeseView == "strict" then
 				strictSurface:draw(strictTiles)
 				baseSurface:clear()
-				pileSurface:clear()
+				pileSurface:draw(strictPileTiles)
 			else
 				strictSurface:clear()
 				baseSurface:draw(baseTiles)
@@ -810,6 +813,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		if cheeseView == "strict" then
 			local c = if baked then cheeseColor(math.floor(baked * 50 + 0.5) / 50) else CHEESE_RAW
 			strictSurface:look(c, 0)
+			pileSurface:look(Color3.new(c.R * PILE_SHADE.R, c.G * PILE_SHADE.G, c.B * PILE_SHADE.B), 0)
 		elseif cheeseView == "base" and melt > 0 then
 			local c = cheeseColor(math.floor((baked :: number) * 50 + 0.5) / 50)
 			baseSurface:look(c, 1 - melt)

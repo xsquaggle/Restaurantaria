@@ -166,11 +166,29 @@ for gx = -G, G do
 end
 check("heavy pile: no pile drawn far from the spot", farPile, 0)
 check("heavy pile: the pile sits on the base", pl.base[nodeAt(0.3, 0.1)] > 0, true)
--- Even and the miss have no piles drawn.
+-- The strict view keeps the pile too (Lawson 15:40: piles preserved in both), inside its own
+-- outline: drawn at the spot, never where the strict outline is bare, never far away.
+check("heavy pile: the strict view's pile is drawn at its spot", pl.strictPiles[nodeAt(0.3, 0.1)] > 0, true)
+local strictOut, strictFar = 0, 0
+for gx = -G, G do
+	for gy = -G, G do
+		local i = CheeseMap.index(gx, gy)
+		local x, y = gx * H, gy * H
+		if pl.strictPiles[i] >= 0 and proofs.pile.map.edge[i] < 0 then
+			strictOut += 1
+		end
+		if (x - 0.3) ^ 2 + (y - 0.1) ^ 2 > 0.35 ^ 2 and pl.strictPiles[i] >= 0 then
+			strictFar += 1
+		end
+	end
+end
+check("heavy pile: the strict view's pile stays inside the strict outline", strictOut, 0)
+check("heavy pile: the strict view's pile is not drawn far from the spot", strictFar, 0)
+-- Even and the miss have no piles drawn, in either view.
 for _, name in { "even", "miss" } do
 	local any = 0
 	for i = 1, #proofs[name].look.piles do
-		if proofs[name].look.piles[i] >= 0 then
+		if proofs[name].look.piles[i] >= 0 or proofs[name].look.strictPiles[i] >= 0 then
 			any += 1
 		end
 	end

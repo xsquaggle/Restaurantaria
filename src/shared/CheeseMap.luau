@@ -370,13 +370,15 @@ end
 -- The baked look (presentation only): the variant ("even", "patchy" or "heavy") and two node
 -- fields to draw at level 0 (positive inside): the base (the covered area closed by CLOSE so
 -- the gaps between shreds melt shut, broad misses kept, outline smoothed, clipped to the dough)
--- and the piles (where the cheese lies PILE footprints deep, drawn over the base). Also what
+-- and the piles (where the cheese lies PILE footprints deep, drawn over the base; strictPiles
+-- are the same spots for the strict view, which keeps its piles too). Also what
 -- the variant was chosen from, and the dough shares the base and the strict outline cover, so
 -- every proof can report the visual-only fill.
 export type Look = {
 	variant: string,
 	base: { number },
 	piles: { number },
+	strictPiles: { number }, -- the same piles clipped by the strict outline (map.edge)
 	measure: Measure,
 	baseCoverage: number, -- share of the edible area inside the rim under the base
 	broadMiss: number, -- the base's largest bare region inside the rim (share of the edible area)
@@ -405,13 +407,17 @@ function CheeseMap.look(map: Map): Look
 	local softHeavy = blur(heavy, CheeseMap.SMOOTH)
 	local base = table.create(NODES, FAR)
 	local piles = table.create(NODES, FAR)
+	local strictPiles = table.create(NODES, FAR)
 	local baseN, strictN, doughN, edibleBase = 0, 0, 0, 0
 	for i = 1, NODES do
 		local inside = CheeseMap.DOUGH - radius[i]
 		-- Level 0 at half the blur; scaled to dough-local distance near the outline (the blur's
 		-- slope at its half point is about 0.4 / sigma per unit), clipped by the dough's edge.
 		base[i] = math.min((soft[i] - 0.5) * CheeseMap.SMOOTH * 2.5, inside)
-		piles[i] = math.min((softHeavy[i] - 0.5) * CheeseMap.SMOOTH * 2.5, inside, base[i])
+		local pile = (softHeavy[i] - 0.5) * CheeseMap.SMOOTH * 2.5
+		piles[i] = math.min(pile, inside, base[i])
+		-- The strict view's piles: the same spots, inside its own outline.
+		strictPiles[i] = math.min(pile, inside, map.edge[i])
 		if onDough[i] then
 			doughN += 1
 			if base[i] >= 0 then
@@ -438,6 +444,7 @@ function CheeseMap.look(map: Map): Look
 		variant = variant,
 		base = base,
 		piles = piles,
+		strictPiles = strictPiles,
 		measure = m,
 		baseCoverage = baseCoverage,
 		broadMiss = broadMiss,

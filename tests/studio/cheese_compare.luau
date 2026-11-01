@@ -62,6 +62,7 @@ local function ovenSize(): number?
 end
 
 local function sheet(seconds: number?, size: number?): string
+	local oven = ovenSize()
 	clear()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "CheeseCompare"
@@ -82,8 +83,8 @@ local function sheet(seconds: number?, size: number?): string
 	local head = text + 8
 	local cellW = screen.X / cols
 	local cellH = (screen.Y - head) / rows
-	local px = size or ovenSize() or screen.Y / 3
-	px = math.min(px, cellW - 8, cellH - 2 * (text + 4) - 6)
+	local px = size or oven or screen.Y / 3
+	px = math.floor(math.min(px, cellW - 8, cellH - 2 * (text + 4) - 6))
 	local sauce = cleanSauce()
 	local field = MakeSauce.replay(sauce)
 	local S = G.shape(0.95, 0.95, 0)
@@ -99,7 +100,7 @@ local function sheet(seconds: number?, size: number?): string
 	for r, v in VIEWS do
 		local rowLabel = Instance.new("TextLabel")
 		rowLabel.BackgroundTransparency = 1
-		rowLabel.Position = UDim2.fromOffset(0, head + (r - 1) * cellH)
+		rowLabel.Position = UDim2.fromOffset(0, math.floor(head + (r - 1) * cellH))
 		rowLabel.Size = UDim2.new(1, 0, 0, text + 4)
 		rowLabel.Font = Enum.Font.GothamMedium
 		rowLabel.TextSize = text
@@ -111,7 +112,7 @@ local function sheet(seconds: number?, size: number?): string
 			local holder = Instance.new("Frame")
 			holder.BackgroundTransparency = 1
 			holder.Size = UDim2.fromOffset(px, px)
-			holder.Position = UDim2.fromOffset((c - 0.5) * cellW - px / 2, head + (r - 1) * cellH + text + 6)
+			holder.Position = UDim2.fromOffset(math.floor((c - 0.5) * cellW - px / 2), math.floor(head + (r - 1) * cellH + text + 6))
 			holder.Parent = back
 			local food = MakeLayers.new(holder, 1, { cheeseView = v.view })
 			food:place(px / 2, px / 2, px, S, 1)
@@ -129,10 +130,10 @@ local function sheet(seconds: number?, size: number?): string
 			local score, coverage = g.score, g.detail.coverage
 			local caption = Instance.new("TextLabel")
 			caption.BackgroundTransparency = 1
-			caption.Position = UDim2.fromOffset((c - 1) * cellW, head + (r - 1) * cellH + text + 8 + px)
+			caption.Position = UDim2.fromOffset(math.floor((c - 1) * cellW), math.floor(head + (r - 1) * cellH + text + 8 + px))
 			caption.Size = UDim2.fromOffset(cellW, text + 2)
 			caption.Font = Enum.Font.Gotham
-			caption.TextSize = text - 2
+			caption.TextSize = text
 			caption.TextColor3 = Color3.new(1, 1, 1)
 			caption.Text = string.format("%s: %.0f%% covered%s, Cheese %d", CheeseProofs.labels[name], coverage * 100, if info.variant and v.view == "base" then ", " .. info.variant .. " base" else "", math.floor(score + 0.5))
 			caption.Parent = back
