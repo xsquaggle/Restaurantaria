@@ -373,6 +373,93 @@ function Make.new(ctx: any, container: Frame)
 		pinRest = rest
 	end
 
+	-- Remaining cheese (Lawson 2026-10-29 15:53; Astra r21's track and fill): the shaker's
+	-- supply for this pizza, remaining = the server's cap (PrepFood.MAX_PINCHES) less the
+	-- pinches on the board (the pizza's stored pinches plus the held pour's unsent ones: the
+	-- same pinches drawn), never a timer. Shown during the cheese step in the free tool cell
+	-- under the sauce pot (the resting pin's cell in the dough step), level and still while the
+	-- shaker tips, clear of the dough, Next and Undo. The fill shows through a clip that
+	-- shrinks with the supply over the fixed-size fill image (her registration); the count is
+	-- a label above the track, never inside it. Empty: the dark channel and "Empty". A
+	-- supply gauge only: not coverage, readiness or grade.
+	local gauge: Frame
+	local gaugeClip: Frame
+	local gaugeFill: ImageLabel
+	local gaugeLabel: TextLabel
+	local gaugeW: number
+	do
+		local meta = Assets.Meta.cheeseGauge
+		local x, y = cell(0, 2)
+		-- Her proof canvases: 84 x 21 on a phone, 140 x 35 on desktop; on a phone the cell is
+		-- narrower (about 78 px beside Undo), so the gauge keeps 2 px clear of it.
+		gaugeW = math.floor(if compact then math.min(84, cellW - 2) else math.min(140, cellW - 8))
+		local gaugeH = gaugeW * meta.height / meta.width
+		local textSize = if compact then 14 else 18
+		local blockH = textSize + 4 + gaugeH
+		gauge = Ui.new("Frame", {
+			Name = "CheeseLeft",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(x + (cellW - gaugeW) / 2, y + (cellH - blockH) / 2),
+			Size = UDim2.fromOffset(gaugeW, blockH),
+			ZIndex = 5,
+			Visible = false,
+			Parent = dough,
+		})
+		gaugeLabel = Ui.text({
+			Name = "Count",
+			Text = "",
+			FontFace = Theme.Font.bodySemi,
+			TextSize = textSize,
+			TextColor3 = C.ink,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Size = UDim2.new(1, 0, 0, textSize + 2),
+			ZIndex = 6,
+			Parent = gauge,
+		})
+		local track = Ui.new("ImageLabel", {
+			Name = "Track",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(0, textSize + 4),
+			Size = UDim2.fromOffset(gaugeW, gaugeH),
+			ZIndex = 6,
+			Parent = gauge,
+		})
+		Art.apply(track, "ui_cheese_remaining_track")
+		local k = gaugeW / meta.width
+		gaugeClip = Ui.new("Frame", {
+			Name = "Clip",
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			Position = UDim2.fromOffset(meta.clipX * k, meta.clipY * k),
+			Size = UDim2.fromOffset(meta.clipW * k, meta.clipH * k),
+			ZIndex = 7,
+			Parent = track,
+		})
+		gaugeFill = Ui.new("ImageLabel", {
+			Name = "Fill",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(-meta.clipX * k, -meta.clipY * k),
+			Size = UDim2.fromOffset(gaugeW, gaugeH),
+			ZIndex = 7,
+			Parent = gaugeClip,
+		})
+		Art.apply(gaugeFill, "ui_cheese_remaining_fill")
+	end
+	local gaugeShown = -1
+	local function showGauge(on: boolean, remaining: number)
+		gauge.Visible = on
+		if not on or remaining == gaugeShown then
+			return
+		end
+		gaugeShown = remaining
+		local meta = Assets.Meta.cheeseGauge
+		local k = gaugeW / meta.width
+		local share = math.clamp(remaining / meta.capacity, 0, 1)
+		gaugeClip.Size = UDim2.fromOffset(meta.clipW * k * share, meta.clipH * k)
+		gaugeFill.Visible = remaining > 0
+		gaugeLabel.Text = if remaining > 0 then string.format("%d left", remaining) else "Empty"
+	end
+
 	-- Step list: every step of this ticket in order. The current step sits on the nav's coral
 	-- pill; done steps are muted. Phones show the current step alone with its number.
 	local stepsX, stepsY = cell(0, 0)
@@ -755,6 +842,7 @@ function Make.new(ctx: any, container: Frame)
 		-- Sauce and cheese, on the dough as it is now (its shape is fixed once rolled).
 		if m.step == "dough" then
 			food.frame.Visible = false
+			showGauge(false, 0)
 			return
 		end
 		food.frame.Visible = true
@@ -772,6 +860,7 @@ function Make.new(ctx: any, container: Frame)
 			end
 		end
 		food:cheese(pinches)
+		showGauge(m.step == "cheese", math.clamp(PrepFood.MAX_PINCHES - #pinches, 0, PrepFood.MAX_PINCHES))
 	end
 
 	------------------------------------------------------------------------------------------
@@ -1634,7 +1723,7 @@ function Make.new(ctx: any, container: Frame)
 
 	-- First-shift pointer, one lesson per part of the dough step, then Topping's own. The
 	-- glove keeps clear of the tool column, the step label and Undo (Tutorial's hint.clear).
-	local keepClear = { stepsBox, crock, tub, pot, bowl, pinRest, undo.frame }
+	local keepClear = { stepsBox, crock, tub, pot, bowl, pinRest, undo.frame, gauge }
 	local hintFor: (any) -> any
 	function station.hint(snap: any): any
 		local h = hintFor(snap)

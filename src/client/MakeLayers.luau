@@ -34,7 +34,10 @@ local G = require(Shared.PrepGeometry)
 local MakeSauce = require(Shared.MakeSauce)
 local PrepFood = require(Shared.PrepFood)
 local SauceCover = require(Shared.SauceCover)
+local CheeseMap = require(Shared.CheeseMap)
+local SurfaceTiles = require(Shared.SurfaceTiles)
 local Ui = require(script.Parent.Ui)
+local FoodSurface = require(script.Parent.FoodSurface)
 
 local MakeLayers = {}
 
@@ -91,6 +94,43 @@ local function cheeseStates(family: string): { any }
 		{ art = "food_cheese_burnt" .. v, at = Config.Oven.burntAt },
 	}
 end
+-- Slice 8a cheese looks (Config.FoodArt.cheeseView). PLACEHOLDER colours, not art: each is the
+-- mean colour of the opaque pixels of Astra's matching cheese export (raw r13, melted / golden /
+-- burnt r14 v2), so the stand-in base reads as the same cheese until her authored finished-base
+-- art replaces it. Piles: the same colour, a little deeper (proposal).
+local CHEESE_RAW = Color3.fromRGB(248, 227, 177)
+local CHEESE_COLORS = {
+	{ color = Color3.fromRGB(250, 232, 181), at = Config.Oven.cookedFrom },
+	{ color = Color3.fromRGB(248, 193, 87), at = Config.Oven.targets.well },
+	{ color = Color3.fromRGB(163, 78, 26), at = Config.Oven.burntAt },
+}
+local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
+-- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
+-- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
+-- SHRED_MIN radius.
+local SHRED_OVERHANG = 0.02
+local SHRED_MIN = 0.07
+-- The melt (proposal, Lawson to judge): from the end of the raw state (rawUntil) to cooked
+-- (cookedFrom) the shreds fade out as the base fades in.
+local function meltShare(seconds: number?): number
+	if not seconds then
+		return 0
+	end
+	return math.clamp((seconds - Config.Oven.rawUntil) / (Config.Oven.cookedFrom - Config.Oven.rawUntil), 0, 1)
+end
+local function cheeseColor(seconds: number?): Color3
+	if not seconds or seconds <= CHEESE_COLORS[1].at then
+		return CHEESE_COLORS[1].color
+	end
+	for i = 1, #CHEESE_COLORS - 1 do
+		local a, b = CHEESE_COLORS[i], CHEESE_COLORS[i + 1]
+		if seconds < b.at then
+			return a.color:Lerp(b.color, (seconds - a.at) / (b.at - a.at))
+		end
+	end
+	return CHEESE_COLORS[#CHEESE_COLORS].color
+end
+
 -- The r13 stamps' single swap to the cooked P15 stamp (kept for the A/B only): halfway through
 -- the toppings' raw-to-baked crossfade (Widgets: from half the light bake to the regular bake).
 local SAUCE_COOKED_AT = (Config.Oven.targets.light * 0.5 + Config.Oven.targets.regular) / 2
@@ -112,6 +152,22 @@ export type Options = {
 	sauce: string?,
 	-- "v2" or "v1" (default Config.FoodArt.cheese).
 	cheese: string?,
+	-- "base", "strict" or "shreds" (default Config.FoodArt.cheeseView).
+	cheeseView: string?,
+}
+
+-- What the cheese view last drew, for the proofs: the base variant, the map's measures, the
+-- dough shares the base and the strict outline cover, and the drawn strict area against the
+-- map's covered nodes (dough-local units).
+export type CheeseInfo = {
+	view: string,
+	variant: string?,
+	measure: CheeseMap.Measure?,
+	baseShare: number?,
+	strictShare: number?,
+	strictDrawn: number?,
+	baseDrawn: number?,
+	tiles: number,
 }
 
 export type Layers = {
@@ -121,6 +177,7 @@ export type Layers = {
 	bake: (Layers, number?) -> (),
 	sauce: (Layers, { number }?, { any }?) -> (),
 	cheese: (Layers, { any }?) -> (),
+	cheeseInfo: (Layers) -> CheeseInfo,
 }
 
 local function key(S: any, F: number): string
@@ -203,6 +260,18 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	local cheeseLower = group("Lower", 1, cheeseLayer)
 	local cheeseUpper = group("Upper", 2, cheeseLayer)
 	cheeseUpper.Visible = false
+	local cheeseView = opts.cheeseView or Config.FoodArt.cheeseView
+	-- Slice 8a surfaces (FoodSurface): the strict outline, the baked base and its piles.
+	local strictSurface = FoodSurface.new(cheeseLayer, zIndex + 2, "Strict", { color = CHEESE_RAW })
+	local baseSurface = FoodSurface.new(cheeseLayer, zIndex + 2, "Base", { color = CHEESE_COLORS[1].color })
+	local pileSurface = FoodSurface.new(cheeseLayer, zIndex + 3, "Piles", { color = CHEESE_COLORS[1].color })
+	-- The map of the pinches last drawn, its look and tiles (nil until a view needs them).
+	local mapKey = ""
+	local cheeseLook: CheeseMap.Look? = nil
+	local strictTiles: { SurfaceTiles.Tile } = {}
+	local baseTiles: { SurfaceTiles.Tile } = {}
+	local pileTiles: { SurfaceTiles.Tile } = {}
+	local surfacesKey = ""
 
 	local geometry = ""
 	local cx, cy, F, flat = 0, 0, 1, 1
@@ -381,6 +450,10 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		placeGroup(sauceCooked, SAUCE_REACH)
 		cheeseOrigin = placeGroup(cheeseLower, CHEESE_REACH)
 		placeGroup(cheeseUpper, CHEESE_REACH)
+		for _, surf in { strictSurface, baseSurface, pileSurface } do
+			surf:place(Vector2.zero, screen, tileRot, tileA, tileB)
+		end
+		surfacesKey = ""
 		build()
 	end
 
@@ -638,26 +711,15 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	end
 
 	-- The cheese pinches (dough-local), in placement order, in the cooking state of the bake
-	-- (raw when not baked): the lower state in one group, the upper state in a second group
-	-- fading in over it (its GroupTransparency, so the oven's every-frame call redraws nothing).
-	function layers.cheese(_self: Layers, list: { any }?)
-		local i, t = 1, 0
-		if baked then
-			i, t = blend(CHEESES, baked)
-			t = math.floor(t * 50 + 0.5) / 50
-		end
-		cheeseUpper.Visible = baked ~= nil and t > 0
-		cheeseUpper.GroupTransparency = 1 - t
-		-- Redrawn only when the pinches, the place or the pair of states change.
-		local parts = { geometry, tostring(i) }
-		for _, p in list or {} do
-			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
-		end
-		local k = table.concat(parts, "|")
-		if k == cheeseKey then
-			return
-		end
-		cheeseKey = k
+	-- (raw when not baked). Slice 8a (Config.FoodArt.cheeseView):
+	--  * "base": the loose shreds (Astra's raw pinch art) until the melt, then fading out while
+	--    the finished base fades in (meltShare); the base and its piles are shaped from the
+	--    shared map (CheeseMap.look) and coloured by the bake. Flat-colour PLACEHOLDER base.
+	--  * "strict": the map's own outline (the scored coverage), raw colour, then the bake's.
+	--  * "shreds": the pinch sprites through every state (before slice 8a), the lower state in
+	--    one group and the upper one fading in as a second group over it.
+	-- Shreds near the dough's edge are drawn smaller so they stop at it (SHRED_OVERHANG).
+	local function drawShreds(list: { any }?, i: number, fadeOut: number)
 		local n = 0
 		for _, p in list or {} do
 			n += 1
@@ -669,21 +731,118 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 				pinches[n] = pair
 			end
 			local s = screen(p) - cheeseOrigin
+			local r = math.sqrt(p.x * p.x + p.y * p.y)
+			local radius = math.clamp(CheeseMap.DOUGH + SHRED_OVERHANG - r, SHRED_MIN, PrepFood.PINCH_RADIUS)
 			for j, img in pair do
 				img.Position = UDim2.fromOffset(s.X, s.Y)
-				fit(img, 2 * PrepFood.PINCH_RADIUS, CHEESE_SHARE, (n * 137.5) % 360)
+				fit(img, 2 * radius, CHEESE_SHARE, (n * 137.5) % 360)
 				local art = if j == 1 then CHEESES[i].art else CHEESES[i + 1].art
 				if img:GetAttribute("Look") ~= art then
 					img:SetAttribute("Look", art)
 					Art.apply(img, art)
 				end
-				img.Visible = true
+				img.ImageTransparency = fadeOut
+				img.Visible = fadeOut < 1
 			end
 		end
 		for j = n + 1, #pinches do
 			pinches[j][1].Visible = false
 			pinches[j][2].Visible = false
 		end
+	end
+
+	-- The map, its look and the three surfaces' tiles, rebuilt only when the pinches change.
+	local function mapFor(list: { any }?)
+		local parts = {}
+		for _, p in list or {} do
+			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
+		end
+		local k = table.concat(parts, "|")
+		if k == mapKey and cheeseLook then
+			return
+		end
+		mapKey = k
+		local map = CheeseMap.build(list or {})
+		local look = CheeseMap.look(map)
+		cheeseLook = look
+		local G, H = CheeseMap.G, CheeseMap.GRID_STEP
+		local function field(f: { number }): (number, number) -> number
+			return function(gx: number, gy: number): number
+				return f[CheeseMap.index(gx, gy)]
+			end
+		end
+		strictTiles = SurfaceTiles.build(G, H, field(map.edge), 0)
+		baseTiles = SurfaceTiles.build(G, H, field(look.base), 0)
+		pileTiles = SurfaceTiles.build(G, H, field(look.piles), 0)
+		surfacesKey = ""
+	end
+
+	function layers.cheese(_self: Layers, list: { any }?)
+		local i, t = 1, 0
+		if baked and cheeseView == "shreds" then
+			i, t = blend(CHEESES, baked)
+			t = math.floor(t * 50 + 0.5) / 50
+		end
+		local melt = if cheeseView == "base" then math.floor(meltShare(baked) * 50 + 0.5) / 50 else 0
+		local useMap = cheeseView == "strict" or (cheeseView == "base" and melt > 0)
+		if useMap then
+			mapFor(list)
+		end
+		-- The surfaces: drawn when the pinches or the place change, recoloured every call.
+		local sk = geometry .. "|" .. mapKey .. "|" .. cheeseView .. "|" .. tostring(useMap)
+		if useMap and sk ~= surfacesKey then
+			surfacesKey = sk
+			if cheeseView == "strict" then
+				strictSurface:draw(strictTiles)
+				baseSurface:clear()
+				pileSurface:clear()
+			else
+				strictSurface:clear()
+				baseSurface:draw(baseTiles)
+				pileSurface:draw(pileTiles)
+			end
+		elseif not useMap and surfacesKey ~= "" then
+			surfacesKey = ""
+			strictSurface:clear()
+			baseSurface:clear()
+			pileSurface:clear()
+		end
+		if cheeseView == "strict" then
+			local c = if baked then cheeseColor(math.floor(baked * 50 + 0.5) / 50) else CHEESE_RAW
+			strictSurface:look(c, 0)
+		elseif cheeseView == "base" and melt > 0 then
+			local c = cheeseColor(math.floor((baked :: number) * 50 + 0.5) / 50)
+			baseSurface:look(c, 1 - melt)
+			pileSurface:look(Color3.new(c.R * PILE_SHADE.R, c.G * PILE_SHADE.G, c.B * PILE_SHADE.B), 1 - melt)
+		end
+		-- The shreds.
+		cheeseUpper.Visible = cheeseView == "shreds" and baked ~= nil and t > 0
+		cheeseUpper.GroupTransparency = 1 - t
+		local showShreds = cheeseView == "shreds" or (cheeseView == "base" and melt < 1)
+		local parts = { geometry, tostring(i), cheeseView, tostring(melt), tostring(showShreds) }
+		for _, p in list or {} do
+			table.insert(parts, string.format("%.4f,%.4f", p.x, p.y))
+		end
+		local k = table.concat(parts, "|")
+		if k == cheeseKey then
+			return
+		end
+		cheeseKey = k
+		drawShreds(if showShreds then list else {}, i, if cheeseView == "base" then melt else 0)
+	end
+
+	function layers.cheeseInfo(_self: Layers): CheeseInfo
+		local look = cheeseLook
+		local info: CheeseInfo = { view = cheeseView, tiles = strictSurface:count() + baseSurface:count() + pileSurface:count() }
+		if look then
+			info.variant = look.variant
+			info.measure = look.measure
+			info.baseShare = look.baseShare
+			info.strictShare = look.strictShare
+			info.strictDrawn = SurfaceTiles.area(strictTiles)
+			info.baseDrawn = SurfaceTiles.area(baseTiles)
+		end
+		return info
 	end
 
 	return layers

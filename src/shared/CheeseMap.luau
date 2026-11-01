@@ -30,17 +30,27 @@ CheeseMap.DOUGH = 0.95 -- the dough's outer edge, dough-local
 CheeseMap.EDIBLE = 0.84 -- the edible target, where coverage is graded
 CheeseMap.GRID_STEP = 0.04
 CheeseMap.G = 24 -- nodes run from -G to G on each axis (0.96 each way)
--- Proposals (presentation only): a node under PILE footprints or more is a heavy pile; the
--- base closes gaps narrower than about two SMOOTH (a blur of the covered nodes, cut at half);
--- a miss of at least BROAD_MISS (share of the edible area) is a broad miss the base keeps.
-CheeseMap.PILE = 3
+-- Proposals (presentation only, Lawson to judge; no earlier percentage is approved):
+-- PILE: a node under this many footprints or more is a heavy pile.
+CheeseMap.PILE = 4
+-- CLOSE: the baked base closes any bare gap the cheese leaves that a disc of this radius cannot
+-- fit into (a morphological closing of the covered nodes), so the gaps between shreds melt shut
+-- while a miss wider than about 2 x CLOSE stays bare. SMOOTH: the base's outline is then
+-- smoothed (a blur cut at half). BROAD_MISS: a bare region of the base at least this share of
+-- the edible area is a broad miss. RIM: a bare band this wide just inside the edible edge is
+-- left out of the variant's measures, as on a real pizza where sauce shows between the cheese
+-- and the crust (the grade still counts it).
+CheeseMap.CLOSE = 0.08
 CheeseMap.SMOOTH = 0.05
 CheeseMap.BROAD_MISS = 0.03
--- Variant bands (proposal, Lawson to judge; no earlier percentage is approved): "even" from
--- GOOD_COVERAGE coverage with no broad miss and under HEAVY_SHARE of the edible area piled;
--- "heavy" from HEAVY_SHARE piled; otherwise "patchy".
-CheeseMap.GOOD_COVERAGE = 0.85
-CheeseMap.HEAVY_SHARE = 0.12
+CheeseMap.RIM = 0.08
+-- Variant bands (proposals): "heavy" when at least HEAVY_SHARE of the deposited cheese is piled
+-- above PILE - 1 layers, or the deposit is over HEAVY_AMOUNT even layers; otherwise "even" when
+-- the base covers at least GOOD_COVERAGE of the edible area inside the rim with no broad miss;
+-- otherwise "patchy".
+CheeseMap.GOOD_COVERAGE = 0.8
+CheeseMap.HEAVY_SHARE = 0.25
+CheeseMap.HEAVY_AMOUNT = 1.6
 
 local G, H = CheeseMap.G, CheeseMap.GRID_STEP
 local SIDE = 2 * G + 1
@@ -57,7 +67,8 @@ local NODES = SIDE * SIDE
 local radius: { number } = table.create(NODES, 0)
 local onDough: { boolean } = table.create(NODES, false)
 local edible: { boolean } = table.create(NODES, false)
-local edibleCount = 0
+local inner: { boolean } = table.create(NODES, false)
+local edibleCount, innerCount = 0, 0
 for gx = -G, G do
 	for gy = -G, G do
 		local i = idx(gx, gy)
@@ -65,14 +76,19 @@ for gx = -G, G do
 		radius[i] = r
 		onDough[i] = r <= CheeseMap.DOUGH + 1e-9
 		edible[i] = r <= CheeseMap.EDIBLE + 1e-9
+		inner[i] = r <= CheeseMap.EDIBLE - CheeseMap.RIM + 1e-9
 		if edible[i] then
 			edibleCount += 1
+		end
+		if inner[i] then
+			innerCount += 1
 		end
 	end
 end
 CheeseMap.radius = radius
 CheeseMap.onDough = onDough
 CheeseMap.edible = edible
+CheeseMap.inner = inner
 CheeseMap.EDIBLE_NODES = edibleCount
 
 export type Vec = { x: number, y: number }
@@ -239,16 +255,107 @@ local function blur(field: { number }, sigma: number): { number }
 	return out
 end
 
+-- The largest connected bare region (4-connected nodes) of a node field (bare: value < 0) within
+-- the nodes `within` marks, as a share of the edible area.
+local function largestBare(field: { number }, within: { boolean }): number
+	local seen: { [number]: boolean } = {}
+	local largest = 0
+	for gx = -G, G do
+		for gy = -G, G do
+			local i = idx(gx, gy)
+			if within[i] and field[i] < 0 and not seen[i] then
+				local size = 0
+				local stack = { { gx, gy } }
+				seen[i] = true
+				while #stack > 0 do
+					local top = table.remove(stack) :: { number }
+					size += 1
+					for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+						local nx, ny = top[1] + d[1], top[2] + d[2]
+						if nx >= -G and nx <= G and ny >= -G and ny <= G then
+							local j = idx(nx, ny)
+							if within[j] and field[j] < 0 and not seen[j] then
+								seen[j] = true
+								table.insert(stack, { nx, ny })
+							end
+						end
+					end
+				end
+				largest = math.max(largest, size)
+			end
+		end
+	end
+	return largest / edibleCount
+end
+
+-- Node offsets within CLOSE (a disc of nodes).
+local DISC: { { number } } = {}
+do
+	local k = math.floor(CheeseMap.CLOSE / H + 1e-9)
+	for dx = -k, k do
+		for dy = -k, k do
+			if (dx * H) ^ 2 + (dy * H) ^ 2 <= CheeseMap.CLOSE ^ 2 + 1e-9 then
+				table.insert(DISC, { dx, dy })
+			end
+		end
+	end
+end
+
+-- Morphological closing of a 0/1 node field by the DISC: dilate, then erode. Nodes past the
+-- dough count as covered while eroding, so cheese that reaches the dough's edge keeps reaching
+-- it (the base is clipped to the dough afterwards).
+local function close(field: { number }): { number }
+	local grown = table.create(NODES, 0)
+	for gx = -G, G do
+		for gy = -G, G do
+			local i = idx(gx, gy)
+			if field[i] >= 1 then
+				for _, d in DISC do
+					local x, y = gx + d[1], gy + d[2]
+					if x >= -G and x <= G and y >= -G and y <= G then
+						grown[idx(x, y)] = 1
+					end
+				end
+			end
+		end
+	end
+	local out = table.create(NODES, 0)
+	for gx = -G, G do
+		for gy = -G, G do
+			local i = idx(gx, gy)
+			if grown[i] >= 1 then
+				local keep = 1
+				for _, d in DISC do
+					local x, y = gx + d[1], gy + d[2]
+					if x >= -G and x <= G and y >= -G and y <= G then
+						local j = idx(x, y)
+						if onDough[j] and grown[j] < 1 then
+							keep = 0
+							break
+						end
+					end
+				end
+				out[i] = keep
+			end
+		end
+	end
+	return out
+end
+
 -- The baked look (presentation only): the variant ("even", "patchy" or "heavy") and two node
--- fields to draw at level 0 (positive inside): the base (the covered area with the gaps
--- between shreds closed, broad misses kept, clipped to the dough) and the piles (the heavy
--- areas, drawn over the base). Also the base's area against the scored covered area, as shares
--- of the dough, so every proof can report the visual-only fill.
+-- fields to draw at level 0 (positive inside): the base (the covered area closed by CLOSE so
+-- the gaps between shreds melt shut, broad misses kept, outline smoothed, clipped to the dough)
+-- and the piles (where the cheese lies PILE footprints deep, drawn over the base). Also what
+-- the variant was chosen from, and the dough shares the base and the strict outline cover, so
+-- every proof can report the visual-only fill.
 export type Look = {
 	variant: string,
 	base: { number },
 	piles: { number },
 	measure: Measure,
+	baseCoverage: number, -- share of the edible area inside the rim under the base
+	broadMiss: number, -- the base's largest bare region inside the rim (share of the edible area)
+	pileShare: number, -- share of the deposited cheese piled above PILE - 1 layers
 	baseShare: number,
 	strictShare: number,
 }
@@ -257,26 +364,29 @@ function CheeseMap.look(map: Map): Look
 	local m = CheeseMap.measure(map)
 	local covered = table.create(NODES, 0)
 	local heavy = table.create(NODES, 0)
+	local mass, pileMass = 0, 0
 	for i = 1, NODES do
-		if map.count[i] >= 1 then
+		local c = map.count[i]
+		if c >= 1 then
 			covered[i] = 1
 		end
-		if map.count[i] >= CheeseMap.PILE then
+		mass += c
+		if c >= CheeseMap.PILE then
 			heavy[i] = 1
+			pileMass += c - (CheeseMap.PILE - 1)
 		end
 	end
-	local soft = blur(covered, CheeseMap.SMOOTH)
+	local soft = blur(close(covered), CheeseMap.SMOOTH)
 	local softHeavy = blur(heavy, CheeseMap.SMOOTH)
 	local base = table.create(NODES, FAR)
 	local piles = table.create(NODES, FAR)
-	local baseN, strictN, doughN = 0, 0, 0
+	local baseN, strictN, doughN, edibleBase = 0, 0, 0, 0
 	for i = 1, NODES do
 		local inside = CheeseMap.DOUGH - radius[i]
-		-- Level 0 at half the blur; scaled to dough-local distance near the rim (the blur's
+		-- Level 0 at half the blur; scaled to dough-local distance near the outline (the blur's
 		-- slope at its half point is about 0.4 / sigma per unit), clipped by the dough's edge.
-		local b = (soft[i] - 0.5) * CheeseMap.SMOOTH * 2.5
-		base[i] = math.min(b, inside)
-		piles[i] = math.min((softHeavy[i] - 0.5) * CheeseMap.SMOOTH * 2.5, inside)
+		base[i] = math.min((soft[i] - 0.5) * CheeseMap.SMOOTH * 2.5, inside)
+		piles[i] = math.min((softHeavy[i] - 0.5) * CheeseMap.SMOOTH * 2.5, inside, base[i])
 		if onDough[i] then
 			doughN += 1
 			if base[i] >= 0 then
@@ -286,11 +396,17 @@ function CheeseMap.look(map: Map): Look
 				strictN += 1
 			end
 		end
+		if inner[i] and base[i] >= 0 then
+			edibleBase += 1
+		end
 	end
+	local baseCoverage = edibleBase / innerCount
+	local broadMiss = largestBare(base, inner)
+	local pileShare = if mass > 0 then pileMass / mass else 0
 	local variant = "patchy"
-	if m.piled >= CheeseMap.HEAVY_SHARE then
+	if pileShare >= CheeseMap.HEAVY_SHARE or m.amount > CheeseMap.HEAVY_AMOUNT then
 		variant = "heavy"
-	elseif m.coverage >= CheeseMap.GOOD_COVERAGE and m.largestMiss < CheeseMap.BROAD_MISS then
+	elseif baseCoverage >= CheeseMap.GOOD_COVERAGE and broadMiss < CheeseMap.BROAD_MISS then
 		variant = "even"
 	end
 	return {
@@ -298,6 +414,9 @@ function CheeseMap.look(map: Map): Look
 		base = base,
 		piles = piles,
 		measure = m,
+		baseCoverage = baseCoverage,
+		broadMiss = broadMiss,
+		pileShare = pileShare,
 		baseShare = baseN / doughN,
 		strictShare = strictN / doughN,
 	}

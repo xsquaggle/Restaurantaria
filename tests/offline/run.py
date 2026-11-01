@@ -36,6 +36,7 @@ DEFAULT_CHECKS = [
     "tests/sauce_cover_check.luau",
     "tests/sauce_advice_check.luau",
     "tests/cheese_pour_check.luau",
+    "tests/cheese_map_check.luau",
     "tests/grade_check.luau",
     "tests/scoring_check.luau",
     "tests/serve_gate_check.luau",

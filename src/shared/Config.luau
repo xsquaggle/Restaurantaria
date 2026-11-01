@@ -306,6 +306,12 @@ Config.Rewards = {
 Config.FoodArt = {
 	sauce = "material",
 	cheese = "v2",
+	-- How the cheese is drawn (slice 8a; MakeLayers): "base" (Lawson 2026-11-01 22:08: the loose
+	-- shreds melt in the oven into a finished cheese base shaped from the shared map; the base is
+	-- a flat-colour PLACEHOLDER until Astra's authored base art arrives), "strict" (the map's own
+	-- outline through every state, the comparison view) or "shreds" (the pinch sprites through
+	-- every state, as before slice 8a).
+	cheeseView = "base",
 }
 
 Config.Dev = {

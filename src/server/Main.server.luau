@@ -9,6 +9,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local MakeCheese = require(ReplicatedStorage.Shared.MakeCheese)
+local CheeseProofs = require(ReplicatedStorage.Shared.CheeseProofs)
 local MakeDough = require(ReplicatedStorage.Shared.MakeDough)
 local MakeSauce = require(ReplicatedStorage.Shared.MakeSauce)
 local PrepFood = require(ReplicatedStorage.Shared.PrepFood)
@@ -150,7 +151,7 @@ local function cleanMake(act: (string, any) -> (), pizza: any)
 	end
 end
 
-local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true, correctSummary = true }
+local TEST_MUTATORS = { playOut = true, stage = true, act = true, setBake = true, age = true, skipArrivals = true, resetPatience = true, cutAssist = true, correctSummary = true, proofCheese = true }
 local SERVER_TEST_SETTINGS = { mixedOrders = true, simulateLoadFailure = true, foodCap = true }
 
 if RunService:IsStudio() then
@@ -397,6 +398,62 @@ if RunService:IsStudio() then
 			end
 			push(player)
 			return if #log == 0 then "ok" else table.concat(log, "\n")
+		elseif command == "proofCheese" then
+			-- value = { proof = "even" | "miss" | "pile", oven = boolean? }: the first open
+			-- ticket's pizza still on the Make station gets a clean dough and sauce if it needs
+			-- them, then one of slice 8a's proof cheeses (CheeseProofs: 24 pinches, each its own
+			-- tap) and no toppings, through the real actions; with oven, it goes in the oven.
+			-- Returns the Cheese grade the server recorded.
+			local shift = session.shift
+			local log = {}
+			local function act(action: string, args: any)
+				local ok, reason = ShiftService.apply(session, action, args)
+				if not ok then
+					table.insert(log, action .. ": " .. tostring(reason))
+				end
+			end
+			local name = type(value) == "table" and value.proof or "even"
+			local okName, pinches = pcall(CheeseProofs.pinches, name)
+			if not okName then
+				return "no such proof"
+			end
+			shift.startedAt -= 1000
+			ShiftService.tick(session)
+			local clock = workspace:GetServerTimeNow()
+			for _, c in shift.customers do
+				if c.status == "waiting" then
+					c.arrivedAt = clock - 5
+					act("takeOrder", { customerId = c.id })
+				end
+			end
+			local pizza = nil
+			for _, c in shift.customers do
+				local pz = c.status == "ordered" and c.pizzaId and shift.pizzas[c.pizzaId]
+				if pz and pz.stage == "topping" and (pz.make.step == "dough" or pz.make.step == "sauce" or pz.make.step == "cheese") then
+					pizza = pz
+					break
+				end
+			end
+			if not pizza then
+				return "no pizza on the Make station before its cheese"
+			end
+			if pizza.make.step == "dough" then
+				cleanDough(act, pizza.id)
+			end
+			if pizza.make.step == "sauce" then
+				cleanSauce(act, pizza.id)
+			end
+			for _, p in pinches do
+				act("addCheese", { pizzaId = pizza.id, newStroke = true, points = { p } })
+			end
+			act("finishCheese", { pizzaId = pizza.id, from = "cheese" })
+			if type(value) == "table" and value.oven then
+				act("sendToOven", { pizzaId = pizza.id })
+			end
+			push(player)
+			local g = MakeCheese.grade(pizza.make.cheese)
+			local line = string.format("pizza %d proof=%s pinches=%d cheese=%d coverage=%.3f stage=%s slot=%s", pizza.id, name, MakeCheese.count(pizza.make.cheese), g.score, g.detail.coverage, pizza.stage, tostring(pizza.slot))
+			return if #log == 0 then line else line .. "\n" .. table.concat(log, "\n")
 		elseif command == "act" then
 			-- value = { action, args }: one real player action, as if the client sent it.
 			local ok, reason = ShiftService.apply(session, value[1], value[2])

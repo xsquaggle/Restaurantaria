@@ -159,6 +159,10 @@ local Assets = {
 	ui_ticket_tab_selected = "rbxassetid://80463041302408",
 	ui_timer_fill = "rbxassetid://86980522024378",
 	ui_timer_track = "rbxassetid://110311316826751",
+	-- The remaining-cheese gauge (Astra r21, 512 x 128 track and registered fill), uploaded
+	-- 2026-11-01 from the delivery's originals (sha256 as in her manifest).
+	ui_cheese_remaining_track = "rbxassetid://107640196380081",
+	ui_cheese_remaining_fill = "rbxassetid://89074563474884",
 	ui_tutorial_hand = "rbxassetid://85949058675409",
 	ui_tutorial_target_halo = "rbxassetid://131302856190575",
 	-- Interface (Astra, UI V2 integration proof 01).
@@ -260,6 +264,9 @@ Assets.Meta = {
 	-- V2 ticket: three pieces cut from one 840 px wide master; caps 96 px tall, only the
 	-- middle stretches.
 	ticket = { width = 840, cap = 96, midHeight = 746 },
+	-- Remaining-cheese gauge (Astra r21 README): 512 x 128 canvas; the fill shows through a
+	-- clip at (37, 36), 438 x 56 when full, its image never resized as the clip shrinks.
+	cheeseGauge = { width = 512, height = 128, clipX = 37, clipY = 36, clipW = 438, clipH = 56, capacity = 48 },
 	-- UI V2 complete pack: slice centres in delivered pixels (right/bottom exclusive in the
 	-- manifest, so Rect.new takes them as is) and the source height SliceScale divides by.
 	buttonSecondary = { slice = Rect.new(88, 72, 424, 88), height = 160 },
