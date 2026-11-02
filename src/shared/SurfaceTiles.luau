@@ -45,21 +45,13 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 	if turn and turn ~= 0 then
 		assert(key == nil, "a turned surface has no square keys")
 		local own = vals
+		local turned = SurfaceTiles.turnNodes(G, function(gx: number, gy: number): number
+			return own[(gx + G) * side + (gy + G) + 1]
+		end, turn)
 		vals = table.create(side * side, 0)
-		local c, s = math.cos(turn), math.sin(turn)
-		local function at(ix: number, iy: number): number
-			ix = math.clamp(ix, -G, G)
-			iy = math.clamp(iy, -G, G)
-			return own[(ix + G) * side + (iy + G) + 1]
-		end
-		for ux = -G, G do
-			for uy = -G, G do
-				-- p = R(-turn) u, in node units.
-				local px, py = c * ux + s * uy, -s * ux + c * uy
-				local fx, fy = math.floor(px), math.floor(py)
-				local tx, ty = px - fx, py - fy
-				local v00, v10, v01, v11 = at(fx, fy), at(fx + 1, fy), at(fx, fy + 1), at(fx + 1, fy + 1)
-				vals[(ux + G) * side + (uy + G) + 1] = (v00 * (1 - tx) + v10 * tx) * (1 - ty) + (v01 * (1 - tx) + v11 * tx) * ty
+		for gx = -G, G do
+			for gy = -G, G do
+				vals[(gx + G) * side + (gy + G) + 1] = turned(gx, gy)
 			end
 		end
 	end
@@ -188,6 +180,39 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 		flush(G)
 	end
 	return tiles
+end
+
+-- A node field on its grid turned by `turn`: the returned value(ux, uy) at a turned node is the
+-- field bilinearly between its own nodes at p = R(-turn) u (nodes past the grid take its
+-- nearest edge). Computed once for every node, so several surfaces of one field share it.
+function SurfaceTiles.turnNodes(G: number, value: (number, number) -> number, turn: number): (number, number) -> number
+	local side = 2 * G + 1
+	local own = table.create(side * side, 0)
+	for gx = -G, G do
+		for gy = -G, G do
+			own[(gx + G) * side + (gy + G) + 1] = value(gx, gy)
+		end
+	end
+	local function at(ix: number, iy: number): number
+		ix = math.clamp(ix, -G, G)
+		iy = math.clamp(iy, -G, G)
+		return own[(ix + G) * side + (iy + G) + 1]
+	end
+	local out = table.create(side * side, 0)
+	local c, s = math.cos(turn), math.sin(turn)
+	for ux = -G, G do
+		for uy = -G, G do
+			-- p = R(-turn) u, in node units.
+			local px, py = c * ux + s * uy, -s * ux + c * uy
+			local fx, fy = math.floor(px), math.floor(py)
+			local tx, ty = px - fx, py - fy
+			local v00, v10, v01, v11 = at(fx, fy), at(fx + 1, fy), at(fx, fy + 1), at(fx + 1, fy + 1)
+			out[(ux + G) * side + (uy + G) + 1] = (v00 * (1 - tx) + v10 * tx) * (1 - ty) + (v01 * (1 - tx) + v11 * tx) * ty
+		end
+	end
+	return function(ux: number, uy: number): number
+		return out[(ux + G) * side + (uy + G) + 1]
+	end
 end
 
 -- A point of a turned surface's tiles (u, built with `turn`) back in the field's own

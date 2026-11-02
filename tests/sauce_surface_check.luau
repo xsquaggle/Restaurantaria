@@ -471,6 +471,31 @@ do
 	local aOwn, aTurned = SurfaceTiles.area(own.surface), SurfaceTiles.area(turned.surface)
 	check("turned surface: same area within 1%", math.abs(aTurned - aOwn) / aOwn <= 0.01, true)
 	check("turned surface: as many deep-red bands", #turned.bands, #own.bands)
+	-- Each turned band lies inside the turned surface and inside the band below it.
+	local outside = 0
+	for ix = -40, 40 do
+		for iy = -40, 40 do
+			local x, y = ix / 40, iy / 40
+			local below = covers(turned.surface, x, y)
+			for _, b in turned.bands do
+				local here = covers(b.tiles, x, y)
+				if here and not below then
+					-- Allow the outline's own width: a neighbour of the point is under it.
+					local near = false
+					for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+						if covers(turned.surface, x + h * o[1], y + h * o[2]) then
+							near = true
+						end
+					end
+					if not near then
+						outside += 1
+					end
+				end
+				below = here
+			end
+		end
+	end
+	check("turned surface: bands nested inside the surface", outside, 0)
 	table.insert(report, string.format("turned grid: fit rebuilds 400 random views (worst %.1e), oval at 35 degrees turns the grid %.3f rad; %d clear points agree, area %.4f turned vs %.4f own", worst, turn, samples, aTurned, aOwn))
 end
 

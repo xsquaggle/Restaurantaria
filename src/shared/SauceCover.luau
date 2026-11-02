@@ -370,10 +370,15 @@ function SauceCover.layers(field: { number }, stride: number?, bands: boolean?, 
 			surf[(gx + n) * side + (gy + n) + 1] = surfaceValue(credits, gx * k, gy * k)
 		end
 	end
+	-- On a turned grid both node fields are turned once, shared by the surface and the bands.
+	local surfAt = function(gx: number, gy: number): number
+		return surf[(gx + n) * side + (gy + n) + 1]
+	end
+	if turn and turn ~= 0 then
+		surfAt = SurfaceTiles.turnNodes(n, surfAt, turn)
+	end
 	local out: Layers = {
-		surface = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
-			return surf[(gx + n) * side + (gy + n) + 1]
-		end, 0, nil, turn),
+		surface = SurfaceTiles.build(n, h * k, surfAt, 0),
 		bands = {},
 	}
 	if bands then
@@ -390,14 +395,19 @@ function SauceCover.layers(field: { number }, stride: number?, bands: boolean?, 
 				end
 			end
 		end
+		local deepAt = function(gx: number, gy: number): number
+			return deep[(gx + n) * side + (gy + n) + 1]
+		end
+		if turn and turn ~= 0 then
+			deepAt = SurfaceTiles.turnNodes(n, deepAt, turn)
+		end
 		for _, level in SauceCover.DEEP_LEVELS do
 			if top < level then
 				break
 			end
 			local tiles = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
-				local idx = (gx + n) * side + (gy + n) + 1
-				return math.min((deep[idx] - level) * DEEP_SLOPE, surf[idx])
-			end, 0, nil, turn)
+				return math.min((deepAt(gx, gy) - level) * DEEP_SLOPE, surfAt(gx, gy))
+			end, 0)
 			table.insert(out.bands, { level = level, tiles = tiles })
 		end
 	end
