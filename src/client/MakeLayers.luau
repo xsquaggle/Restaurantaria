@@ -545,6 +545,9 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		if sauceSurfaces then
 			sauceSurfaces.raw:place(Vector2.zero, screen, tileRot, tileA, tileB)
 			sauceSurfaces.cooked:place(Vector2.zero, screen, tileRot, tileA, tileB)
+			for _, band in sauceSurfaces.bands do
+				band:place(Vector2.zero, screen, tileRot, tileA, tileB)
+			end
 		end
 		surfacesKey = ""
 		build()
