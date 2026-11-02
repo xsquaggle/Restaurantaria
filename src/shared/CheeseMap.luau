@@ -468,4 +468,21 @@ function CheeseMap.tiles(field: { number }, stride: number?, turn: number?): { S
 	end, 0, nil, turn)
 end
 
+-- The loose shreds (the raw pinch art, until the melt): one sprite per pinch of footprint radius
+-- PrepFood.PINCH_RADIUS, drawn smaller near the dough's edge so it stops at the edge (Lawson
+-- 2026-10-29: cheese stops at the pizza edge), never under SHRED_MIN. A pinch too near the edge
+-- for that keeps SHRED_MIN and is drawn moved in along its radius, so it still stops at the edge.
+-- Presentation only: the map (the grade) keeps the pinch where it landed. Returns the sprite's
+-- centre and radius (dough-local).
+CheeseMap.SHRED_MIN = 0.07
+function CheeseMap.shred(p: Vec): (Vec, number)
+	local r = math.sqrt(p.x * p.x + p.y * p.y)
+	local radius = math.clamp(CheeseMap.DOUGH - r, CheeseMap.SHRED_MIN, PrepFood.PINCH_RADIUS)
+	if r + radius <= CheeseMap.DOUGH then
+		return p, radius
+	end
+	local k = (CheeseMap.DOUGH - radius) / r
+	return { x = p.x * k, y = p.y * k }, radius
+end
+
 return CheeseMap

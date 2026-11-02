@@ -274,6 +274,39 @@ end
 check("edge: no drawn cheese more than 0.005 past the dough's edge", worst <= 0.005, true)
 note(string.format("Edge deposit (24 pinches on the dough's edge): drawn cheese reaches %.4f past the edge at most (strict and base, on the full grid and every 2nd and 3rd node)", math.max(0, worst)))
 
+-- The loose shreds (the raw look until the melt) stop at the edge too: a sprite never reaches
+-- past it, is never under SHRED_MIN or over the footprint, a pinch well inside is drawn as
+-- before, and a moved one stays on its own radius. Before this fix a pinch on the edge drew
+-- SHRED_MIN (0.07) past it.
+local shredWorst, shredMoved, shredBad = -1, 0, 0
+for k = 0, 380 do
+	local r = k * 0.0025
+	for a = 0, 11 do
+		local ang = a / 12 * 2 * math.pi + 0.1
+		local p = { x = r * math.cos(ang), y = r * math.sin(ang) }
+		local c, radius = CheeseMap.shred(p)
+		local cr = math.sqrt(c.x * c.x + c.y * c.y)
+		shredWorst = math.max(shredWorst, cr + radius - CheeseMap.DOUGH)
+		if radius < CheeseMap.SHRED_MIN - 1e-12 or radius > PrepFood.PINCH_RADIUS + 1e-12 then
+			shredBad += 1
+		end
+		if c ~= p then
+			shredMoved += 1
+			if r < CheeseMap.DOUGH - PrepFood.PINCH_RADIUS or math.abs(c.x * p.y - c.y * p.x) > 1e-9 or c.x * p.x + c.y * p.y < 0 then
+				shredBad += 1
+			end
+		elseif r <= CheeseMap.DOUGH - PrepFood.PINCH_RADIUS and radius ~= PrepFood.PINCH_RADIUS then
+			shredBad += 1
+		end
+	end
+end
+check("edge: no shred sprite past the dough's edge", shredWorst <= 1e-9, true)
+check("edge: shred sprites keep their size limits and radius", shredBad, 0)
+check("edge: only pinches within a footprint of the edge are drawn moved in", shredMoved > 0, true)
+local onEdge, onEdgeRadius = CheeseMap.shred({ x = 0.95, y = 0 })
+near("edge: a pinch on the edge is drawn at SHRED_MIN, moved in to stop at the edge", onEdge.x + onEdgeRadius, CheeseMap.DOUGH, 1e-9)
+note(string.format("Edge shreds: a raw shred sprite reaches %.4f past the edge at most (pinches from the centre to the edge, 12 directions; before this fix 0.07)", math.max(0, shredWorst)))
+
 ------------------------------------------------------------------------------------------
 -- 5. The strict surface is the scored coverage; the picture never changes the score.
 

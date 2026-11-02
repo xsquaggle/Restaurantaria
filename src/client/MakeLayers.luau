@@ -141,11 +141,6 @@ local STRIDES = { 1, 2, 3, 4, 6 }
 -- (the slice 2 discs: 1.9 ms), its squares about 16 px on the large desktop pizza.
 local SAUCE_STRIDES = { 2, 3, 4, 6, 8, 12 }
 local MIN_TILE_PX = 4.5
--- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
--- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
--- SHRED_MIN radius.
-local SHRED_OVERHANG = 0.02
-local SHRED_MIN = 0.07
 -- The melt (proposal, Lawson to judge): from the end of the raw state (rawUntil) to cooked
 -- (cookedFrom). First the finished base fades in UNDER the still-solid shreds (the gaps between
 -- them fill with cheese), then the shreds fade out over the now-solid base, so the sauce never
@@ -885,7 +880,8 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	--    the bake's.
 	--  * "shreds": the pinch sprites through every state (before slice 8a), the lower state in
 	--    one group and the upper one fading in as a second group over it.
-	-- Shreds near the dough's edge are drawn smaller so they stop at it (SHRED_OVERHANG).
+	-- Shreds near the dough's edge are drawn smaller, or moved in, so they stop at it
+	-- (CheeseMap.shred).
 	local function drawShreds(list: { any }?, i: number, fadeOut: number)
 		local n = 0
 		for _, p in list or {} do
@@ -897,9 +893,8 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 				pair = { lower, upper }
 				pinches[n] = pair
 			end
-			local s = screen(p) - cheeseOrigin
-			local r = math.sqrt(p.x * p.x + p.y * p.y)
-			local radius = math.clamp(CheeseMap.DOUGH + SHRED_OVERHANG - r, SHRED_MIN, PrepFood.PINCH_RADIUS)
+			local centre, radius = CheeseMap.shred(p)
+			local s = screen(centre) - cheeseOrigin
 			for j, img in pair do
 				img.Position = UDim2.fromOffset(s.X, s.Y)
 				fit(img, 2 * radius, CHEESE_SHARE, (n * 137.5) % 360)
