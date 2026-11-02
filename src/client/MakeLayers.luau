@@ -334,7 +334,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		else nil
 	if sauceSurfaces then
 		for j in SauceCover.DEEP_LEVELS do
-			local band = FoodSurface.new(sauceLayer, 0, "Deep" .. j, { color = DEEP_RAW })
+			local band = FoodSurface.new(sauceLayer, 0, "Deep" .. j, { color = DEEP_RAW, pad = 0 })
 			band:look(DEEP_RAW, 1 - BAND_OPACITY[j])
 			sauceSurfaces.bands[j] = band
 		end

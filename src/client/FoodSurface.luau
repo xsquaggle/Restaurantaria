@@ -36,7 +36,9 @@ local FoodSurface = {}
 -- A turned view (an oval rolled at an angle): each tile reaches PAD px past its square, so
 -- rounding never opens a seam. An upright view (every round dough, and the oven's flattened
 -- view of it): tiles are snapped to whole pixels instead, so neighbours share their edges
--- exactly and never overlap (an overlap shows as a darker line while a surface fades).
+-- exactly and never overlap (an overlap shows as a darker line while a surface fades). A
+-- surface that is always see-through (the sauce's deep-red bands) takes `pad` 0: on a turned
+-- view its tiles' overlaps showed as a hatch of darker lines (Studio, 2026-11-02).
 local PAD = 0.5
 local SOFT = 1.0 -- px over which a cut edge goes from opaque to clear (anti-aliasing)
 local SOFT_STEP = 1 / 256 -- the soft width's quantum along the gradient: few shared sequences
@@ -63,6 +65,7 @@ export type Options = {
 	image: string?,
 	imagePx: number?, -- the material map's size in px
 	span: number?, -- the material map's half width, dough-local
+	pad: number?, -- px each tile reaches past its square on a turned view (default PAD)
 }
 
 export type Surface = {
@@ -84,6 +87,7 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 	local useImage = options.image ~= nil
 	local imagePx = options.imagePx or 1024
 	local span = options.span or 1
+	local pad = options.pad or PAD
 	local pool: { GuiObject } = {}
 	local tints: { Color3 } = {}
 	local shown = 0
@@ -180,9 +184,9 @@ function FoodSurface.new(parent: GuiObject, zIndex: number, name: string, option
 				el.AnchorPoint = Vector2.zero
 				el.Position = UDim2.fromOffset(X0, Y0)
 			else
-				W = sa * (t.x1 - t.x0) + 2 * PAD
-				H = sb * (t.y1 - t.y0) + 2 * PAD
-				lx0, ly0, lx1, ly1 = t.x0 - PAD / sa, t.y0 - PAD / sb, t.x1 + PAD / sa, t.y1 + PAD / sb
+				W = sa * (t.x1 - t.x0) + 2 * pad
+				H = sb * (t.y1 - t.y0) + 2 * pad
+				lx0, ly0, lx1, ly1 = t.x0 - pad / sa, t.y0 - pad / sb, t.x1 + pad / sa, t.y1 + pad / sb
 				el.AnchorPoint = Vector2.new(0.5, 0.5)
 				el.Position = UDim2.fromOffset(s.X, s.Y)
 			end
