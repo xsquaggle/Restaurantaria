@@ -2,11 +2,10 @@
 -- default) against the slice 2 discs, for the same records. Run in Studio during Play, in the
 -- Client (paste it: loadstring is not available there); it sets shared.sauceCompare to
 -- { sheet = function(seconds, size), clear = function() }. sheet lays a sheet over the game: one
--- row per renderer, one column per record (the slice 2 comparison set's, as in
--- tests/sauce_surface_check.luau), every pizza drawn by the game's own MakeLayers top-down on
--- the same round dough at the given bake seconds (nil = raw). Returns, per pizza, the grade's
--- coverage and score, and for the surface its tiles, drawn area against the credited area, and
--- the specks.
+-- row per renderer, one column per record (Astra r21's proof set), every pizza drawn by the
+-- game's own MakeLayers top-down on the same round dough at the given bake seconds (nil = raw).
+-- Returns, per pizza, the grade's coverage and score, and for the surface its tiles (and the
+-- deep-red bands'), drawn area against the credited area, and the specks.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,14 +28,6 @@ local function circle(r: number): { any }
 	end
 	return out
 end
-local function arc(r: number, from: number, to: number): { any }
-	local out = {}
-	for i = 0, 32 do
-		local a = math.rad(from + (to - from) * i / 32)
-		out[i + 1] = P(r * math.cos(a), r * math.sin(a))
-	end
-	return out
-end
 local function sauceOf(pours: { any }, spreads: { { any } }): any
 	local actions = {}
 	for _, p in pours do
@@ -51,11 +42,22 @@ local tri = {}
 for i, deg in { 90, 210, 330 } do
 	tri[i] = P(0.4 * math.cos(math.rad(deg)), 0.4 * math.sin(math.rad(deg)))
 end
+local function ring(r: number): { any }
+	local out = {}
+	for k = 0, 2 do
+		local a = math.pi / 2 + k * 2 * math.pi / 3
+		table.insert(out, P(r * math.cos(a), r * math.sin(a)))
+	end
+	return out
+end
+-- Astra r21's sauce proof set: sparse, even, bare island, crust only, spill, plus the mound
+-- (thick sauce, deep red).
 local RECORDS = {
+	{ "Sparse", sauceOf({ P(-0.5, 0.1) }, { { P(-0.6, 0.1), P(0.75, 0.1) }, { P(0.75, 0.15), P(-0.2, 0.15) } }) },
 	{ "Even", sauceOf(tri, { circle(0.3), circle(0.5), circle(0.7) }) },
-	{ "Half spread", sauceOf({ P(0.3, 0), P(0.45, 0.4), P(0.45, -0.4) }, { arc(0.2, -80, 80), arc(0.4, -80, 80), arc(0.6, -80, 80), arc(0.75, -80, 80) }) },
-	{ "Thin trace", sauceOf({ P(-0.5, 0.1) }, { { P(-0.6, 0.1), P(0.75, 0.1) }, { P(0.75, 0.15), P(-0.2, 0.15) } }) },
-	{ "Rim spill", sauceOf(tri, { circle(0.3), circle(0.5), circle(0.7), circle(0.88) }) },
+	{ "Bare island", sauceOf(ring(0.6), { circle(0.55), circle(0.75) }) },
+	{ "Crust only", sauceOf(ring(0.88), { circle(0.88), circle(0.9) }) },
+	{ "Spill", sauceOf(tri, { circle(0.3), circle(0.5), circle(0.7), circle(0.88) }) },
 	{ "Mound", sauceOf({ P(0, 0), P(0.06, 0), P(-0.06, 0), P(0, 0.06), P(0, -0.06), P(0.04, 0.04) }, { { P(-0.15, 0), P(0.15, 0) } }) },
 }
 local VIEWS = {
@@ -150,7 +152,7 @@ local function sheet(seconds: number?, size: number?): string
 			end
 			caption.Text = string.format("%s: %.0f%% covered, Sauce %d", name, grade.detail.coverage * 100, grade.score)
 			caption.Parent = back
-			table.insert(lines, string.format("%s / %s: coverage=%.3f score=%d tiles=%d drawn=%s credited=%.3f discs=%d stride=%s", v.sauce, name, grade.detail.coverage, grade.score, info.tiles, if info.drawn then string.format("%.3f", info.drawn) else "-", credited(field), info.specks, tostring(info.stride)))
+			table.insert(lines, string.format("%s / %s: coverage=%.3f score=%d tiles=%d deepTiles=%s drawn=%s credited=%.3f discs=%d stride=%s", v.sauce, name, grade.detail.coverage, grade.score, info.tiles, tostring(info.deepTiles), if info.drawn then string.format("%.3f", info.drawn) else "-", credited(field), info.specks, tostring(info.stride)))
 		end
 	end
 	return table.concat(lines, "\n")
