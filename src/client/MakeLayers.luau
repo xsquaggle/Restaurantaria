@@ -135,7 +135,11 @@ local PILE_SHADE = Color3.new(0.94, 0.88, 0.8)
 -- The cheese surfaces' drawing grid (see strideFor): strides dividing CheeseMap.G, and the
 -- least on-screen size of a drawn square.
 local STRIDES = { 1, 2, 3, 4, 6 }
-local SAUCE_STRIDES = { 1, 2, 3, 4, 6, 8, 12 } -- dividing the sauce surface's grid (MakeSauce.GRID * SauceCover.FINE)
+-- The sauce surface's strides divide its grid (MakeSauce.GRID * SauceCover.FINE). Never every
+-- node: a spread redraws every frame while it is dragged, and every node cost 12 to 13 ms of
+-- geometry a redraw in Studio (2026-11-02, with the deep-red bands); every 2nd node 3.5 to 4.3 ms
+-- (the slice 2 discs: 1.9 ms), its squares about 16 px on the large desktop pizza.
+local SAUCE_STRIDES = { 2, 3, 4, 6, 8, 12 }
 local MIN_TILE_PX = 4.5
 -- The shreds of a pinch near the dough's edge are drawn smaller so they reach at most
 -- SHRED_OVERHANG past it (dough-local; the map itself stops at the edge), never under
