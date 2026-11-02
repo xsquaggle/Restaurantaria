@@ -246,8 +246,8 @@ end
 -- value, dough-local: min((smoothed - SOLID) * CELL * SLOPE, DOUGH - r), level 0 (SLOPE turns
 -- the smoothed credit into about a distance near the outline). Thinner sauce away from it stays
 -- specks (SauceCover.specks). Every `stride`-th node for a pizza small on screen (strides
--- dividing FINE * MakeSauce.GRID). Each square is keyed by the deep-red share of the cell
--- nearest its centre, so the client tints it and a full run only joins squares of one tint.
+-- dividing FINE * MakeSauce.GRID). A thick layer's deep red is drawn over it as nested bands
+-- (SauceCover.layers), not as a tint per square, which showed as blocks on a large pizza.
 -- Measured offline (tests/sauce_surface_check.luau): a round layer's outline turns through 8
 -- of 72 directions on the raw grid (an octagon) and about 50 smoothed, its radius within 5%;
 -- drawn area within 3.5% of credited (8.5% over for sauce thinned along the rim, which the
@@ -311,30 +311,100 @@ local function surfaceValue(credits: { number }, fx: number, fy: number): number
 	return math.min((smoothed(credits, fx, fy) - SauceCover.SOLID) * CELL * SauceCover.SLOPE, SauceCover.DOUGH - r)
 end
 
-function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.Tile }
+-- The deep red of a thick layer (slice 8a): nested bands where the layer's deep-red share (its
+-- 5x5 mean thickness, as SauceCover.deep but not rounded) reaches each of DEEP_LEVELS, each one
+-- a surface with a straight-piece outline like the sauce's own and never past it (node value
+-- min((share - level) * DEEP_SLOPE, the sauce surface's)). The client lays each band over the
+-- sauce in a deep-red colour at a low opacity, so a thick spot darkens in small steps along
+-- smooth curves. The share between cell centres is read linearly. Proposals (looks only).
+SauceCover.DEEP_LEVELS = { 0.1, 0.25, 0.4, 0.55, 0.7, 0.85 }
+local DEEP_SLOPE = CELL -- turns a share into about a distance (only where a band meets the outline)
+
+-- The deep-red share of every material cell, not rounded.
+local function sharesOf(field: { number }): { [number]: number }
+	local out: { [number]: number } = {}
+	for _, i in cells do
+		local mean = 0
+		for _, j in blocks[i] do
+			mean += field[j]
+		end
+		mean /= #blocks[i]
+		out[i] = math.clamp((mean / MakeSauce.EVEN - SauceCover.DEEP_FROM) / SauceCover.DEEP_SPAN, 0, 1)
+	end
+	return out
+end
+
+-- The share at fine node (fx, fy): a cell centre's own, or the mean of the two or four cells
+-- around a node between them (0 off the material).
+local function shareAt(shares: { [number]: number }, fx: number, fy: number): number
+	local gx, gy = fx // 2, fy // 2
+	local ox, oy = fx - 2 * gx, fy - 2 * gy
+	local sum, n = 0, 0
+	for dx = 0, ox do
+		for dy = 0, oy do
+			local i = MakeSauce.cellAt(gx + dx, gy + dy)
+			sum += if i then shares[i] or 0 else 0
+			n += 1
+		end
+	end
+	return sum / n
+end
+
+export type Band = { level: number, tiles: { SurfaceTiles.Tile } }
+export type Layers = { surface: { SurfaceTiles.Tile }, bands: { Band } }
+
+-- The surface and (with `bands`) the deep-red bands of a field, on every `stride`-th node:
+-- bands[j] is DEEP_LEVELS[j]'s, up to the last level some node reaches.
+function SauceCover.layers(field: { number }, stride: number?, bands: boolean?): Layers
 	local k = stride or 1
 	local G = MakeSauce.GRID * SauceCover.FINE
 	assert(G % k == 0, "stride must divide the surface's grid")
+	local n = G // k
+	local side = 2 * n + 1
 	local credits = creditsOf(field)
-	local deepAt: { [number]: number } = {}
 	local h = CELL / SauceCover.FINE
-	local function value(gx: number, gy: number): number
-		return surfaceValue(credits, gx * k, gy * k)
-	end
-	local function key(gx: number, gy: number): number
-		local cx, cy = (gx + 0.5) * k * h, (gy + 0.5) * k * h
-		local i = MakeSauce.cellAt(math.floor(cx / CELL + 0.5), math.floor(cy / CELL + 0.5))
-		if not i or not blocks[i] then
-			return 0
+	local surf = table.create(side * side, 0)
+	for gx = -n, n do
+		for gy = -n, n do
+			surf[(gx + n) * side + (gy + n) + 1] = surfaceValue(credits, gx * k, gy * k)
 		end
-		local d = deepAt[i]
-		if d == nil then
-			d = SauceCover.deep(field, i)
-			deepAt[i] = d
-		end
-		return d
 	end
-	return SurfaceTiles.build(G // k, h * k, value, 0, key)
+	local out: Layers = {
+		surface = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
+			return surf[(gx + n) * side + (gy + n) + 1]
+		end, 0),
+		bands = {},
+	}
+	if bands then
+		local shares = sharesOf(field)
+		local deep = table.create(side * side, 0)
+		local top = 0
+		for gx = -n, n do
+			for gy = -n, n do
+				local idx = (gx + n) * side + (gy + n) + 1
+				if surf[idx] >= 0 then
+					local d = shareAt(shares, gx * k, gy * k)
+					deep[idx] = d
+					top = math.max(top, d)
+				end
+			end
+		end
+		for _, level in SauceCover.DEEP_LEVELS do
+			if top < level then
+				break
+			end
+			local tiles = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
+				local idx = (gx + n) * side + (gy + n) + 1
+				return math.min((deep[idx] - level) * DEEP_SLOPE, surf[idx])
+			end, 0)
+			table.insert(out.bands, { level = level, tiles = tiles })
+		end
+	end
+	return out
+end
+
+function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.Tile }
+	return SauceCover.layers(field, stride).surface
 end
 
 -- The specks drawn beside the surface: the discs of cells with no covered neighbour (thin

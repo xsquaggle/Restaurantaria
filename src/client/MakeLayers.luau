@@ -63,6 +63,27 @@ local FULL_OPACITY = 0.92
 local BARE = 0.03 -- a cell under this share of full-credit thickness counts as unsauced for the stamp edge
 local SIZE_STEP = 0.02 -- stamp diameters are rounded to this (fewer resizes)
 local DEEP = Color3.fromRGB(190, 150, 150)
+-- Slice 8a surface: the deep red of a thick layer as nested bands (SauceCover.layers), each a
+-- flat deep red laid over the sauce so the layers up to a share k reach about DEEP_ALPHA * k
+-- opacity; a flat colour C at opacity a over the material is close to the DEEP multiply above
+-- for the material's own reds (raw mean 216, 33, 10 and cooked 172, 26, 11, measured in Studio
+-- 2026-11-02, give C = 94, 3, 1 and 74, 2, 1 at a = 0.45). Proposals (looks only).
+local DEEP_RAW = Color3.fromRGB(94, 3, 1)
+local DEEP_COOKED = Color3.fromRGB(74, 2, 1)
+local DEEP_ALPHA = 0.45
+-- Each band's own opacity: the layers up to band j reach DEEP_ALPHA times the middle of band
+-- j's share range.
+local BAND_OPACITY: { number } = {}
+do
+	local levels = SauceCover.DEEP_LEVELS
+	local below = 0
+	for j, level in levels do
+		local top = levels[j + 1] or 1
+		local reach = DEEP_ALPHA * (level + top) / 2
+		BAND_OPACITY[j] = 1 - (1 - reach) / (1 - below)
+		below = reach
+	end
+end
 local DOLLOP = 0.5 -- dough-local diameter of a fresh pour's dollop
 -- Response 14 (asset-manifest.json): the material maps are 1024 px over the -1..1 square; the
 -- board smear's alpha spans 41..470 of its 512 px canvas across, centred.
@@ -194,6 +215,7 @@ export type SauceInfo = {
 	drawn: number?,
 	specks: number,
 	stride: number?,
+	deepTiles: number?,
 }
 
 export type Layers = {
@@ -296,14 +318,24 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	local strictSurface = FoodSurface.new(cheeseLayer, -2, "Strict", { color = CHEESE_RAW })
 	local baseSurface = FoodSurface.new(cheeseLayer, -2, "Base", { color = CHEESE_COLORS[1].color })
 	local pileSurface = FoodSurface.new(cheeseLayer, -1, "Piles", { color = CHEESE_COLORS[1].color })
-	-- Slice 8a sauce surfaces ("surface" mode): the raw material, and the cooked one fading in
-	-- over it in the oven; under the specks' groups (ZIndex 1 and 2 in the sauce layer).
+	-- Slice 8a sauce surfaces ("surface" mode): the raw material, the cooked one fading in over
+	-- it in the oven, and the deep-red bands over both; under the specks' groups (ZIndex 1 and 2
+	-- in the sauce layer).
 	local sauceSurfaces = if surfaceMode
 		then {
 			raw = FoodSurface.new(sauceLayer, -2, "SurfaceRaw", { image = "sauce_material_raw_v2", imagePx = MATERIAL_PX, span = SauceCover.SPAN }),
 			cooked = FoodSurface.new(sauceLayer, -1, "SurfaceCooked", { image = "sauce_material_cooked_v2", imagePx = MATERIAL_PX, span = SauceCover.SPAN }),
+			bands = {} :: { FoodSurface.Surface },
 		}
 		else nil
+	if sauceSurfaces then
+		for j in SauceCover.DEEP_LEVELS do
+			local band = FoodSurface.new(sauceLayer, 0, "Deep" .. j, { color = DEEP_RAW })
+			band:look(DEEP_RAW, 1 - BAND_OPACITY[j])
+			sauceSurfaces.bands[j] = band
+		end
+	end
+	local deepTiles = 0
 	local sauceTiles: { SurfaceTiles.Tile } = {}
 	local sauceStride: number? = nil
 	local speckCount = 0
@@ -612,6 +644,11 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			-- once covered. Scorch is the look colour of both.
 			sauceSurfaces.raw:look(hot, if k >= 1 and cookedOn then 1 else 0)
 			sauceSurfaces.cooked:look(hot, if cookedOn then 1 - k else 1)
+			local deep = DEEP_RAW:Lerp(DEEP_COOKED, if cookedOn then k else 0)
+			local color = Color3.new(deep.R * hot.R, deep.G * hot.G, deep.B * hot.B)
+			for j, band in sauceSurfaces.bands do
+				band:look(color, 1 - BAND_OPACITY[j])
+			end
 		end
 		local cook = Color3.new(1, 1, 1):Lerp(COOK_TINT, k)
 		local tint = Color3.new(cook.R * hot.R, cook.G * hot.G, cook.B * hot.B)
@@ -674,28 +711,40 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 	end
 
-	-- (Surface) the continuous surface of the field (SauceCover.surface), raw and, once the
-	-- pizza has been in the oven, cooked; each square tinted by its deep-red share.
-	local function deepTint(k: any): Color3
-		return Color3.new(1, 1, 1):Lerp(DEEP, k or 0)
-	end
+	-- (Surface) the continuous surface of the field (SauceCover.layers), raw and, once the
+	-- pizza has been in the oven, cooked, with the deep-red bands of a thick layer over it.
 	local function drawSurface(field: { number }?)
 		local surfaces = sauceSurfaces :: any
 		if not field then
 			sauceTiles = {}
 			sauceStride = nil
+			deepTiles = 0
 			surfaces.raw:clear()
 			surfaces.cooked:clear()
+			for _, band in surfaces.bands do
+				band:clear()
+			end
 			return
 		end
 		local stride = strideFor(MakeSauce.CELL / SauceCover.FINE, SAUCE_STRIDES)
 		sauceStride = stride
-		sauceTiles = SauceCover.surface(field, stride)
-		surfaces.raw:draw(sauceTiles, deepTint)
+		local drawnLayers = SauceCover.layers(field, stride, true)
+		sauceTiles = drawnLayers.surface
+		surfaces.raw:draw(sauceTiles)
 		if cookedOn then
-			surfaces.cooked:draw(sauceTiles, deepTint)
+			surfaces.cooked:draw(sauceTiles)
 		else
 			surfaces.cooked:clear()
+		end
+		deepTiles = 0
+		for j, band in surfaces.bands do
+			local b = drawnLayers.bands[j]
+			if b and #b.tiles > 0 then
+				band:draw(b.tiles)
+				deepTiles += #b.tiles
+			else
+				band:clear()
+			end
 		end
 	end
 
@@ -952,6 +1001,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 			drawn = if sauceSurfaces then SurfaceTiles.area(sauceTiles) else nil,
 			specks = speckCount,
 			stride = sauceStride,
+			deepTiles = deepTiles,
 		}
 	end
 

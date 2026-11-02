@@ -4,7 +4,7 @@
 -- never reaches past the dough's edge; it draws about the area the grade credits (surface plus
 -- the specks of thin sauce beside it); a bare hole stays bare; a round layer draws round (no
 -- octagon); thin sauce stays specks, never a wash; the specks sit off the surface; a small
--- pizza's coarser grid keeps the shape; a thick layer is keyed deep red. Arithmetic only: how it looks is checked in Studio and by Lawson.
+-- pizza's coarser grid keeps the shape; a thick layer's deep red is nested bands inside it. Arithmetic only: how it looks is checked in Studio and by Lawson.
 
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
@@ -144,7 +144,7 @@ local records = {
 -- credited (rim spill, about 8.5%); never transparency for amount (Astra r14).
 local GATED = { ["half spread"] = true, ["even adequate"] = true, ["rim spill"] = true, ["board spill"] = true, ["undo (even, last spread taken back)"] = true, ["unmoved dollops"] = true, ["excess mound"] = true }
 local DRAWN_TOL = 0.1
-table.insert(report, "record                               coverage  grade  credited  surface + specks = drawn   drawn/credited  tiles (stride 1 / 2)  specks  deepest key")
+table.insert(report, "record                               coverage  grade  credited  surface + specks = drawn   drawn/credited  tiles (stride 1 / 2)  specks  deep-red band areas")
 for _, rec in records do
 	local name, sauce = rec[1], rec[2]
 	local before = MakeSauce.grade(sauce)
@@ -180,20 +180,39 @@ for _, rec in records do
 		check(string.format("%s: drawn within %d%% of credited", name, DRAWN_TOL * 100), math.abs(ratio - 1) <= DRAWN_TOL, true)
 		check(name .. ": every second node, the surface within 8% of its fine drawing", math.abs(surf2 - surf) / surf <= 0.08, true)
 	end
-	local deepest = 0
-	for _, t in tiles do
-		deepest = math.max(deepest, t.key or 0)
+	-- The deep-red bands: nested (each inside the one below, the first inside the surface),
+	-- the same rule as the discs' tint (the deepest band reached is at most the deepest disc's
+	-- share, rounded).
+	local drawnLayers = SauceCover.layers(field, 1, true)
+	check(name .. ": layers' surface is the surface", SurfaceTiles.area(drawnLayers.surface), surf)
+	local deepest, outside, below = 0, 0, drawnLayers.surface
+	local bandAreas = {}
+	for j, band in drawnLayers.bands do
+		check(string.format("%s: band %d is level %.2f", name, j, SauceCover.DEEP_LEVELS[j]), band.level, SauceCover.DEEP_LEVELS[j])
+		if #band.tiles > 0 then
+			deepest = band.level
+		end
+		for _, p in insidePoints(band.tiles) do
+			if not covers(below, p[1], p[2]) then
+				outside += 1
+			end
+		end
+		below = band.tiles
+		table.insert(bandAreas, string.format("%.3f", SurfaceTiles.area(band.tiles)))
 	end
-	table.insert(report, string.format("%-36s %8.3f  %5d  %8.3f  %7.3f + %6.3f = %7.3f  %14.3f  %9d / %-9d  %6d  %11.2f", name, before.detail.coverage, before.score, cred, surf, sp, surf + sp, ratio, #tiles, #tiles2, #specks, deepest))
-	if name == "excess mound" then
-		check("excess mound: the mound is keyed deep red", deepest > 0, true)
-	end
-	-- The keys are the discs' deep shares (one rule): every key is the mean of corner cells'.
+	check(name .. ": every band inside the one below it (and the first inside the surface)", outside, 0)
 	local discDeep = 0
 	for _, d in SauceCover.discs(field) do
 		discDeep = math.max(discDeep, d.deep)
 	end
-	check(name .. ": no key deeper than the deepest disc", deepest <= discDeep + 1e-9, true)
+	check(name .. ": no band deeper than the deepest disc's share", deepest <= discDeep + 0.025 + 1e-9, true)
+	table.insert(report, string.format("%-36s %8.3f  %5d  %8.3f  %7.3f + %6.3f = %7.3f  %14.3f  %9d / %-9d  %6d  %s", name, before.detail.coverage, before.score, cred, surf, sp, surf + sp, ratio, #tiles, #tiles2, #specks, if #bandAreas > 0 then table.concat(bandAreas, " ") else "-"))
+	if name == "excess mound" then
+		check("excess mound: the mound reaches the top deep-red band", deepest, SauceCover.DEEP_LEVELS[#SauceCover.DEEP_LEVELS])
+	end
+	if name == "even adequate" then
+		check("even adequate: an even layer is mostly free of deep red", #drawnLayers.bands == 0 or SurfaceTiles.area(drawnLayers.bands[1].tiles) < 0.25 * surf, true)
+	end
 end
 
 -- 2. A bare hole stays bare: an even layer out to 0.8 with a hole of radius 0.15 at (0.3, 0).
