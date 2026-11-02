@@ -45,19 +45,21 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 		local t = (level - va) / (vb - va)
 		return ax + (bx - ax) * t, ay + (by - ay) * t
 	end
-	-- A cut tile for square (gx, gy) from the outline piece P-Q, given its outside corners. The
-	-- normal is turned by the outside corner farthest from the line: a corner at the level (or
-	-- within rounding of it) lies on the outline and gives no side, and a smoothed staircase puts
-	-- corners exactly at the level along its diagonal.
-	local function cut(gx: number, gy: number, px: number, py: number, qx: number, qy: number, outside: { { number } }, k: any)
+	-- A cut tile for square (gx, gy) from the outline piece P-Q, given the corners that bound
+	-- the piece ({x, y, inside}). The normal is turned by the corner farthest from the line: a
+	-- corner at the level, or within rounding of it, lies on the outline and gives no side (a
+	-- smoothed staircase puts corners exactly at the level along its diagonal, and both outside
+	-- corners of a square can sit a rounding error under it, the outline then running along
+	-- the square's edge).
+	local function cut(gx: number, gy: number, px: number, py: number, qx: number, qy: number, corners: { { any } }, k: any)
 		local cx, cy = (gx + 0.5) * h, (gy + 0.5) * h
 		local tx, ty = qx - px, qy - py
 		local len = math.sqrt(tx * tx + ty * ty)
 		if len < 1e-9 * h then
 			-- Both crossings at one corner, which is at the level. An outside corner there: the
 			-- inside is the whole square but that point. An inside one: that point alone.
-			for _, o in outside do
-				if math.abs(o[1] - px) + math.abs(o[2] - py) < 1e-9 * h then
+			for _, o in corners do
+				if not o[3] and math.abs(o[1] - px) + math.abs(o[2] - py) < 1e-9 * h then
 					table.insert(tiles, { kind = "full", x0 = gx * h, y0 = gy * h, x1 = (gx + 1) * h, y1 = (gy + 1) * h, key = k })
 					return
 				end
@@ -65,15 +67,16 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 			return
 		end
 		local nx, ny = -ty / len, tx / len
-		-- Point it out, towards the outside corner farthest from the line.
-		local best = 0
-		for _, o in outside do
+		-- Point it out: the farthest corner is on the outside of the line if it is outside, on
+		-- the inside if it is inside.
+		local best, bestInside = 0, false
+		for _, o in corners do
 			local s = nx * (o[1] - px) + ny * (o[2] - py)
 			if math.abs(s) > math.abs(best) then
-				best = s
+				best, bestInside = s, o[3]
 			end
 		end
-		if best < 0 then
+		if (best < 0) ~= bestInside then
 			nx, ny = -nx, -ny
 		end
 		local d = nx * (px - cx) + ny * (py - cy)
@@ -124,14 +127,12 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 							table.insert(points, { px, py, i, j })
 						end
 					end
-					local outside = {}
-					for i = 1, 4 do
-						if not inside[i] then
-							table.insert(outside, { cx[i], cy[i] })
-						end
-					end
 					if #points == 2 then
-						cut(gx, gy, points[1][1], points[1][2], points[2][1], points[2][2], outside, k)
+						local corners = {}
+						for i = 1, 4 do
+							corners[i] = { cx[i], cy[i], inside[i] }
+						end
+						cut(gx, gy, points[1][1], points[1][2], points[2][1], points[2][2], corners, k)
 					elseif #points == 4 then
 						-- Saddle with its middle outside: each inside corner gets its own piece,
 						-- between the crossings on its two edges.
@@ -147,9 +148,10 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 									end
 								end
 								if p1 and p2 then
-									-- Its two neighbours are outside (a saddle alternates).
+									-- The corner and its two neighbours, which are outside (a saddle
+									-- alternates); the opposite corner is inside but past the line.
 									local o1, o2 = i % 4 + 1, (i + 2) % 4 + 1
-									cut(gx, gy, p1[1], p1[2], p2[1], p2[2], { { cx[o1], cy[o1] }, { cx[o2], cy[o2] } }, k)
+									cut(gx, gy, p1[1], p1[2], p2[1], p2[2], { { cx[i], cy[i], true }, { cx[o1], cy[o1], false }, { cx[o2], cy[o2], false } }, k)
 								end
 							end
 						end

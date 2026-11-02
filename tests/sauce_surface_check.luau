@@ -305,6 +305,65 @@ do
 	onBelow = covers(stair, 0.8, 0.2)
 	check("tiles: a diagonal at the level draws half the square", math.abs(half - 0.5) < 1e-9, true)
 	check("tiles: that half is the side above the level", onAbove and not onBelow, true)
+	-- Both outside corners a rounding error under the level: the outline runs along the
+	-- square's edge and the whole square is inside (Studio, 2026-11-01: such squares drew bare,
+	-- small notches along the sauce's outline).
+	local edgeOn = SurfaceTiles.build(1, 1, at({ ["0,0"] = 1, ["0,1"] = 1, ["1,0"] = -1e-18, ["1,1"] = -1e-18 }), 0)
+	local whole = 0
+	for _, t in edgeOn do
+		if t.x0 == 0 and t.y0 == 0 then
+			whole += SurfaceTiles.area({ t })
+		end
+	end
+	check("tiles: outside corners a rounding error under the level leave the square whole", math.abs(whole - 1) < 1e-6, true)
+	-- Random fields with many values at, or a rounding error from, the level: the drawn surface
+	-- agrees with the field read between its nodes (bilinear) wherever that is clearly in or
+	-- out (a quarter of the square's largest corner value: the straight cut is a chord of the
+	-- curved outline). A saddle whose middle is inside is drawn whole by design (header of
+	-- SurfaceTiles), so those squares are left out.
+	local seed = 12345
+	local function rand(): number
+		seed = (seed * 1103515245 + 12345) % 2147483648
+		return seed / 2147483648
+	end
+	local G = 6
+	local bad, samples, saddles = 0, 0, 0
+	for _ = 1, 40 do
+		local values: { [string]: number } = {}
+		for gx = -G, G do
+			for gy = -G, G do
+				local r = rand()
+				values[gx .. "," .. gy] = if r < 0.2 then 0 elseif r < 0.35 then -1e-17 elseif r < 0.45 then 1e-17 else (rand() * 2 - 1)
+			end
+		end
+		local value = at(values)
+		local tiles = SurfaceTiles.build(G, 1, value, 0)
+		for gx = -G, G - 1 do
+			for gy = -G, G - 1 do
+				local a, b, c, e = value(gx, gy), value(gx + 1, gy), value(gx + 1, gy + 1), value(gx, gy + 1)
+				local big = math.max(math.abs(a), math.abs(b), math.abs(c), math.abs(e))
+				local ia, ib, ic, ie = a >= 0, b >= 0, c >= 0, e >= 0
+				if ia == ic and ib == ie and ia ~= ib and (a + b + c + e) / 4 >= 0 then
+					saddles += 1
+					continue
+				end
+				for sx = 1, 3 do
+					for sy = 1, 3 do
+						local u, w = sx / 4, sy / 4
+						local bil = a * (1 - u) * (1 - w) + b * u * (1 - w) + c * u * w + e * (1 - u) * w
+						if math.abs(bil) > 0.25 * big then
+							samples += 1
+							if (bil > 0) ~= covers(tiles, gx + u, gy + w) then
+								bad += 1
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	check("tiles: random fields near the level draw what the field says", bad, 0)
+	table.insert(report, string.format("tiles: %d clear samples of 40 random fields near the level (%d whole saddles left out), %d drawn wrong", samples, saddles, bad))
 end
 
 -- 6. An empty field draws nothing.
