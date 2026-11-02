@@ -152,7 +152,7 @@ local function sheet(seconds: number?, size: number?): string
 			end
 			caption.Text = string.format("%s: %.0f%% covered, Sauce %d", name, grade.detail.coverage * 100, grade.score)
 			caption.Parent = back
-			table.insert(lines, string.format("%s / %s: coverage=%.3f score=%d tiles=%d deepTiles=%s drawn=%s credited=%.3f discs=%d stride=%s", v.sauce, name, grade.detail.coverage, grade.score, info.tiles, tostring(info.deepTiles), if info.drawn then string.format("%.3f", info.drawn) else "-", credited(field), info.specks, tostring(info.stride)))
+			table.insert(lines, string.format("%s / %s: coverage=%.3f score=%d tiles=%d deepTiles=%s surface=%s credited=%.3f specks=%d stride=%s", v.sauce, name, grade.detail.coverage, grade.score, info.tiles, tostring(info.deepTiles), if info.drawn then string.format("%.3f", info.drawn) else "-", credited(field), info.specks, tostring(info.stride)))
 		end
 	end
 	return table.concat(lines, "\n")
