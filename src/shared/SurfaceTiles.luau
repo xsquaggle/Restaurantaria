@@ -28,13 +28,39 @@ export type Tile = {
 
 -- G: nodes run -G..G on each axis, h apart. value(gx, gy) is the field at a node. key(gx, gy),
 -- if given, labels each square (a full run only joins squares with equal keys, e.g. a tint).
-function SurfaceTiles.build(G: number, h: number, value: (number, number) -> number, level: number, key: ((number, number) -> any)?): { Tile }
+-- turn (radians, optional): build on the field's grid turned by it, so a view that stretches
+-- the food along turned axes (an oval rolled at an angle: a shear the GUI cannot draw on
+-- upright squares) draws exact turned rectangles. The tiles are then in turned coordinates
+-- u = R(turn) p (SurfaceTiles.unturn maps them back), and each turned node takes the field
+-- bilinearly between the field's own nodes (nodes past the grid take its nearest edge).
+function SurfaceTiles.build(G: number, h: number, value: (number, number) -> number, level: number, key: ((number, number) -> any)?, turn: number?): { Tile }
 	local tiles: { Tile } = {}
 	local side = 2 * G + 1
 	local vals = table.create(side * side, 0)
 	for gx = -G, G do
 		for gy = -G, G do
 			vals[(gx + G) * side + (gy + G) + 1] = value(gx, gy)
+		end
+	end
+	if turn and turn ~= 0 then
+		assert(key == nil, "a turned surface has no square keys")
+		local own = vals
+		vals = table.create(side * side, 0)
+		local c, s = math.cos(turn), math.sin(turn)
+		local function at(ix: number, iy: number): number
+			ix = math.clamp(ix, -G, G)
+			iy = math.clamp(iy, -G, G)
+			return own[(ix + G) * side + (iy + G) + 1]
+		end
+		for ux = -G, G do
+			for uy = -G, G do
+				-- p = R(-turn) u, in node units.
+				local px, py = c * ux + s * uy, -s * ux + c * uy
+				local fx, fy = math.floor(px), math.floor(py)
+				local tx, ty = px - fx, py - fy
+				local v00, v10, v01, v11 = at(fx, fy), at(fx + 1, fy), at(fx, fy + 1), at(fx + 1, fy + 1)
+				vals[(ux + G) * side + (uy + G) + 1] = (v00 * (1 - tx) + v10 * tx) * (1 - ty) + (v01 * (1 - tx) + v11 * tx) * ty
+			end
 		end
 	end
 	local function v(gx: number, gy: number): number
@@ -162,6 +188,56 @@ function SurfaceTiles.build(G: number, h: number, value: (number, number) -> num
 		flush(G)
 	end
 	return tiles
+end
+
+-- A point of a turned surface's tiles (u, built with `turn`) back in the field's own
+-- coordinates: p = R(-turn) u.
+function SurfaceTiles.unturn(turn: number, x: number, y: number): (number, number)
+	local c, s = math.cos(turn), math.sin(turn)
+	return c * x + s * y, -s * x + c * y
+end
+
+-- A surface's exact draw: J = R(phi) diag(a, b) R(turn), a view's local stretch (screen px per
+-- unit, screen = J p, R(t) turning +x towards +y)
+-- split into a turn of the food's own grid, a stretch along the turned axes and a turn on
+-- screen (2 x 2 singular values). A surface built on its field's grid turned by `turn`
+-- (SurfaceTiles.build) is drawn by tiles that are exact turned rectangles, so neighbours meet
+-- on any oval; on the field's own grid a sheared oval (rolled at an angle) cannot be drawn by
+-- rectangles, and Studio showed the tiles' rows splitting into stripes and steps. The turn is
+-- kept within a quarter turn, and is 0 for every round dough and the oven's upright views (the
+-- tiles are then the field's own squares, as before). Returns phi (degrees), a and b (px per
+-- unit along the drawn axes) and turn (radians). The material maps are sampled in the turned
+-- grid's coordinates, so on a turned oval the sauce material is turned with it (one consistent
+-- orientation for every tile of the view).
+function SurfaceTiles.fit(J: { a: number, b: number, c: number, d: number }): (number, number, number, number)
+	local E, Fd = (J.a + J.d) / 2, (J.a - J.d) / 2
+	local Gs, H = (J.b + J.c) / 2, (J.c - J.b) / 2
+	local Q, R = math.sqrt(E * E + H * H), math.sqrt(Fd * Fd + Gs * Gs)
+	local a2 = math.atan2(H, E)
+	if R <= 1e-9 * Q then
+		-- The same stretch both ways: a turn and a scale, no grid turn.
+		return math.deg(a2), Q, Q, 0
+	end
+	local a1 = math.atan2(Gs, Fd)
+	local phi, turn = (a2 + a1) / 2, (a2 - a1) / 2
+	local sa, sb = Q + R, Q - R
+	-- Keep the grid's turn within a quarter turn: R(phi) diag(a, b) R(turn) equals
+	-- R(phi - k pi/2) diag'(.) R(turn + k pi/2), the axes swapped for odd k.
+	local k = math.floor(-turn / (math.pi / 2) + 0.5)
+	if k ~= 0 then
+		turn += k * math.pi / 2
+		phi -= k * math.pi / 2
+		if k % 2 ~= 0 then
+			sa, sb = sb, sa
+		end
+	end
+	if math.abs(turn) < 1e-7 then
+		turn = 0
+	end
+	if math.abs(phi) < 1e-9 then
+		phi = 0
+	end
+	return math.deg(phi), sa, sb, turn
 end
 
 -- The area of the surface the tiles draw (full tiles plus each cut tile's inside part), for the

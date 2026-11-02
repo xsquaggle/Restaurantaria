@@ -362,13 +362,15 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	-- (px in the frame).
 	local J: any = G.localStretch(S, F, flat)
 	local tileRot, tileA, tileB = 0, 1, 1
+	-- The surfaces' draw (SurfaceTiles.fit) and the turn of their tiles' grid.
+	local surfRot, surfA, surfB, surfTurn = 0, 1, 1, 0
 	-- A surface's drawing grid: every `stride`-th node of its field's, the finest whose squares
 	-- (`step` dough-local apart) are at least MIN_TILE_PX on screen. A small pizza (the phone's
 	-- oven, about 2.4 px per cheese map square) drawn square by square shows a ragged outline,
 	-- each 2 px tile resolving its edge in a pixel or two; every second node gives about 5 px
 	-- tiles and a smooth chain of straight pieces (nothing a phone could show is lost).
 	local function strideFor(step: number, strides: { number }): number
-		local square = math.min(tileA, tileB) * step
+		local square = math.min(surfA, surfB) * step
 		for _, k in strides do
 			if square * k >= MIN_TILE_PX then
 				return k
@@ -539,18 +541,27 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		cx, cy, F, S, flat = x, y, frameSize, shape, f
 		J = G.localStretch(S, F, flat)
 		tileRot, tileA, tileB = tileFit(J)
+		surfRot, surfA, surfB, surfTurn = SurfaceTiles.fit(J)
 		sauceOrigin = placeGroup(sauceRaw, SAUCE_REACH)
 		placeGroup(sauceCooked, SAUCE_REACH)
 		cheeseOrigin = placeGroup(cheeseLower, CHEESE_REACH)
 		placeGroup(cheeseUpper, CHEESE_REACH)
+		-- The surfaces' tiles are on the turned grid: back to dough-local, then to the screen.
+		local turn = surfTurn
+		local surfScreen = if turn == 0
+			then screen
+			else function(u: any): Vector2
+				local px, py = SurfaceTiles.unturn(turn, u.x, u.y)
+				return screen({ x = px, y = py })
+			end
 		for _, surf in { strictSurface, baseSurface, pileSurface } do
-			surf:place(Vector2.zero, screen, tileRot, tileA, tileB)
+			surf:place(Vector2.zero, surfScreen, surfRot, surfA, surfB)
 		end
 		if sauceSurfaces then
-			sauceSurfaces.raw:place(Vector2.zero, screen, tileRot, tileA, tileB)
-			sauceSurfaces.cooked:place(Vector2.zero, screen, tileRot, tileA, tileB)
+			sauceSurfaces.raw:place(Vector2.zero, surfScreen, surfRot, surfA, surfB)
+			sauceSurfaces.cooked:place(Vector2.zero, surfScreen, surfRot, surfA, surfB)
 			for _, band in sauceSurfaces.bands do
-				band:place(Vector2.zero, screen, tileRot, tileA, tileB)
+				band:place(Vector2.zero, surfScreen, surfRot, surfA, surfB)
 			end
 		end
 		surfacesKey = ""
@@ -735,7 +746,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		end
 		local stride = strideFor(MakeSauce.CELL / SauceCover.FINE, SAUCE_STRIDES)
 		sauceStride = stride
-		local drawnLayers = SauceCover.layers(field, stride, true)
+		local drawnLayers = SauceCover.layers(field, stride, true, surfTurn)
 		sauceTiles = drawnLayers.surface
 		surfaces.raw:draw(sauceTiles)
 		if cookedOn then
@@ -908,17 +919,17 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 	end
 
 	local cheeseFields: { { number } }? = nil
-	local tilesStride = 0
+	local tilesStride, tilesTurn = 0, 0
 	local function buildTiles(stride: number)
 		local fields = cheeseFields
 		if not fields then
 			return
 		end
-		tilesStride = stride
-		strictTiles = CheeseMap.tiles(fields[1], stride)
-		baseTiles = CheeseMap.tiles(fields[2], stride)
-		pileTiles = CheeseMap.tiles(fields[3], stride)
-		strictPileTiles = CheeseMap.tiles(fields[4], stride)
+		tilesStride, tilesTurn = stride, surfTurn
+		strictTiles = CheeseMap.tiles(fields[1], stride, surfTurn)
+		baseTiles = CheeseMap.tiles(fields[2], stride, surfTurn)
+		pileTiles = CheeseMap.tiles(fields[3], stride, surfTurn)
+		strictPileTiles = CheeseMap.tiles(fields[4], stride, surfTurn)
 		surfacesKey = ""
 	end
 
@@ -932,7 +943,7 @@ function MakeLayers.new(parent: GuiObject, zIndex: number, options: Options?): L
 		local k = table.concat(parts, "|")
 		local stride = strideFor(CheeseMap.GRID_STEP, STRIDES)
 		if k == mapKey and cheeseLook then
-			if stride ~= tilesStride then
+			if stride ~= tilesStride or surfTurn ~= tilesTurn then
 				buildTiles(stride)
 			end
 			return

@@ -458,12 +458,14 @@ end
 -- A node field's surface (level 0) as tiles, drawn on every `stride`-th node (1, 2, 3, 4 or 6:
 -- strides dividing G). The client draws a small pizza on a coarser grid so its tiles are not
 -- a pixel or two each (MakeLayers); the fields are smooth, so the outline keeps its shape.
-function CheeseMap.tiles(field: { number }, stride: number?): { SurfaceTiles.Tile }
+-- With `turn`, on that grid turned (SurfaceTiles.build: a view stretching the dough along
+-- turned axes).
+function CheeseMap.tiles(field: { number }, stride: number?, turn: number?): { SurfaceTiles.Tile }
 	local k = stride or 1
 	assert(G % k == 0, "stride must divide CheeseMap.G")
 	return SurfaceTiles.build(G // k, CheeseMap.GRID_STEP * k, function(gx: number, gy: number): number
 		return field[idx(gx * k, gy * k)]
-	end, 0)
+	end, 0, nil, turn)
 end
 
 return CheeseMap

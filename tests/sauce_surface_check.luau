@@ -385,6 +385,95 @@ do
 	table.insert(report, string.format("tiles: %d clear samples of 40 random fields near the level (%d whole saddles left out), %d drawn wrong", samples, saddles, bad))
 end
 
+-- 5b. An oval rolled at an angle (a view that stretches the dough along turned axes): the
+-- surfaces are drawn on their grid turned (SurfaceTiles.fit and build's turn), so every tile is
+-- an exact turned rectangle (Studio, 2026-11-02: on the field's own grid such a view drew rows
+-- of tiles splitting into stripes and steps). The fit rebuilds the view exactly, keeps the turn
+-- within a quarter turn and leaves round and upright views on the field's own grid; the turned
+-- surface covers what the field's own does (points clear of the outline) and draws the same area.
+do
+	local G = require(Shared.PrepGeometry)
+	local function rot(t: number)
+		return { a = math.cos(t), b = -math.sin(t), c = math.sin(t), d = math.cos(t) }
+	end
+	local function mul(A: any, B: any)
+		return { a = A.a * B.a + A.b * B.c, b = A.a * B.b + A.b * B.d, c = A.c * B.a + A.d * B.c, d = A.c * B.b + A.d * B.d }
+	end
+	local worst, worstTurn, flips = 0, 0, 0
+	local seed = 777
+	local function rnd(): number
+		seed = (seed * 1103515245 + 12345) % 2147483648
+		return seed / 2147483648
+	end
+	for _ = 1, 400 do
+		local J = { a = rnd() * 400 - 50, b = rnd() * 200 - 100, c = rnd() * 200 - 100, d = rnd() * 400 - 50 }
+		if J.a * J.d - J.b * J.c > 1 then
+			local phi, a, b, turn = SurfaceTiles.fit(J)
+			local back = mul(mul(rot(math.rad(phi)), { a = a, b = 0, c = 0, d = b }), rot(turn))
+			local scale = math.max(math.abs(J.a), math.abs(J.b), math.abs(J.c), math.abs(J.d))
+			for _, k in { "a", "b", "c", "d" } do
+				worst = math.max(worst, math.abs(back[k] - J[k]) / scale)
+			end
+			worstTurn = math.max(worstTurn, math.abs(turn))
+			if a <= 0 or b <= 0 then
+				flips += 1
+			end
+		end
+	end
+	check("turned fit: rebuilds the view (400 random views)", worst < 1e-9, true)
+	check("turned fit: turn within a quarter turn", worstTurn <= math.pi / 4 + 1e-9, true)
+	check("turned fit: positive stretches", flips, 0)
+	-- Round and upright views keep the field's own grid, with no turn on screen.
+	for _, case in { { "round", G.shape(0.95, 0.95, 0), 1 }, { "round in the oven", G.shape(0.95, 0.95, 0), 0.6 }, { "upright oval", G.shape(1.0, 0.8, 0), 1 }, { "tall oval", G.shape(0.8, 1.0, 0), 1 }, { "tall oval in the oven", G.shape(0.8, 1.0, 0), 0.6 } } do
+		local J = G.localStretch(case[2], 300, case[3])
+		local phi, a, b, turn = SurfaceTiles.fit(J)
+		check("turned fit: " .. case[1] .. " keeps the grid", turn, 0)
+		check("turned fit: " .. case[1] .. " is upright", phi, 0)
+		check("turned fit: " .. case[1] .. " stretches as drawn", math.abs(a - J.a) + math.abs(b - J.d) < 1e-9, true)
+	end
+	-- A turned oval: a real turn, and the turned surface covers what the field's own does.
+	local J = G.localStretch(G.shape(1.0, 0.72, math.rad(35)), 300, 1)
+	local _, _, _, turn = SurfaceTiles.fit(J)
+	check("turned fit: an oval turned 35 degrees turns the grid", math.abs(turn) > 0.3, true)
+	local field = MakeSauce.replay(even)
+	local own = SauceCover.layers(field, 2, true)
+	local turned = SauceCover.layers(field, 2, true, turn)
+	local h = 2 * CELL / SauceCover.FINE
+	local samples, bad = 0, 0
+	-- Compare where the field's own surface is clear: the point and its neighbours 1.5 squares
+	-- away agree on it.
+	for ix = -40, 40 do
+		for iy = -40, 40 do
+			local x, y = ix / 40, iy / 40
+			local inOwn = covers(own.surface, x, y)
+			local clear = true
+			for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 } } do
+				if covers(own.surface, x + 1.5 * h * o[1], y + 1.5 * h * o[2]) ~= inOwn then
+					clear = false
+					break
+				end
+			end
+			if clear then
+				samples += 1
+				-- u = R(turn) p
+				local ux, uy = math.cos(turn) * x - math.sin(turn) * y, math.sin(turn) * x + math.cos(turn) * y
+				if covers(turned.surface, ux, uy) ~= inOwn then
+					bad += 1
+				end
+				local bx, by = SurfaceTiles.unturn(turn, ux, uy)
+				if math.abs(bx - x) + math.abs(by - y) > 1e-12 then
+					bad += 1
+				end
+			end
+		end
+	end
+	check("turned surface: covers what the field's own surface covers (clear of the outline)", bad, 0)
+	local aOwn, aTurned = SurfaceTiles.area(own.surface), SurfaceTiles.area(turned.surface)
+	check("turned surface: same area within 1%", math.abs(aTurned - aOwn) / aOwn <= 0.01, true)
+	check("turned surface: as many deep-red bands", #turned.bands, #own.bands)
+	table.insert(report, string.format("turned grid: fit rebuilds 400 random views (worst %.1e), oval at 35 degrees turns the grid %.3f rad; %d clear points agree, area %.4f turned vs %.4f own", worst, turn, samples, aTurned, aOwn))
+end
+
 -- 6. An empty field draws nothing.
 check("empty: no surface", #SauceCover.surface(MakeSauce.empty()), 0)
 check("empty: no specks", #SauceCover.specks(MakeSauce.empty()), 0)

@@ -354,8 +354,9 @@ export type Band = { level: number, tiles: { SurfaceTiles.Tile } }
 export type Layers = { surface: { SurfaceTiles.Tile }, bands: { Band } }
 
 -- The surface and (with `bands`) the deep-red bands of a field, on every `stride`-th node:
--- bands[j] is DEEP_LEVELS[j]'s, up to the last level some node reaches.
-function SauceCover.layers(field: { number }, stride: number?, bands: boolean?): Layers
+-- bands[j] is DEEP_LEVELS[j]'s, up to the last level some node reaches. With `turn`, on that
+-- grid turned (SurfaceTiles.build: a view stretching the dough along turned axes).
+function SauceCover.layers(field: { number }, stride: number?, bands: boolean?, turn: number?): Layers
 	local k = stride or 1
 	local G = MakeSauce.GRID * SauceCover.FINE
 	assert(G % k == 0, "stride must divide the surface's grid")
@@ -372,7 +373,7 @@ function SauceCover.layers(field: { number }, stride: number?, bands: boolean?):
 	local out: Layers = {
 		surface = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
 			return surf[(gx + n) * side + (gy + n) + 1]
-		end, 0),
+		end, 0, nil, turn),
 		bands = {},
 	}
 	if bands then
@@ -396,15 +397,15 @@ function SauceCover.layers(field: { number }, stride: number?, bands: boolean?):
 			local tiles = SurfaceTiles.build(n, h * k, function(gx: number, gy: number): number
 				local idx = (gx + n) * side + (gy + n) + 1
 				return math.min((deep[idx] - level) * DEEP_SLOPE, surf[idx])
-			end, 0)
+			end, 0, nil, turn)
 			table.insert(out.bands, { level = level, tiles = tiles })
 		end
 	end
 	return out
 end
 
-function SauceCover.surface(field: { number }, stride: number?): { SurfaceTiles.Tile }
-	return SauceCover.layers(field, stride).surface
+function SauceCover.surface(field: { number }, stride: number?, turn: number?): { SurfaceTiles.Tile }
+	return SauceCover.layers(field, stride, false, turn).surface
 end
 
 -- The specks drawn beside the surface: the discs of cells with no covered neighbour (thin
